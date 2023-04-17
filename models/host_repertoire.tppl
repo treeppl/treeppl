@@ -2,13 +2,13 @@
  *  Host repertoire model
  *
  *  This file implements the host repertoire model described by Braga et al 2020 (https://doi.org/10.1093/sysbio/syaa019).
- *  
+ *
  *  The model assumes that the hosts used by a parasite can be described by a vector (the host repertoire). Each element in
  *  this vector describes the state of the host-parasite interaction. In the simplest version of the model, we only consider
  *  two interaction states: the parasite uses the host (1) or it does not use the host (0). In the three-state case,
  *  considered here, the parasites are assumed either to not use the host (0), potentially use it (1), or prefer it (2). The
  *  model can easily be extended to more interaction states, if desired.
- *  
+ *
  *  The dynamics of the model is described by a rate matrix that accommodates some effects depending on the current host
  *  repertoire. Thus, the host states in the repertoire do not evolve independently of each other, which poses a challenge
  *  in inference. However, the 'independence model', that assumes independent evolution of host states under a rate matrix
@@ -72,7 +72,7 @@ type Tree =
 // they allow safe communication across interfaces because they use
 // unique string labels, which are typically the primary way of linking
 // objects like tree leaves to observations in phylogenetic models in
-// other environments like R (and presumably python). 
+// other environments like R (and presumably python).
 //
 // At this point, it is unclear to us how to describe this data type
 // in TreePPL. We simply call it LabeledMatrix in the script below.
@@ -81,7 +81,7 @@ type Tree =
 /*---------------- Model-specific types -----------------------------*/
 
 
-// Tree decorated with postorder messages from belief propagation. 
+// Tree decorated with postorder messages from belief propagation.
 // Postorder = backwards in time
 type MsgTree =
  | MsgLeaf(age: Real, label: String, out_msg: Real[][3])
@@ -121,10 +121,10 @@ type HistoryTree =
  *  @param beta: phylogenetic distance parameter, determining strength of the host distance effect on host
  *               repertoire evolution
  *
- *  Note: 
+ *  Note:
  *  Rescaling of Q-matrix might be needed for some datasets, for some not (?? I do not understand this -- Fredrik)
  *  There is a scaling option in  RevBayes that affects the value of mu. I do not think we need it -- Mariana
- * 
+ *
  *  TrePPL syntax notes:
  *    -- (1) We use 1-indexing, second-nature to R users (which will be most of the organism biologists)
  *    -- (2) Using slicing of arrays using a vector of indices, as in R
@@ -143,7 +143,7 @@ type HistoryTree =
  *    -- mean(x: Real[])
  *    -- which(x: A[], function(element of A): bool) -- like 'which' in R
  *    -- rep(x: A, times: Int) -- like 'rep' in R
- *    -- arithmetic operations (multiplication, exponentiation) for matrices and vectors 
+ *    -- arithmetic operations (multiplication, exponentiation) for matrices and vectors
  *    -- t(x: A[][]) -- matrix transpose
  *    -- stationary_probs(Q: Real[][]) -- function for computing the stationary probabilities
  *                                        for a rate matrix Q
@@ -156,9 +156,9 @@ function model(parasite_tree: Tree, interactions: LabeledMatrix,
                host_distances: LabeledMatrix, tune: Real = 0.9) {
 
     // Set priors for model parameters
-    lambda ∼ Dirichlet(1,1,1,1)
-    mu ∼ Exponential(10)
-    beta ∼ Exponential(1)
+    lambda ~ Dirichlet(1,1,1,1)
+    mu ~ Exponential(10)
+    beta ~ Exponential(1)
 
     // Set transition rate matrix for three-state independence model. We assume that we
     // can multiply a matrix by a scalar.
@@ -204,7 +204,7 @@ function model(parasite_tree: Tree, interactions: LabeledMatrix,
         factor -n_host * log(3)   // unconditional prob for possible repertoires
 
     // Simulate repertoire history on the parasite tree
-    left  = simulate (probs_tree.left , rep, Q, D, d) 
+    left  = simulate (probs_tree.left , rep, Q, D, d)
     right = simulate (probs_tree.right, rep, Q, D, d)
     historyTree = HistoryNode(age=probs_tree.age, label=probs_tree.label,
                               repertoire=rep, history=[],
@@ -219,11 +219,11 @@ function model(parasite_tree: Tree, interactions: LabeledMatrix,
 
 /**
  * get_proposal_params
- * 
+ *
  * This functions uses belief propagation under the independence
  * model, and an anneling parameter 'tune', to obtain parameters
  * for the proposals of ancestral repertoires.
- * 
+ *
  * Parameters:
  *   @param parasite_tree: parasite tree
  *   @param interactions: interaction matrix
@@ -267,8 +267,8 @@ function postorder_msgs(tree: Tree, interactions: LabeledMatrix, Q: RateMatrix) 
     left_in_msg  = message( left.out_msg, Tleft)
     right_in_msg = message(right.out_msg, Tright)
 
-    out_msg      = left_in_msg * right_in_msg 
-    
+    out_msg      = left_in_msg * right_in_msg
+
     return MsgNode(age=tree.age, label=tree.label, left_in_msg=left_in_msg, right_in_msg=right_in_msg, out_msg=out_msg)
 }
 
@@ -280,7 +280,7 @@ function final_probs(tree: MsgTree, root_msg: Real[][3], Q: RateMatrix, tune: Re
 
     if tree is Leaf
         return ProbsLeaf(age=0.0, label=tree.label, probs=probs)
-    
+
     Tleft  = exp(Q*(tree.age-tree.left.age))
     Tright = exp(Q*(tree.age-tree.right.age))
 
@@ -341,7 +341,7 @@ function simulate (tree: ProbsTree, start: HistoryPoint, mp: ModelParams) : Hist
     // can be done at any point in the inference.
     rep: Int[]
     for i in 1 to lengths(probs)[1] {
-        propose rep[i] ~ Categorical (tree.probs[i], [0,1,2]) 
+        propose rep[i] ~ Categorical (tree.probs[i], [0,1,2])
     }
 
     stop = HistoryPoint (age=tree.age, repertoire=rep)
@@ -353,7 +353,7 @@ function simulate (tree: ProbsTree, start: HistoryPoint, mp: ModelParams) : Hist
 
     left  = simulate (tree.left , rep, mp)
     right = simulate (tree.right, rep, mp)
-    
+
     return HistoryNode (age=tree.age, label=tree.label,
                         repertoire=rep, history=history,
                         left=left, right=right)
@@ -487,7 +487,7 @@ function rate (rep: Int[], host_index: Int, to_state: Int, mp: ModelParams)
 
     // NB! Using R indexing style here to generate vector from matrix
     d = mean (mp.D[host_index][current_hosts])
-        
+
     return base_rate * (exp(-mp.beta*(d/mp.d_average))
 }
 
