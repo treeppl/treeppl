@@ -18,11 +18,11 @@ include "mexpr/type-check.mc"
 
 include "sys.mc"
 
-include "../../../coreppl/src/coreppl-to-mexpr/compile.mc"
-include "../../../coreppl/src/coreppl-to-mexpr/runtimes.mc"
-include "../../../coreppl/src/coreppl-to-rootppl/compile.mc"
-include "../../../coreppl/src/coreppl.mc"
-include "../../../coreppl/src/parser.mc"
+include "coreppl::coreppl-to-mexpr/compile.mc"
+include "coreppl::coreppl-to-mexpr/runtimes.mc"
+include "coreppl::coreppl-to-rootppl/compile.mc"
+include "coreppl::coreppl.mc"
+include "coreppl::parser.mc"
 
 -- Version of parseMCoreFile needed to get input data into the program
 let parseMCoreFile = lam filename.
