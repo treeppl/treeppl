@@ -243,7 +243,7 @@ function get_proposal_params(parasite_tree: Tree, interactions: LabeledMatrix,
     // NB! Assuming we have
     pis = rep (stationary_probs(Q), times=length(msgTree.out_msg))
 
-    return final_probs(tree, pis, Q, tune)
+    return final_probs(msgTree, pis, Q, tune)
 }
 
 
@@ -418,7 +418,7 @@ function propose_events_for_host (host_index: Int, from_age: Real, end_age: Real
 
 
 // Propose from conditional exponential distribution with rate 'rate'
-// but with support only on (0, max_t).
+// but with support only on 0(, max_t).
 // NB! It might be convenient to be able to fully specify custom
 // distributions directly in TreePPL.
 function propose_exponential_max_t (rate: Real, max_t: Real)
@@ -433,7 +433,7 @@ function propose_exponential_max_t (rate: Real, max_t: Real)
 
 // Simulate repertoire evolution from full model, one event
 // at a time. We return the sequence of repertoires.
-function simulate_by_event (rep: Int[], events: Events[], event_index: Int,
+function simulate_by_event (rep: Int[], events: Event[], event_index: Int,
                             from_age: Real, end_age: Real, mp: ModelParams)
 {
     // End case, deal with last time segment
