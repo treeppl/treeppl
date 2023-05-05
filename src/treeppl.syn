@@ -83,6 +83,7 @@ prod SequenceTypeTppl: TypeTppl = ty:TypeTppl "[" size:Integer? "]"
 
 prod AtomicReal: TypeTppl = "Real"
 prod AtomicBool: TypeTppl = "Bool"
+prod AtomicInt: TypeTppl = "Int"
 
 
 /-

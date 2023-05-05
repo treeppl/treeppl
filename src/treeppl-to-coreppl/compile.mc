@@ -345,6 +345,10 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       info = x.info
     }
 
+  | AtomicIntTypeTppl x -> TyInt {
+      info = x.info
+    }
+
   sem compileStmtTppl: TpplCompileContext -> StmtTppl -> (Expr -> Expr)
 
   sem compileStmtTppl (context: TpplCompileContext) =
@@ -510,9 +514,11 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
 
   | PrintStmtTppl x ->
     lam cont.
-      let print = print_ (snoc_ (float2string_ (compileExprTppl x.real)) (char_ '\n')) in
-      let flush = flushStdout_ unit_ in
-      isemi_ (isemi_ print flush) cont
+      foldr isemi_ cont
+        [ dprint_ (compileExprTppl x.real)
+        -- , print_ (str_ "\n") in
+        , flushStdout_ unit_
+        ]
 
   sem compileExprTppl: ExprTppl -> Expr
 
