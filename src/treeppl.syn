@@ -189,7 +189,7 @@ prod Resample: StmtTppl = "resample" ";"
 prod If: StmtTppl = "if" condition:ExprTppl "{" ifTrueStmts:StmtTppl* "}" ("else" "{" ifFalseStmts:StmtTppl* "}")?
 prod Weight: StmtTppl = "weight" value:ExprTppl ";"
 prod LogWeight: StmtTppl = "logWeight" value:ExprTppl ";"
-prod ForLoop: StmtTppl = "for" iterator:LName "in" range:ExprTppl "{" forStmts:StmtTppl+ "}"
+prod ForLoop: StmtTppl = "for" iterator:LName "in" range:ExprTppl "{" forStmts:StmtTppl* "}"
 prod Return: StmtTppl = "return" return:ExprTppl? ";"
 
 prod Print: StmtTppl = "print" "(" real:ExprTppl ")" ";"

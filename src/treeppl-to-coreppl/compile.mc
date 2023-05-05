@@ -469,6 +469,42 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       }
     }
 
+  | ForLoopStmtTppl x -> lam cont.
+    let var_ = lam n. TmVar {ident = n, ty = tyunknown_, info = x.info, frozen = false} in
+    let lam_ = lam n. lam body. TmLam {ident = n, ty = tyunknown_, info = x.info, body = body, tyAnnot = tyunknown_, tyIdent = tyunknown_} in
+    let match_ = lam target. lam pat. lam thn. lam els. TmMatch { target = target, pat = pat, thn = thn, els = els, info = x.info, ty = tyunknown_ } in
+    let app_ = lam l. lam r. TmApp { lhs = l, rhs = r, info = x.info, ty = tyunknown_ } in
+    let consPat_ = lam head. lam rest. PatSeqEdge
+      { prefix = [PatNamed {ident = PName head.v, info = head.i, ty = tyunknown_}]
+      , middle = PName rest
+      , postfix = []
+      , info = x.info
+      , ty = tyunknown_
+      } in
+    let loop_ : Expr -> ((Expr -> Expr) -> Expr) -> Expr = lam arg. lam mkBody.
+      let fName = nameSym "for" in
+      TmRecLets
+      { bindings =
+        [ { ident = fName
+          , tyAnnot = tyunknown_
+          , tyBody = tyunknown_
+          , body = mkBody (app_ (var_ fName))
+          , info = x.info
+          }
+        ]
+      , inexpr = app_ (var_ fName) arg
+      , ty = tyunknown_
+      , info = x.info
+      } in
+    let param = nameSym "l" in
+    let rest = nameSym "l" in
+    loop_ (compileExprTppl x.range)
+      (lam recur.
+        lam_ param
+          (match_ (var_ param) (consPat_ x.iterator rest)
+            (foldr (lam f. lam e. f e) (recur (var_ rest)) (map (compileStmtTppl context) x.forStmts))
+            cont))
+
   | ReturnStmtTppl r ->
     lam cont. match r.return with Some x then compileExprTppl x else withInfo r.info unit_
 
