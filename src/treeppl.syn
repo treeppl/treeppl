@@ -94,7 +94,7 @@ prod Fun: DeclTppl =
   model:"model"? "function" name:LName
   "(" (args:{name:LName ":" ty:TypeTppl} args:{"," name:LName ":" ty:TypeTppl}*)? ")"
   (":" returnTy:TypeTppl)?
-  "{" body:StmtTppl+ "}"
+  "{" body:StmtTppl* "}"
 
 /-
 A (type) constructor is similar to a function but needs to have at least one
