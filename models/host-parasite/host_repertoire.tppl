@@ -418,7 +418,7 @@ function propose_events_for_host (host_index: Int, from_age: Real, end_age: Real
 
 
 // Propose from conditional exponential distribution with rate 'rate'
-// but with support only on 0(, max_t).
+// but with support only on (0, max_t).
 // NB! It might be convenient to be able to fully specify custom
 // distributions directly in TreePPL.
 function propose_exponential_max_t (rate: Real, max_t: Real)
