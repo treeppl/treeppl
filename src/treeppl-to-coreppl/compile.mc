@@ -572,6 +572,31 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       ty = tyunknown_
     }
 
+  | ToExprTppl x ->
+    let let_ = lam n. lam body. lam inexpr. TmLet
+      { ident = n
+      , tyAnnot = tyunknown_
+      , tyBody = tyunknown_
+      , body = body
+      , inexpr = inexpr
+      , info = x.info
+      , ty = tyunknown_
+      } in
+    let var_ = lam n. TmVar {ident = n, ty = tyunknown_, info = x.info, frozen = false} in
+    let app_ = lam l. lam r. TmApp { lhs = l, rhs = r, info = x.info, ty = tyunknown_ } in
+    let const_ = lam c. TmConst { info = x.info, val = c, ty = tyunknown_ } in
+    let int_ = lam i. const_ (CInt { val = i }) in
+    let lam_ = lam n. lam body. TmLam {ident = n, tyAnnot = tyunknown_, tyIdent = tyunknown_, body = body, ty = tyunknown_, info = x.info} in
+    let addi_ = lam l. lam r. app_ (app_ (const_ (CAddi ())) l) r in
+    let subi_ = lam l. lam r. app_ (app_ (const_ (CSubi ())) l) r in
+    let s = nameSym "start" in
+    let e = nameSym "end" in
+    let idx = nameSym "idx" in
+    let_ s (compileExprTppl x.beginVal)
+      (let_ e (compileExprTppl x.endVal)
+        (app_ (app_ (const_ (CCreate {})) (addi_ (subi_ (var_ e) (var_ s)) (int_ 1)))
+          (lam_ idx (addi_ (var_ idx) (var_ s)))))
+
   | ConstructorExprTppl x ->
     let mkField : {key : {v:String, i:Info}, value : Option ExprTppl} -> (SID, Expr) = lam field.
       let sid = stringToSid field.key.v in
@@ -786,6 +811,39 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       thn = TmConst { info = x.info, ty = tyunknown_, val = CBool { val = false } },
       els = TmConst { info = x.info, ty = tyunknown_, val = CBool { val = true } },
       ty = tyunknown_
+    }
+
+  -- NOTE(vipa, 2023-05-05): Currently using 1-based indexing
+  | SubscriptExprTppl x ->
+    let app_ = lam l. lam r. TmApp { lhs = l, rhs = r, info = x.info, ty = tyunknown_ } in
+    let const_ = lam c. TmConst { info = x.info, val = c, ty = tyunknown_ } in
+    let int_ = lam i. const_ (CInt { val = i }) in
+    let addi_ = lam l. lam r. app_ (app_ (const_ (CAddi ())) l) r in
+    let var_ = lam n. TmVar {ident = n, ty = tyunknown_, info = x.info, frozen = false} in
+    let subseq_ = lam seq. lam idx. lam len. app_ (app_ (app_ (const_ (CSubsequence ())) seq) idx) len in
+    let let_ = lam n. lam body. lam inexpr. TmLet
+      { ident = n
+      , tyAnnot = tyunknown_
+      , tyBody = tyunknown_
+      , body = body
+      , inexpr = inexpr
+      , info = x.info
+      , ty = tyunknown_
+      } in
+    let idx = compileExprTppl x.idx in
+    match x.lastIdx with Some lastIdx then
+      let n = nameSym "start" in
+      let start = subi_ (var_ n) (int_ 1) in
+      let len = addi_ (subi_ (compileExprTppl lastIdx) (var_ n)) (int_ 1) in
+      let_ n idx (subseq_ (compileExprTppl x.left) start len)
+    else
+      app_ (app_ (const_ (CGet ())) (compileExprTppl x.left)) (subi_ idx (int_ 1))
+
+  | SequenceExprTppl x ->
+    TmSeq {
+      tms = map compileExprTppl x.values,
+      ty = tyunknown_,
+      info = x.info
     }
 
   | RealExprTppl r ->

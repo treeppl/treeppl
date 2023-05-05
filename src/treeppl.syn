@@ -79,7 +79,7 @@ Real[]
 Int[10]
 -/
 prod TypeTppl: TypeTppl = name:UName
-prod Sequence: TypeTppl = ty:TypeTppl "[" size:Integer? "]"
+prod SequenceTypeTppl: TypeTppl = ty:TypeTppl "[" size:Integer? "]"
 
 prod AtomicReal: TypeTppl = "Real"
 prod AtomicBool: TypeTppl = "Bool"
@@ -121,6 +121,7 @@ prod Real: ExprTppl = val:Real
 prod Variable: ExprTppl = ident:LName
 prod True: ExprTppl = "true"
 prod False: ExprTppl = "false"
+prod Sequence: ExprTppl = "[" (values:ExprTppl ("," values:ExprTppl)*)? "]"
 
 
 -- infix left Addition: Expr = "+"
@@ -146,6 +147,8 @@ prod left Unequal: ExprTppl = left:ExprTppl "!=" right:ExprTppl
 infix left And: ExprTppl = "&&"
 infix left Or: ExprTppl = "||"
 prefix Not: ExprTppl = "!"
+-- List operations
+postfix Subscript: ExprTppl = "[" idx:ExprTppl (":" lastIdx:ExprTppl)? "]"
 
 
 -- Function call as expression
@@ -154,10 +157,12 @@ prod FunCall: ExprTppl = f:ExprTppl "(" (args:ExprTppl ("," args:ExprTppl)*)? ")
 prod Projection: ExprTppl = target:ExprTppl "." field:LIdent
 
 precedence {
-  Projection FunCall;
+  Projection FunCall Subscript;
+  Not;
   Mul Div;
   Add Sub;
   ~Less Greater LessEq GreaterEq Equal Unequal;
+  ~And Or;
 }
 
 -- Built-in distro keywords
