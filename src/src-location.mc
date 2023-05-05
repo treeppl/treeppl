@@ -2,7 +2,7 @@
 
 include "sys.mc"
 
-let tpplSrcCwd = sysGetCwd ()
+let tpplSrcCwd = concat (sysGetCwd ()) "/src"
 
 let tpplSrcLocUnix =
   match sysGetEnv "HOME" with Some path then

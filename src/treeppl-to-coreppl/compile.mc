@@ -207,7 +207,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
 
   sem compile (input: Expr) =
   | FileTppl x ->
-    let externals = parseMCoreFile (concat tpplSrcLoc "/src/externals/ext.mc") in
+    let externals = parseMCoreFile (concat tpplSrcLoc "/externals/ext.mc") in
     let exts = setOfSeq cmpString ["externalLog", "externalExp"] in
     let externals = filterExternalMap exts externals in  -- strip everything but needed stuff from externals
     let externals = symbolize externals in
