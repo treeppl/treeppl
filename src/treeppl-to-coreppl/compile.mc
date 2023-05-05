@@ -586,7 +586,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
   -- inference/type-checking. This seems like a problem that should
   -- appear in many languages, i.e., we want a good way of supporting
   -- it in MExpr. I guess a superset that includes some form of ad-hoc
-  -- overleading?
+  -- overloading?
   | AddExprTppl x ->
     TmApp {
       info = x.info,
@@ -672,6 +672,23 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       ty = tyunknown_
     }
 
+  | LessExprTppl x ->
+    TmApp {
+      info = x.info,
+      lhs = TmApp {
+        info = x.info,
+        lhs = TmConst {
+          ty = tyunknown_,
+          info = x.info,
+          val = CLtf ()
+        },
+        rhs = compileExprTppl x.left,
+        ty = tyunknown_
+      },
+      rhs = compileExprTppl x.right,
+      ty = tyunknown_
+    }
+
   | GreaterExprTppl x ->
     TmApp {
       info = x.info,
@@ -681,6 +698,24 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
           ty = tyunknown_,
           info = x.info,
           val = CGtf ()
+        },
+        rhs = compileExprTppl x.left,
+        ty = tyunknown_
+      },
+      rhs = compileExprTppl x.right,
+      ty = tyunknown_
+    }
+
+
+  | GreaterEqExprTppl x ->
+    TmApp {
+      info = x.info,
+      lhs = TmApp {
+        info = x.info,
+        lhs = TmConst {
+          ty = tyunknown_,
+          info = x.info,
+          val = CGeqf ()
         },
         rhs = compileExprTppl x.left,
         ty = tyunknown_
@@ -703,6 +738,53 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
         ty = tyunknown_
       },
       rhs = compileExprTppl x.right,
+      ty = tyunknown_
+    }
+
+  | UnequalExprTppl x ->
+    TmApp {
+      info = x.info,
+      lhs = TmApp {
+        info = x.info,
+        lhs = TmConst {
+          ty = tyunknown_,
+          info = x.info,
+          val = CNeqf ()
+        },
+        rhs = compileExprTppl x.left,
+        ty = tyunknown_
+      },
+      rhs = compileExprTppl x.right,
+      ty = tyunknown_
+    }
+
+  | AndExprTppl x ->
+    TmMatch {
+      info = x.info,
+      target = compileExprTppl x.left,
+      pat = PatBool { val = true, info = get_ExprTppl_info x.left, ty = tyunknown_ },
+      thn = compileExprTppl x.right,
+      els = TmConst { info = x.info, ty = tyunknown_, val = CBool { val = false } },
+      ty = tyunknown_
+    }
+
+  | OrExprTppl x ->
+    TmMatch {
+      info = x.info,
+      target = compileExprTppl x.left,
+      pat = PatBool { val = true, info = get_ExprTppl_info x.left, ty = tyunknown_ },
+      thn = TmConst { info = x.info, ty = tyunknown_, val = CBool { val = true } },
+      els = compileExprTppl x.right,
+      ty = tyunknown_
+    }
+
+  | NotExprTppl x ->
+    TmMatch {
+      info = x.info,
+      target = compileExprTppl x.right,
+      pat = PatBool { val = true, info = get_ExprTppl_info x.right, ty = tyunknown_ },
+      thn = TmConst { info = x.info, ty = tyunknown_, val = CBool { val = false } },
+      els = TmConst { info = x.info, ty = tyunknown_, val = CBool { val = true } },
       ty = tyunknown_
     }
 

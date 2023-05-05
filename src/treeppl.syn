@@ -142,6 +142,11 @@ prod left LessEq: ExprTppl = left:ExprTppl "<=" right:ExprTppl
 prod left GreaterEq: ExprTppl = left:ExprTppl ">=" right:ExprTppl
 prod left Equal: ExprTppl = left:ExprTppl "==" right:ExprTppl
 prod left Unequal: ExprTppl = left:ExprTppl "!=" right:ExprTppl
+-- Boolean operators
+infix left And: ExprTppl = "&&"
+infix left Or: ExprTppl = "||"
+prefix Not: ExprTppl = "!"
+
 
 -- Function call as expression
 prod FunCall: ExprTppl = f:ExprTppl "(" (args:ExprTppl ("," args:ExprTppl)*)? ")"
