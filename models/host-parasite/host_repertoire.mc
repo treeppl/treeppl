@@ -32,6 +32,11 @@ con MsgNode: {
   out_msg: Message
 } -> MsgTree
 
+let getOutMsg: MsgTree -> Message = lam tree.
+  match tree with MsgLeaf l then l.out_msg
+  else match tree with MsgNode n then n.out_msg
+  else never
+
 type ProbsTree
 con ProbsLeaf: {
   age: Float,
@@ -78,13 +83,88 @@ let createLM: all row. all col. all a.
                Matrix a -> [row] -> [col] -> LabeledMatrix row col a =
   never
 
+type LabeledStringMatrix a = LabeledMatrix String String a
+
 type ModelParams = {
   q: Matrix Float,
-  d_matrix: LabeledMatrix String String Float,
+  d_matrix: LabeledStringMatrix Float,
   d_average: Float
 }
 
 mexpr
+
+let stationary_probs: Matrix Float -> StateLikelihoods =
+  never -- TODO
+in
+
+recursive let postorder_msgs:
+  Tree -> LabeledStringMatrix Float -> Matrix Float -> MsgTree =
+    never -- TODO
+in
+
+recursive let final_probs:
+  MsgTree -> Message -> Matrix Float -> Float -> ProbsTree =
+    never -- TODO
+in
+
+let message: Message -> Matrix Float -> Message =
+  never -- TODO
+in
+
+let observation_message: Map String Int -> Message =
+  never -- TODO
+in
+
+let rate: [Int] -> Int -> Int -> ModelParams -> Float =
+  never --TODO
+in
+
+let total_rate: [Int] -> ModelParams -> Float =
+  never --TODO
+in
+
+recursive let simulate_by_event:
+  [Int] -> [Event] -> Int -> Float -> Float -> ModelParams -> [HistoryPoint] =
+    never -- TODO
+in
+
+let simulate_history:
+  HistoryPoint -> HistoryPoint -> ModelParams -> [HistoryPoint] =
+    never --TODO
+in
+
+recursive let simulate: ProbsTree -> HistoryPoint -> ModelParams -> HistoryTree =
+  never --TODO
+in
+
+let propose_exponential_max_t: Float -> Float -> Float =
+  never --TODO
+in
+
+
+recursive let propose_events_for_host:
+  Int -> Float -> Float -> Int -> Int -> Matrix Float =
+    never --TODO
+in
+
+recursive let propose_events:
+  Int -> HistoryPoint -> HistoryPoint -> Matrix Float -> [Event] =
+    never --TODO
+in
+
+let get_proposal_params:
+  Tree -> LabeledStringMatrix Float -> Matrix Float -> Float -> ProbsTree =
+    lam parasite_tree. lam interactions. lam q. lam tune.
+
+    let msgTree: MsgTree = postorder_msgs parasite_tree interactions q in
+
+    let pis: Message =
+      create (length (getOutMsg msgTree)) (lam. stationary_probs q) in
+
+    final_probs msgTree pis q tune
+
+in
+
 
 -- Data
 let parasite_tree: Tree = Node{
@@ -116,7 +196,7 @@ let parasite_tree: Tree = Node{
 
 -- let mapFromSeq : all k. all v. (k -> k -> Int) -> [(k, v)] -> Map k v =
 
-let interactions: LabeledMatrix String String Int =
+let interactions: LabeledStringMatrix Int =
   createLM [
       [2,2,0,0,0]
       [2,2,0,0,0]
@@ -126,7 +206,7 @@ let interactions: LabeledMatrix String String Int =
       [0,0,0,0,2]
     ] ["T1","T2","T3","T4","T5","T6"] ["H1","H2","H3","H4","H5"] in
 
-let host_distances: LabeledMatrix String String Float =
+let host_distances: LabeledStringMatrix Float =
   createLM [
       [0.           , 0.8630075756 , 2.6699063134 , 2.6699063134 , 2.6699063134],
       [0.8630075756 , 0.           , 2.6699063134 , 2.6699063134 , 2.6699063134],
@@ -142,20 +222,21 @@ let lambda: [Float] = assume (Dirichlet [1.,1.,1.,1.]) in
 let mu: Float = assume (Exponential 10.) in
 let beta: Float = assume (Exponential 1.) in
 
-let r = [
+let r: Matrix Float = [
   [negf (get lambda 0), (get lambda 0), 0.],
   [get lambda 1, negf (addf (get lambda 1) (get lambda 2)), get lambda 2],
   [0., get lambda 3, negf (get lambda 3)]
 ] in
 
-let q = map (lam row. map (lam e. mulf mu e) row) r in
+let q: Matrix Float = map (lam row. map (lam e. mulf mu e) row) r in
 
 let tot_dist = 0. in
 let n_hosts = 5 in
 let d_matrix = host_distances in
 let d_average = 4.4 in
 
-let mp: ModelParams = { q = q, d_matrix = host_distances, d_average = d_average } in
+let mp: ModelParams =
+  { q = q, d_matrix = host_distances, d_average = d_average } in
 
 mu
 
