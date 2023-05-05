@@ -150,6 +150,8 @@ infix left Or: ExprTppl = "||"
 prefix Not: ExprTppl = "!"
 -- List operations
 postfix Subscript: ExprTppl = "[" idx:ExprTppl (":" lastIdx:ExprTppl)? "]"
+-- Conversions, not sure this is actually what we want in the end
+prod ConvIntToReal: ExprTppl = "Real" "(" val:ExprTppl ")"
 
 
 -- Function call as expression

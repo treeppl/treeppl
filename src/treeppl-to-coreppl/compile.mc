@@ -722,6 +722,9 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       ty = tyunknown_
     }
 
+  | ConvIntToRealExprTppl x ->
+    withInfo x.info (int2float_ (compileExprTppl x.val))
+
   | LessEqExprTppl x ->
     TmApp {
       info = x.info,
