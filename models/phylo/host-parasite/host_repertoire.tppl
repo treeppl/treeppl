@@ -199,7 +199,7 @@ function model(parasite_tree: Tree, interactions: LabeledMatrix,
     // bilities of the independence model, or some estimate of the
     // stationary repertoire probabilities from the full model
     if (sum (rep) == 0)
-        factor INFINITY
+        factor -INFINITY
     else
         factor -n_host * log(3)   // unconditional prob for possible repertoires
 
