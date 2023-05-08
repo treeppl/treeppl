@@ -1,4 +1,5 @@
 include "map.mc"
+include "math.mc"
 
 type Tree
 con Leaf: {
@@ -12,7 +13,8 @@ con Node: {
   label: String
 } -> Tree
 
-type StateLikelihoods = (Float,Float,Float)
+-- Always three elements, but not expressed in type
+type StateLikelihoods = [Float]
 
 type Message = [StateLikelihoods]
 
@@ -51,6 +53,11 @@ con ProbsNode: {
   right: ProbsTree
 } -> ProbsTree
 
+let getProbs: ProbsTree -> Message = lam tree.
+  match tree with ProbsLeaf l then l.probs
+  else match tree with ProbsNode n then n.probs
+  else never
+
 type Event = {age: Float, host: Int, from_state: Int, to_state: Int}
 
 type HistoryPoint = {age: Float, repertoire: [Int]}
@@ -74,8 +81,10 @@ con HistoryNode: {
 -- In TreePPL, we would like to have a conveninent way to refer to the rows and columns of this matrix using names (without runtime overhead)
 -- Alternative: type LabeledMatrix row col a = Map (row,col) a
 type LabeledMatrix row col a = Map row (Map col a)
-let getLM: all row. all col. all a. LabeledMatrix row col a -> row -> col -> a =
- lam row. lam col. lam a. never -- TODO
+let getLM: all row. all col. all a.
+  LabeledMatrix row col a -> row -> col -> a =
+    lam row. lam col. lam a. never
+      -- TODO Daniel
 
 type Matrix a = [[a]]
 
@@ -94,66 +103,78 @@ type ModelParams = {
 mexpr
 
 let stationary_probs: Matrix Float -> StateLikelihoods =
-  never -- TODO
+  lam q.
+  never -- TODO Fredrik Mariana
 in
 
 recursive let postorder_msgs:
-  Tree -> LabeledStringMatrix Float -> Matrix Float -> MsgTree =
-    never -- TODO
+  Tree -> LabeledStringMatrix Int -> Matrix Float -> MsgTree =
+    lam tree. lam interactions. lam q.
+    never -- TODO Daniel
 in
 
 recursive let final_probs:
   MsgTree -> Message -> Matrix Float -> Float -> ProbsTree =
-    never -- TODO
+    lam tree. lam root_msg. lam q. lam tune.
+    never -- TODO Daniel
 in
 
 let message: Message -> Matrix Float -> Message =
-  never -- TODO
+  lam start_msg. lam t.
+    never -- TODO Daniel
 in
 
 let observation_message: Map String Int -> Message =
-  never -- TODO
+  lam interactions.
+    never -- TODO Daniel
 in
 
 let rate: [Int] -> Int -> Int -> ModelParams -> Float =
-  never --TODO
+  lam rep. lam host_index. lam to_state. lam mp.
+    never --TODO Daniel
 in
 
 let total_rate: [Int] -> ModelParams -> Float =
-  never --TODO
+  lam rep. lam mp.
+    never --TODO Daniel
 in
 
 recursive let simulate_by_event:
   [Int] -> [Event] -> Int -> Float -> Float -> ModelParams -> [HistoryPoint] =
-    never -- TODO
+    lam rep. lam events. lam event_index. lam from_age. lam end_age. lam mp.
+      never -- TODO Daniel
 in
 
 let simulate_history:
   HistoryPoint -> HistoryPoint -> ModelParams -> [HistoryPoint] =
-    never --TODO
+    lam from. lam to. lam mp.
+      never --TODO Daniel
 in
 
 recursive let simulate: ProbsTree -> HistoryPoint -> ModelParams -> HistoryTree =
-  never --TODO
+ lam tree. lam start. lam mp.
+   never --TODO Daniel
 in
 
 let propose_exponential_max_t: Float -> Float -> Float =
-  never --TODO
+  lam rate. lam max_t.
+    never --TODO Daniel
 in
 
-
 recursive let propose_events_for_host:
-  Int -> Float -> Float -> Int -> Int -> Matrix Float =
-    never --TODO
+  Int -> Float -> Float -> Int -> Int -> Matrix Float -> [Event] =
+    lam host_index. lam from_age. lam end_age. lam from_state. lam end_state. lam q.
+    never --TODO Daniel
 in
 
 recursive let propose_events:
   Int -> HistoryPoint -> HistoryPoint -> Matrix Float -> [Event] =
-    never --TODO
+    lam host_index. lam from. lam to. lam q.
+      never --TODO Daniel
 in
 
 let get_proposal_params:
-  Tree -> LabeledStringMatrix Float -> Matrix Float -> Float -> ProbsTree =
+  Tree -> LabeledStringMatrix Int -> Matrix Float -> Float -> ProbsTree =
     lam parasite_tree. lam interactions. lam q. lam tune.
 
     let msgTree: MsgTree = postorder_msgs parasite_tree interactions q in
@@ -198,11 +219,11 @@ let parasite_tree: Tree = Node{
 
 let interactions: LabeledStringMatrix Int =
   createLM [
-      [2,2,0,0,0]
-      [2,2,0,0,0]
-      [0,0,2,2,0]
-      [0,0,2,2,0]
-      [0,0,0,0,2]
+      [2,2,0,0,0],
+      [2,2,0,0,0],
+      [0,0,2,2,0],
+      [0,0,2,2,0],
+      [0,0,0,0,2],
       [0,0,0,0,2]
     ] ["T1","T2","T3","T4","T5","T6"] ["H1","H2","H3","H4","H5"] in
 
@@ -215,7 +236,7 @@ let host_distances: LabeledStringMatrix Float =
       [2.6699063134 , 2.6699063134 , 1.9598979474 , 1.9598979474 , 0.]
     ] ["H1","H2","H3","H4","H5"] ["H1","H2","H3","H4","H5"] in
 
-let tune: Real = 0.9 in
+let tune: Float = 0.9 in
 
 -- Model entry point
 let lambda: [Float] = assume (Dirichlet [1.,1.,1.,1.]) in
@@ -230,14 +251,45 @@ let r: Matrix Float = [
 
 let q: Matrix Float = map (lam row. map (lam e. mulf mu e) row) r in
 
-let tot_dist = 0. in
+---- Hardcoded for now ----
 let n_hosts = 5 in
 let d_matrix = host_distances in
 let d_average = 4.4 in
+---------------------------
 
 let mp: ModelParams =
-  { q = q, d_matrix = host_distances, d_average = d_average } in
+  { q = q, d_matrix = d_matrix, d_average = d_average } in
 
-mu
+let probs_tree: ProbsTree = get_proposal_params parasite_tree interactions q tune in
 
+-- This should use `propose` eventually, now `assume` and `weight` manually
+let rep: [Int] = create n_hosts (lam i.
+  let p = get (getProbs probs_tree) i in
+  assume (Categorical p)
+) in
+
+(
+  if any (eqi 2) rep then
+    weight 0. -- TODO Mariana Fredrik
+  else
+    weight (negf inf)
+);
+
+match probs_tree with ProbsNode n then
+  let historyPoint = { age = n.age, repertoire = rep } in
+  let left = simulate n.left historyPoint mp in
+  let right = simulate n.right historyPoint mp in
+  let historyTree = HistoryNode {
+    age = n.age,
+    label = n.label,
+    repertoire = rep,
+    history = [],
+    left=left,
+    right=right
+  } in
+
+  -- { historyTree = historyTree, lambda = lambda, mu = mu, beta = beta }
+  mu
+
+else error "Root is not a node!"
 
