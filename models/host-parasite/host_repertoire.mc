@@ -1,6 +1,17 @@
 include "map.mc"
 include "math.mc"
 
+-- Matrix stuff, we need to implement this (in the Miking standard library). We
+-- should probably do it for tensors instead (and also add support for tensors
+-- in CorePPL)
+let transpose: Matrix Float -> Matrix Float =
+  lam m. never -- TODO
+
+let matrixExponential: Matrix Float -> Matrix Float =
+  lam m. never -- TODO
+
+let
+
 type Tree
 con Leaf: {
   age: Float,
@@ -78,13 +89,14 @@ con HistoryNode: {
   right: HistoryTree
 } -> HistoryTree
 
--- In TreePPL, we would like to have a conveninent way to refer to the rows and columns of this matrix using names (without runtime overhead)
+-- In TreePPL, we would like to have a conveninent way to refer to the rows and
+-- columns of this matrix using names (without runtime overhead)
 -- Alternative: type LabeledMatrix row col a = Map (row,col) a
 type LabeledMatrix row col a = Map row (Map col a)
 let getLM: all row. all col. all a.
   LabeledMatrix row col a -> row -> col -> a =
-    lam row. lam col. lam a. never
-      -- TODO Daniel
+    lam row. lam col. lam a.
+      mapFindExn col (mapFindExn row a)
 
 type Matrix a = [[a]]
 
@@ -110,39 +122,99 @@ in
 recursive let postorder_msgs:
   Tree -> LabeledStringMatrix Int -> Matrix Float -> MsgTree =
     lam tree. lam interactions. lam q.
-    never -- TODO Daniel
+    match tree with Leaf t then
+      MsgLeaf{
+        age = 0.,
+        label = t.label,
+        out_msg = observation_message (mapFindExn (t.label) interactions)
+      }
+    else match tree with Node t then
+      let left = postorder_msgs t.left interactions q in
+      let right = postorder_msgs t.right interactions q in
+
+      -- TODO We need to go through the pseudo-TrePPL code for the rest of this
+      -- function together
+      never
+
+    else never
 in
 
 recursive let final_probs:
   MsgTree -> Message -> Matrix Float -> Float -> ProbsTree =
     lam tree. lam root_msg. lam q. lam tune.
-    never -- TODO Daniel
+    never
+    -- TODO We need to go through the pseudo-TrePPL code for the rest of this
+    -- function together
 in
 
 let message: Message -> Matrix Float -> Message =
   lam start_msg. lam t.
-    never -- TODO Daniel
+    never
+    -- TODO We need to go through the pseudo-TrePPL code for the rest of this
+    -- function together
 in
 
 let observation_message: Map String Int -> Message =
   lam interactions.
-    never -- TODO Daniel
+    never
+    -- TODO We need to go through the pseudo-TrePPL code for the rest of this
+    -- function together
 in
 
 let rate: [Int] -> Int -> Int -> ModelParams -> Float =
   lam rep. lam host_index. lam to_state. lam mp.
-    never --TODO Daniel
+
+    let from_state: Int = get rep host_index in
+
+    let base_rate = get (get mp.q from_state) to_state in
+
+    if gti from_state to_state then base_rate else
+
+      -- TODO We need to go through the pseudo-TrePPL code for the rest of this
+      -- function together
+      let current_hosts =
+        if eqi from_state 0 then never
+        else never
+      in
+
+      never
 in
 
 let total_rate: [Int] -> ModelParams -> Float =
   lam rep. lam mp.
-    never --TODO Daniel
+    -- TODO We need to go through the pseudo-TrePPL code for the rest of this
+    -- function together
+    never
 in
 
 recursive let simulate_by_event:
   [Int] -> [Event] -> Int -> Float -> Float -> ModelParams -> [HistoryPoint] =
     lam rep. lam events. lam event_index. lam from_age. lam end_age. lam mp.
-      never -- TODO Daniel
+      let l = length events in
+      if gti event_index l then
+        let change_rate: Float = total_rate rep mp in
+        observe 0 (Poisson (mulf change_rate
+                              (subf ((last events).age) end_age)));
+        []
+      else
+        let the_event: Event = get events event_index in
+        let rate = rate rep (the_event.host) (the_event.to_state) mp in
+        let change_rate = total_rate rep mp in
+
+        observe true (Bernoulli (divf rate change_rate));
+        observe (subf from_age (the_event.age)) (Exponential change_rate);
+
+        let new_rep = mapi (lam i. lam r.
+            if eqi i (the_event.host) then the_event.to_state
+            else r
+          ) rep
+        in
+
+        let hp: HistoryPoint = { age = the_event.age, repertoire = new_rep } in
+
+        -- TODO We need to go through the pseudo-TrePPL code for the rest of
+        -- this function together
+        never
 in
 
 let simulate_history:
@@ -185,7 +257,6 @@ let get_proposal_params:
     final_probs msgTree pis q tune
 
 in
-
 
 -- Data
 let parasite_tree: Tree = Node{
@@ -288,6 +359,7 @@ match probs_tree with ProbsNode n then
     right=right
   } in
 
+  -- TODO We currently only return mu
   -- { historyTree = historyTree, lambda = lambda, mu = mu, beta = beta }
   mu
 
