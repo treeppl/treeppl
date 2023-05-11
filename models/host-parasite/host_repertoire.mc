@@ -1,17 +1,6 @@
 include "map.mc"
 include "math.mc"
 
--- Matrix stuff, we need to implement this (in the Miking standard library). We
--- should probably do it for tensors instead (and also add support for tensors
--- in CorePPL)
-let transpose: Matrix Float -> Matrix Float =
-  lam m. never -- TODO
-
-let matrixExponential: Matrix Float -> Matrix Float =
-  lam m. never -- TODO
-
-let
-
 type Tree
 con Leaf: {
   age: Float,
@@ -98,18 +87,36 @@ let getLM: all row. all col. all a.
     lam row. lam col. lam a.
       mapFindExn col (mapFindExn row a)
 
+
+-- Matrix stuff, we need to implement this (in the Miking standard library). We
+-- should probably do it for tensors instead (and also add support for tensors
+-- in CorePPL)
 type Matrix a = [[a]]
+
+let transpose: Matrix Float -> Matrix Float =
+  lam m. never -- TODO
+
+let matrixExponential: Matrix Float -> Matrix Float =
+  lam m. never -- TODO
+
+let matrixMulScalar: Matrix Float -> Float -> Matrix Float =
+  lam m. lam s. never -- TODO
+
+let matrixMulElement: Matrix Float -> Matrix Float -> Matrix Float =
+  lam m1. lam m2. never -- TODO
 
 let createLM: all row. all col. all a.
                Matrix a -> [row] -> [col] -> LabeledMatrix row col a =
   never
 
+-- TODO Discuss: do we actually need the labels in the TreePPL code? Can we not verify things in pre- and post processing steps?
 type LabeledStringMatrix a = LabeledMatrix String String a
 
 type ModelParams = {
   q: Matrix Float,
   d_matrix: LabeledStringMatrix Float,
-  d_average: Float
+  d_average: Float,
+  beta: Float
 }
 
 mexpr
@@ -132,33 +139,72 @@ recursive let postorder_msgs:
       let left = postorder_msgs t.left interactions q in
       let right = postorder_msgs t.right interactions q in
 
-      -- TODO We need to go through the pseudo-TrePPL code for the rest of this
-      -- function together
-      never
+      let tLeft = transpose (matrixExponential (matrixMulScalar q (subf t.age left.age))) in
+      let tRight = transpose (matrixExponential (matrixMulScalar q (subf t.age right.age))) in
 
+      -- left_in_msg  = message( left.out_msg, Tleft)
+      -- right_in_msg = message(right.out_msg, Tright)
+
+      -- TODO Check if correct?
+      let out_msg = matrixMulElement left_in_msg right_in_msg in
+
+      -- return MsgNode(age=tree.age, label=tree.label, left_in_msg=left_in_msg, right_in_msg=right_in_msg, out_msg=out_msg)
+      never
     else never
 in
 
 recursive let final_probs:
   MsgTree -> Message -> Matrix Float -> Float -> ProbsTree =
     lam tree. lam root_msg. lam q. lam tune.
+
+    -- TODO Fredrik: What operation is ^?
+    -- let probs = (matrixMulElement tree.out_msg root_msg)^tune in
+
+    -- if tree is Leaf
+    --     return ProbsLeaf(age=0.0, label=tree.label, probs=probs)
+
+    -- Tleft  = exp(Q*(tree.age-tree.left.age))
+    -- Tright = exp(Q*(tree.age-tree.right.age))
+
+    -- TODO Fredrik: * unclear. We think it's elementwise?
+    -- left_root_msg  = message(root_msg*tree.right_in_msg, Tleft)
+    -- right_root_msg = message(root_msg*tree.left_in_msg , Tright)
+
+    -- left  =  final_probs(tree.left,  left_up_msg, Q, tune)
+    -- right =  final_probs(tree.left, right_up_msg, Q, tune)
+
+    -- return ProbsNode(age=tree.age, label=tree.label, left=left, right=right, probs=probs)
+
     never
-    -- TODO We need to go through the pseudo-TrePPL code for the rest of this
-    -- function together
 in
 
 let message: Message -> Matrix Float -> Message =
   lam start_msg. lam t.
+    -- TODO Fredrik: * operation elementwise or standard matrixmul?
+    -- for (i=1 to lengths(start_msg)[1])
+    --     end_msg[i] = start_msg[i]*T
+
+    -- return end_msg
     never
-    -- TODO We need to go through the pseudo-TrePPL code for the rest of this
-    -- function together
 in
 
 let observation_message: Map String Int -> Message =
   lam interactions.
+    -- msg: Real[][3]
+    -- for c in interactions {
+    --     msg[i] =
+    --         -- TODO Daniel: Match on values, not labels
+    --         case c == "0" | [1.0, 0.0, 0.0]
+    --         case c == "1" | [0.0, 1.0, 0.0]
+    --         case c == "2" | [0.0, 0.0, 1.0]
+    --         -- TODO Encode ? as -1 for now. Discuss later.
+    --         case c == "?" | [1.0, 1.0, 1.0]
+    --         // default |  ERROR?
+    -- }
+
+    -- return msg
+
     never
-    -- TODO We need to go through the pseudo-TrePPL code for the rest of this
-    -- function together
 in
 
 let rate: [Int] -> Int -> Int -> ModelParams -> Float =
@@ -170,20 +216,39 @@ let rate: [Int] -> Int -> Int -> ModelParams -> Float =
 
     if gti from_state to_state then base_rate else
 
-      -- TODO We need to go through the pseudo-TrePPL code for the rest of this
-      -- function together
+      -- TODO Filtering operation
       let current_hosts =
-        if eqi from_state 0 then never
-        else never
+        if eqi from_state 0 then
+          -- current_hosts = which(rep %in% [1,2])
+          never
+        else
+          -- current_hosts = which(rep == 2)
+          never
       in
+
+      -- d = mean (mp.D[host_index][current_hosts])
+
+      -- return base_rate * (exp(-mp.beta*(d/mp.d_average))
 
       never
 in
 
 let total_rate: [Int] -> ModelParams -> Float =
   lam rep. lam mp.
-    -- TODO We need to go through the pseudo-TrePPL code for the rest of this
-    -- function together
+
+    -- for (i in 1 to length(rep)) -- TODO Remove for loop? i never used
+    --     lossRates =
+    --       length(rep==1) -- rep==1 filters rep only for hosts with state 1
+    --       *mp.Q[1][0] + length(rep==2)*mp.Q[2][1]
+
+    -- gainRates = 0.0
+    -- for (i in 1 to length(rep)) {
+    --     if (rep[i] %in% [1,2])
+    --         gainRates += rate (rep, i, rep[i]+1, mp)
+    -- }
+
+    -- return lossRates + gainRates
+
     never
 in
 
@@ -212,8 +277,8 @@ recursive let simulate_by_event:
 
         let hp: HistoryPoint = { age = the_event.age, repertoire = new_rep } in
 
-        -- TODO We need to go through the pseudo-TrePPL code for the rest of
-        -- this function together
+        -- return cons hp (simulate_by_event (new_rep, events, event_index+1, the_event.age, end_age, mp))
+
         never
 in
 
@@ -236,6 +301,7 @@ in
 recursive let propose_events_for_host:
   Int -> Float -> Float -> Int -> Int -> Matrix Float -> [Event] =
     lam host_index. lam from_age. lam end_age. lam from_state. lam end_state. lam q.
+    -- TODO What is normalize?
     never --TODO Daniel
 in
 
@@ -298,6 +364,7 @@ let interactions: LabeledStringMatrix Int =
       [0,0,0,0,2]
     ] ["T1","T2","T3","T4","T5","T6"] ["H1","H2","H3","H4","H5"] in
 
+-- TODO Change to matrix
 let host_distances: LabeledStringMatrix Float =
   createLM [
       [0.           , 0.8630075756 , 2.6699063134 , 2.6699063134 , 2.6699063134],
@@ -329,7 +396,7 @@ let d_average = 4.4 in
 ---------------------------
 
 let mp: ModelParams =
-  { q = q, d_matrix = d_matrix, d_average = d_average } in
+  { q = q, d_matrix = d_matrix, d_average = d_average, beta = beta } in
 
 let probs_tree: ProbsTree = get_proposal_params parasite_tree interactions q tune in
 

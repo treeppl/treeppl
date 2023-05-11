@@ -182,7 +182,7 @@ function model(parasite_tree: Tree, interactions: LabeledMatrix,
         }
     }
     d = tot_dist / n_hosts*(n_hosts-1)/2
-    mp = ModelParams (Q=Q, D=D, d_average=d)
+    mp = ModelParams (Q=Q, D=D, d_average=d, beta=beta)
 
     // Derive params for ancestral repertoire proposals from independence model
     probs_tree = get_proposal_params (parasite_tree, interactions, Q, tune)
@@ -409,6 +409,7 @@ function propose_events_for_host (host_index: Int, from_age: Real, end_age: Real
 
     state_probs = normalize ([Q[from_state][to_states[1]], Q[from_state][to_states[2]])
 
+    propose new_state ~ Categorical (state_probs, to_states)
     propose new_state ~ Categorical (state_probs, to_states)
 
     event = Event(age=new_age, host=host_index, from_state=from_state, to_state=new_state)
