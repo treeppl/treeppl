@@ -112,7 +112,7 @@ lang LowerProjMatch = ProjMatchAst + MatchAst + DataPat + RecordPat + RecordType
         -- arbitrary type-checking stuff after the actual typechecking
         -- phase, but I believe these uses are at least correct, and
         -- should not leak any new types into the generated code.
-        unify [infoTm x.target] arr.to (tyTm x.target);
+        unify _tcEnvEmpty [infoTm x.target] arr.to (tyTm x.target);
         match arr.from with recTy & TyRecord rec then
           match mapLookup x.field rec.fields with Some fieldTy then
             if eqType fieldTy expectedResultTy
@@ -322,8 +322,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
     lam cont.
     TmLam {
       ident = arg.name.v,
-      tyIdent = tyunknown_,
       tyAnnot = compileTypeTppl arg.ty,
+      tyParam = tyunknown_,
       body = cont,
       ty = tyunknown_,
       info = arg.name.i
