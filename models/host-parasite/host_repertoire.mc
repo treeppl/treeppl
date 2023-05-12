@@ -1,32 +1,73 @@
 include "map.mc"
 include "math.mc"
 
-type Tree
-con Leaf: {
-  age: Float,
-  label: String
-} -> Tree
-con Node: {
-  age: Float,
-  left: Tree,
-  right: Tree,
-  label: String
-} -> Tree
+----------------
+--- Matrices ---
+----------------
+
+-- Matrix stuff, we need to implement this (in the Miking standard library). We
+-- should probably do it for tensors instead (and also add support for tensors
+-- in CorePPL)
+type Matrix a = [[a]] -- TODO Tensor[a] instead of [[a]]?
+
+let transpose: Matrix Float -> Matrix Float =
+  lam m. never -- TODO
+
+let matrixExponential: Matrix Float -> Matrix Float =
+  lam m. never -- TODO
+
+let matrixMulScalar: Float -> Matrix Float -> Matrix Float =
+   lam s. lam m.
+    map (lam row. map (lam e. mulf s e) row) m
+
+let matrixMulElement: Matrix Float -> Matrix Float -> Matrix Float =
+  lam m1. lam m2. never -- TODO
+
+let matrixPower: Matrix Float -> Float -> Matrix Float =
+  lam m. lam f. never -- TODO
+
+let stationary_probs: Matrix Float -> StateLikelihoods =
+  lam q.
+    never -- TODO Fredrik Mariana
+
+-------------------
+--- Model types ---
+-------------------
+
+-- TODO Labels are integers, as this is the most efficient option. We currently
+-- assume that the mapping between actual string labels and integers is done in
+-- pre- and post-processing.
+type Label = Int
 
 -- Always three elements, but not expressed in type
 type StateLikelihoods = [Float]
 
 type Message = [StateLikelihoods]
 
+-- TODO: There is lots of repetition for the Tree types. Make the Tree type
+-- Tree l r instead, and instantiate l and r to suitable types for the
+-- different Tree types?
+type Tree
+con Leaf: {
+  age: Float,
+  label: Label
+} -> Tree
+con Node: {
+  age: Float,
+  left: Tree,
+  right: Tree,
+  label: Label
+} -> Tree
+
 type MsgTree
 con MsgLeaf: {
   age: Float,
-  label: String,
+  label: Label,
   out_msg: Message
 } -> MsgTree
 con MsgNode: {
   age: Float,
-  label: String,
+  label: Label,
   left: MsgTree,
   right: MsgTree,
   left_in_msg: Message,
@@ -39,15 +80,22 @@ let getOutMsg: MsgTree -> Message = lam tree.
   else match tree with MsgNode n then n.out_msg
   else never
 
+let getMsgTreeAge: MsgTree -> Float = lam tree.
+  match tree with MsgLeaf l then l.age
+  else match tree with MsgNode n then n.age
+  else never
+
+let getAge: MsgTree -> Float = lam tree.
+
 type ProbsTree
 con ProbsLeaf: {
   age: Float,
-  label: String,
+  label: Label,
   probs: Message
 } -> ProbsTree
 con ProbsNode: {
   age: Float,
-  label: String,
+  label: Label,
   probs: Message,
   left: ProbsTree,
   right: ProbsTree
@@ -65,91 +113,74 @@ type HistoryPoint = {age: Float, repertoire: [Int]}
 type HistoryTree
 con HistoryLeaf: {
   age: Float,
-  label: String,
+  label: Label,
   repertoire: [Int],
   history: [HistoryPoint]
 } -> HistoryTree
 con HistoryNode: {
   age: Float,
-  label: String,
+  label: Label,
   repertoire: [Int],
   history: [HistoryPoint],
   left: HistoryTree,
   right: HistoryTree
 } -> HistoryTree
 
--- In TreePPL, we would like to have a conveninent way to refer to the rows and
--- columns of this matrix using names (without runtime overhead)
--- Alternative: type LabeledMatrix row col a = Map (row,col) a
-type LabeledMatrix row col a = Map row (Map col a)
-let getLM: all row. all col. all a.
-  LabeledMatrix row col a -> row -> col -> a =
-    lam row. lam col. lam a.
-      mapFindExn col (mapFindExn row a)
-
-
--- Matrix stuff, we need to implement this (in the Miking standard library). We
--- should probably do it for tensors instead (and also add support for tensors
--- in CorePPL)
-type Matrix a = [[a]]
-
-let transpose: Matrix Float -> Matrix Float =
-  lam m. never -- TODO
-
-let matrixExponential: Matrix Float -> Matrix Float =
-  lam m. never -- TODO
-
-let matrixMulScalar: Matrix Float -> Float -> Matrix Float =
-  lam m. lam s. never -- TODO
-
-let matrixMulElement: Matrix Float -> Matrix Float -> Matrix Float =
-  lam m1. lam m2. never -- TODO
-
-let createLM: all row. all col. all a.
-               Matrix a -> [row] -> [col] -> LabeledMatrix row col a =
-  never
-
--- TODO Discuss: do we actually need the labels in the TreePPL code? Can we not verify things in pre- and post processing steps?
-type LabeledStringMatrix a = LabeledMatrix String String a
+------------------------
+--- Model parameters ---
+------------------------
 
 type ModelParams = {
   q: Matrix Float,
-  d_matrix: LabeledStringMatrix Float,
+  d_matrix: Matrix Float,
   d_average: Float,
   beta: Float
 }
 
+
 mexpr
 
-let stationary_probs: Matrix Float -> StateLikelihoods =
-  lam q.
-  never -- TODO Fredrik Mariana
-in
+-----------------------
+--- Model functions ---
+-----------------------
 
 recursive let postorder_msgs:
-  Tree -> LabeledStringMatrix Int -> Matrix Float -> MsgTree =
+  Tree -> Matrix Int -> Matrix Float -> MsgTree =
     lam tree. lam interactions. lam q.
     match tree with Leaf t then
-      MsgLeaf{
+      MsgLeaf {
         age = 0.,
         label = t.label,
-        out_msg = observation_message (mapFindExn (t.label) interactions)
+        out_msg = observation_message (get interactions (t.label))
       }
     else match tree with Node t then
       let left = postorder_msgs t.left interactions q in
       let right = postorder_msgs t.right interactions q in
 
-      let tLeft = transpose (matrixExponential (matrixMulScalar q (subf t.age left.age))) in
-      let tRight = transpose (matrixExponential (matrixMulScalar q (subf t.age right.age))) in
+      let leftAge = getMsgTreeAge left in
+      let rightAge = getMsgTreeAge right in
 
-      -- left_in_msg  = message( left.out_msg, Tleft)
-      -- right_in_msg = message(right.out_msg, Tright)
+      -- TODO Fredrik: Are these operations the intended ones?
+      let tLeft =
+        transpose
+          (matrixExponential (matrixMulScalar (subf t.age leftAge) q)) in
+      let tRight =
+        transpose
+          (matrixExponential (matrixMulScalar (subf t.age rightAge) q)) in
 
-      -- TODO Check if correct?
+      let left_in_msg  = message (getOutMsg left) tLeft in
+      let right_in_msg = message (getOutMsg right) tRight in
+
+      -- TODO Fredrik: Is this elementwise or standard matrix multiplication?
       let out_msg = matrixMulElement left_in_msg right_in_msg in
 
-      -- return MsgNode(age=tree.age, label=tree.label, left_in_msg=left_in_msg, right_in_msg=right_in_msg, out_msg=out_msg)
-      never
+      MsgNode {
+        age=t.age,
+        label=t.label,
+        left_in_msg=left_in_msg,
+        right_in_msg=right_in_msg,
+        out_msg=out_msg
+      }
     else never
 in
 
@@ -157,30 +188,40 @@ recursive let final_probs:
   MsgTree -> Message -> Matrix Float -> Float -> ProbsTree =
     lam tree. lam root_msg. lam q. lam tune.
 
-    -- TODO Fredrik: What operation is ^?
-    -- let probs = (matrixMulElement tree.out_msg root_msg)^tune in
+    -- TODO Fredrik: What operation is * and ^?
+    -- probs = (tree.out_msg * root_msg)^tune
+    let probs: Message =
+      matrixPower (matrixMulElement (getOutMsg tree) root_msg) tune in
 
-    -- if tree is Leaf
-    --     return ProbsLeaf(age=0.0, label=tree.label, probs=probs)
+    match tree with MsgLeaf t then
+      ProbsLeaf { age = 0., label = t.label, probs = probs }
+    else match tree with MsgNode t then
+      let leftAge = getMsgTreeAge t.left in
+      let rightAge = getMsgTreeAge t.right in
 
-    -- Tleft  = exp(Q*(tree.age-tree.left.age))
-    -- Tright = exp(Q*(tree.age-tree.right.age))
+      -- TODO Fredrik: Check
+      -- Tleft  = exp(Q*(tree.age-tree.left.age))
+      -- Tright = exp(Q*(tree.age-tree.right.age))
+      let tLeft = matrixExponential (matrixMulScalar (subf t.age leftAge) q) in
+      let tRight = matrixExponential (matrixMulScalar (subf t.age rightAge) q) in
 
-    -- TODO Fredrik: * unclear. We think it's elementwise?
-    -- left_root_msg  = message(root_msg*tree.right_in_msg, Tleft)
-    -- right_root_msg = message(root_msg*tree.left_in_msg , Tright)
+      -- TODO Fredrik: * unclear. We think it's elementwise?
+      -- left_root_msg  = message(root_msg*tree.right_in_msg, Tleft)
+      -- right_root_msg = message(root_msg*tree.left_in_msg , Tright)
+      let left_root_msg =
+        message (matrixMulElement root_msg (t.right_in_msg)) tLeft in
+      let right_root_msg =
+        message (matrixMulElement root_msg (t.left_in_msg) tRight in
 
-    -- left  =  final_probs(tree.left,  left_up_msg, Q, tune)
-    -- right =  final_probs(tree.left, right_up_msg, Q, tune)
+      let left = final_probs (t.left) left_root_msg q tune in
+      let right = final_probs (t.left) right_root_msg q tune in
 
-    -- return ProbsNode(age=tree.age, label=tree.label, left=left, right=right, probs=probs)
-
-    never
+      ProbsNode { age=t.age, label=t.label, left=left, right=right, probs=probs }
 in
 
 let message: Message -> Matrix Float -> Message =
   lam start_msg. lam t.
-    -- TODO Fredrik: * operation elementwise or standard matrixmul?
+    -- TODO Fredrik: * operation?
     -- for (i=1 to lengths(start_msg)[1])
     --     end_msg[i] = start_msg[i]*T
 
@@ -312,19 +353,22 @@ recursive let propose_events:
 in
 
 let get_proposal_params:
-  Tree -> LabeledStringMatrix Int -> Matrix Float -> Float -> ProbsTree =
+  Tree -> Matrix Int -> Matrix Float -> Float -> ProbsTree =
     lam parasite_tree. lam interactions. lam q. lam tune.
 
-    let msgTree: MsgTree = postorder_msgs parasite_tree interactions q in
+      let msgTree: MsgTree = postorder_msgs parasite_tree interactions q in
 
-    let pis: Message =
-      create (length (getOutMsg msgTree)) (lam. stationary_probs q) in
+      let pis: Message =
+        create (length (getOutMsg msgTree)) (lam. stationary_probs q) in
 
-    final_probs msgTree pis q tune
+      final_probs msgTree pis q tune
 
 in
 
--- Data
+------------------------------
+--- Input data (hardcoded) ---
+------------------------------
+
 let parasite_tree: Tree = Node{
   age = 10.0,
   left = Node {
@@ -352,31 +396,31 @@ let parasite_tree: Tree = Node{
   label = "index_11"
 } in
 
--- let mapFromSeq : all k. all v. (k -> k -> Int) -> [(k, v)] -> Map k v =
+let interactions: Matrix Int = [
+  -- Row labels: T1, T2, T3, T4, T5, T6
+  -- Column labels: H1, H2, H3, H4, H5
+  [2,2,0,0,0],
+  [2,2,0,0,0],
+  [0,0,2,2,0],
+  [0,0,2,2,0],
+  [0,0,0,0,2],
+  [0,0,0,0,2]
+] in
 
-let interactions: LabeledStringMatrix Int =
-  createLM [
-      [2,2,0,0,0],
-      [2,2,0,0,0],
-      [0,0,2,2,0],
-      [0,0,2,2,0],
-      [0,0,0,0,2],
-      [0,0,0,0,2]
-    ] ["T1","T2","T3","T4","T5","T6"] ["H1","H2","H3","H4","H5"] in
-
--- TODO Change to matrix
-let host_distances: LabeledStringMatrix Float =
-  createLM [
-      [0.           , 0.8630075756 , 2.6699063134 , 2.6699063134 , 2.6699063134],
-      [0.8630075756 , 0.           , 2.6699063134 , 2.6699063134 , 2.6699063134],
-      [2.6699063134 , 2.6699063134 , 0.           , 1.2256551506 , 1.9598979474],
-      [2.6699063134 , 2.6699063134 , 1.2256551506 , 0.           , 1.9598979474],
-      [2.6699063134 , 2.6699063134 , 1.9598979474 , 1.9598979474 , 0.]
-    ] ["H1","H2","H3","H4","H5"] ["H1","H2","H3","H4","H5"] in
+let host_distances: Matrix Float = [
+  -- Row and column labels: H1, H2, H3, H4, H5
+  [0.,0.8630075756,2.6699063134,2.6699063134,2.6699063134],
+  [0.8630075756,0.,2.6699063134,2.6699063134,2.6699063134],
+  [2.6699063134,2.6699063134,0.,1.2256551506,1.9598979474],
+  [2.6699063134,2.6699063134,1.2256551506,0.,1.9598979474],
+  [2.6699063134,2.6699063134,1.9598979474,1.9598979474,0.]
+] in
 
 let tune: Float = 0.9 in
 
--- Model entry point
+-------------------------
+--- Model entry point ---
+-------------------------
 let lambda: [Float] = assume (Dirichlet [1.,1.,1.,1.]) in
 let mu: Float = assume (Exponential 10.) in
 let beta: Float = assume (Exponential 1.) in
@@ -387,20 +431,22 @@ let r: Matrix Float = [
   [0., get lambda 3, negf (get lambda 3)]
 ] in
 
-let q: Matrix Float = map (lam row. map (lam e. mulf mu e) row) r in
+let q: Matrix Float = matrixMulScalar mu r in
 
----- Hardcoded for now ----
+-- Hardcoded, should be done in preprocessing --
 let n_hosts = 5 in
 let d_matrix = host_distances in
 let d_average = 4.4 in
----------------------------
+------------------------------------------------
 
 let mp: ModelParams =
   { q = q, d_matrix = d_matrix, d_average = d_average, beta = beta } in
 
-let probs_tree: ProbsTree = get_proposal_params parasite_tree interactions q tune in
+let probs_tree: ProbsTree =
+  get_proposal_params parasite_tree interactions q tune in
 
 -- This should use `propose` eventually, now `assume` and `weight` manually
+-- TODO Repay the debt?
 let rep: [Int] = create n_hosts (lam i.
   let p = get (getProbs probs_tree) i in
   assume (Categorical p)
@@ -408,7 +454,16 @@ let rep: [Int] = create n_hosts (lam i.
 
 (
   if any (eqi 2) rep then
-    weight 0. -- TODO Mariana Fredrik
+    weight 0.
+    -- TODO(2023-05-12,dlunde): Fredrik, I need help with the below (to make
+    -- sure I don't do anything wrong):
+    -- "For the other task Mariana and I had, assume that the proposal of
+    -- the ancestral host repertoire (the assume statement) is associated with
+    -- a log probability from the pmf of log_score . Then we need to insert at
+    -- the end of the model simulation weight -log_score and observe rep[i] ~
+    -- Categorical stationary_probs , for one suggested version of the model. I
+    -- think this is understandable logic for @dlunde , if not correct CorePPL
+    -- code. Otherwise, ask me."
   else
     weight (negf inf)
 );
@@ -426,9 +481,9 @@ match probs_tree with ProbsNode n then
     right=right
   } in
 
-  -- TODO We currently only return mu
-  -- { historyTree = historyTree, lambda = lambda, mu = mu, beta = beta }
   mu
+  -- TODO We currently only return mu, but the actual return value should be:
+  -- { historyTree = historyTree, lambda = lambda, mu = mu, beta = beta }
 
 else error "Root is not a node!"
 
