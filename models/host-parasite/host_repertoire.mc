@@ -16,35 +16,44 @@ let transpose: Matrix Float -> Matrix Float =
   lam m. never -- TODO
 
 let matrixExponential: Matrix Float -> Matrix Float =
-  lam m. never -- TODO
+  lam m. never -- TODO Fredrik will send code from MrBayes
 
 let matrixMulScalar: Float -> Matrix Float -> Matrix Float =
    lam s. lam m.
     map (lam row. map (lam e. mulf s e) row) m
 
-let matrixMulElement: Matrix Float -> Matrix Float -> Matrix Float =
+let matrixMul: Matrix Float -> Matrix Float -> Matrix Float =
   lam m1. lam m2. never -- TODO
 
-let matrixPower: Matrix Float -> Float -> Matrix Float =
-  lam m. lam f. never -- TODO
+----------------
+--- Messages ---
+----------------
 
-let stationary_probs: Matrix Float -> StateLikelihoods =
-  lam q.
-    never -- TODO Fredrik Mariana
-
--------------------
---- Model types ---
--------------------
-
--- TODO Labels are integers, as this is the most efficient option. We currently
+-- Labels are integers, as this is the most efficient option. We currently
 -- assume that the mapping between actual string labels and integers is done in
 -- pre- and post-processing.
 type Label = Int
 
 -- Always three elements, but not expressed in type
-type StateLikelihoods = [Float]
+type Message = [[Float]]
 
-type Message = [StateLikelihoods]
+-- Standard normalization. Should also return the normalizing constant?
+let normalize: [Float] -> [Float] = lam v. never -- TODO
+
+let normalizeMessage: Message -> Message =
+  lam m. map normalize m
+
+-- Elementwise multiplication of state likelihoods/probabilities
+let mulMessage: Message -> Message -> Message =
+  lam m1. lam m2. never -- TODO
+
+let messageElementPower: Message -> Float -> Message =
+  -- TODO
+  lam m. never
+
+-------------
+--- Trees ---
+-------------
 
 -- TODO: There is lots of repetition for the Tree types. Make the Tree type
 -- Tree l r instead, and instantiate l and r to suitable types for the
@@ -117,7 +126,7 @@ con HistoryLeaf: {
   age: Float,
   label: Label,
   repertoire: [Int],
-  history: [HistoryPoint]
+  history: [HistoryPoint],
 } -> HistoryTree
 con HistoryNode: {
   age: Float,
@@ -125,7 +134,8 @@ con HistoryNode: {
   repertoire: [Int],
   history: [HistoryPoint],
   left: HistoryTree,
-  right: HistoryTree
+  right: HistoryTree,
+  debt: Float --TODO Daniel
 } -> HistoryTree
 
 ------------------------
@@ -162,7 +172,6 @@ recursive let postorder_msgs:
       let leftAge = getMsgTreeAge left in
       let rightAge = getMsgTreeAge right in
 
-      -- TODO Fredrik: Are these operations the intended ones?
       let tLeft =
         transpose
           (matrixExponential (matrixMulScalar (subf t.age leftAge) q)) in
@@ -173,8 +182,7 @@ recursive let postorder_msgs:
       let left_in_msg  = message (getOutMsg left) tLeft in
       let right_in_msg = message (getOutMsg right) tRight in
 
-      -- TODO Fredrik: Is this elementwise or standard matrix multiplication?
-      let out_msg = matrixMulElement left_in_msg right_in_msg in
+      let out_msg = normalizeMessage (mulMessage left_in_msg right_in_msg) in
 
       MsgNode {
         age=t.age,
@@ -190,10 +198,9 @@ recursive let final_probs:
   MsgTree -> Message -> Matrix Float -> Float -> ProbsTree =
     lam tree. lam root_msg. lam q. lam tune.
 
-    -- TODO Fredrik: What operation is * and ^?
-    -- probs = (tree.out_msg * root_msg)^tune
     let probs: Message =
-      matrixPower (matrixMulElement (getOutMsg tree) root_msg) tune in
+      normalizeMessage
+        (messageElementPower (mulMessage (getOutMsg tree) root_msg) tune) in
 
     match tree with MsgLeaf t then
       ProbsLeaf { age = 0., label = t.label, probs = probs }
@@ -201,19 +208,13 @@ recursive let final_probs:
       let leftAge = getMsgTreeAge t.left in
       let rightAge = getMsgTreeAge t.right in
 
-      -- TODO Fredrik: Check
-      -- Tleft  = exp(Q*(tree.age-tree.left.age))
-      -- Tright = exp(Q*(tree.age-tree.right.age))
       let tLeft = matrixExponential (matrixMulScalar (subf t.age leftAge) q) in
       let tRight = matrixExponential (matrixMulScalar (subf t.age rightAge) q) in
 
-      -- TODO Fredrik: * unclear. We think it's elementwise?
-      -- left_root_msg  = message(root_msg*tree.right_in_msg, Tleft)
-      -- right_root_msg = message(root_msg*tree.left_in_msg , Tright)
       let left_root_msg =
-        message (matrixMulElement root_msg (t.right_in_msg)) tLeft in
+        message (mulMessage root_msg (t.right_in_msg)) tLeft in
       let right_root_msg =
-        message (matrixMulElement root_msg (t.left_in_msg) tRight in
+        message (mulMessage root_msg (t.left_in_msg) tRight in
 
       let left = final_probs (t.left) left_root_msg q tune in
       let right = final_probs (t.left) right_root_msg q tune in
@@ -222,25 +223,20 @@ recursive let final_probs:
 in
 
 let message: Message -> Matrix Float -> Message =
-  lam start_msg. lam t.
-    -- TODO Fredrik: * operation?
-    -- for (i=1 to lengths(start_msg)[1])
-    --     end_msg[i] = start_msg[i]*T
-
-    -- return end_msg
-    never
+  lam start_msg. lam p.
+    -- Assumption: v is a row vector
+    map (lam v. matrixMul v p) start_msg
 in
 
 let observation_message: Map String Int -> Message =
   lam interactions.
+    -- TODO Daniel
     -- msg: Real[][3]
     -- for c in interactions {
     --     msg[i] =
-    --         -- TODO Daniel: Match on values, not labels
     --         case c == "0" | [1.0, 0.0, 0.0]
     --         case c == "1" | [0.0, 1.0, 0.0]
     --         case c == "2" | [0.0, 0.0, 1.0]
-    --         -- TODO Encode ? as -1 for now. Discuss later.
     --         case c == "?" | [1.0, 1.0, 1.0]
     --         // default |  ERROR?
     -- }
@@ -257,9 +253,10 @@ let rate: [Int] -> Int -> Int -> ModelParams -> Float =
 
     let base_rate = get (get mp.q from_state) to_state in
 
+    -- TODO Check TreePPL source, update
     if gti from_state to_state then base_rate else
 
-      -- TODO Filtering operation
+      -- TODO Daniel Filtering operation
       let current_hosts =
         if eqi from_state 0 then
           -- current_hosts = which(rep %in% [1,2])
@@ -279,10 +276,10 @@ in
 let total_rate: [Int] -> ModelParams -> Float =
   lam rep. lam mp.
 
-    -- for (i in 1 to length(rep)) -- TODO Remove for loop? i never used
-    --     lossRates =
-    --       length(rep==1) -- rep==1 filters rep only for hosts with state 1
-    --       *mp.Q[1][0] + length(rep==2)*mp.Q[2][1]
+    -- TODO
+    -- lossRates =
+    --   length(rep==1) -- rep==1 filters rep only for hosts with state 1
+    --   *mp.Q[1][0] + length(rep==2)*mp.Q[2][1]
 
     -- gainRates = 0.0
     -- for (i in 1 to length(rep)) {
@@ -344,7 +341,6 @@ in
 recursive let propose_events_for_host:
   Int -> Float -> Float -> Int -> Int -> Matrix Float -> [Event] =
     lam host_index. lam from_age. lam end_age. lam from_state. lam end_state. lam q.
-    -- TODO What is normalize?
     never --TODO Daniel
 in
 
@@ -355,8 +351,8 @@ recursive let propose_events:
 in
 
 let get_proposal_params:
-  Tree -> Matrix Int -> Matrix Float -> Float -> ProbsTree =
-    lam parasite_tree. lam interactions. lam q. lam tune.
+  Tree -> Matrix Int -> Matrix Float -> [Float] -> Float -> ProbsTree =
+    lam parasite_tree. lam interactions. lam q. lam stationary_probs. lam tune.
 
       let msgTree: MsgTree = postorder_msgs parasite_tree interactions q in
 
@@ -398,15 +394,15 @@ let parasite_tree: Tree = Node{
   label = "index_11"
 } in
 
-let interactions: Matrix Int = [
+let interactions: Matrix Char = [
   -- Row labels: T1, T2, T3, T4, T5, T6
   -- Column labels: H1, H2, H3, H4, H5
-  [2,2,0,0,0],
-  [2,2,0,0,0],
-  [0,0,2,2,0],
-  [0,0,2,2,0],
-  [0,0,0,0,2],
-  [0,0,0,0,2]
+  ['2','2','0','0','0'],
+  ['2','2','0','0','0'],
+  ['0','0','2','2','0'],
+  ['0','0','2','2','0'],
+  ['0','0','0','0','2'],
+  ['0','0','0','0','2']
 ] in
 
 let host_distances: Matrix Float = [
@@ -444,28 +440,35 @@ let d_average = 4.4 in
 let mp: ModelParams =
   { q = q, d_matrix = d_matrix, d_average = d_average, beta = beta } in
 
-let probs_tree: ProbsTree =
-  get_proposal_params parasite_tree interactions q tune in
+-- TODO Daniel. Notes from Fredrik below.
+-- Assume 0-indexing.
+-- lambda:[Float] -- Contains lambda_01, lambda_10, lambda_12, lambda_21
+-- pi:[Float] -- Contains the stationary probs
+-- -- You can do this in any order, I start with pi[1]. Sorry for the procedural style...
+-- pi[1] = 1. / (1.0 + (lambda[1]/lambda[0]) + (lambda[2]/lambda[3]))
+-- pi[0] = pi[1] * (lambda[1]/lambda[0])
+-- pi[2] = 1. - pi[0] - pi[1]
+--
+-- let stationary_probs = ... in
 
--- This should use `propose` eventually, now `assume` and `weight` manually
--- TODO Repay the debt?
-let rep: [Int] = create n_hosts (lam i.
+let probs_tree: ProbsTree =
+  get_proposal_params parasite_tree interactions q stationary_probs tune in
+
+-- TODO We need to return and store the debts in the root of the history tree
+let rep: [(Int)] = create n_hosts (lam i.
   let p = get (getProbs probs_tree) i in
-  assume (Categorical p)
+  -- This should use `propose` eventually, now `assume` and `weight` manually
+  let v = assume (Categorical p) in
+  -- TODO Correct name for pmflogprobcategorical
+  let debt = pmfLogProbCategorical p v in
+  (v, debt)
 ) in
 
 (
   if any (eqi 2) rep then
-    weight 0.
-    -- TODO(2023-05-12,dlunde): Fredrik, I need help with the below (to make
-    -- sure I don't do anything wrong):
-    -- "For the other task Mariana and I had, assume that the proposal of
-    -- the ancestral host repertoire (the assume statement) is associated with
-    -- a log probability from the pmf of log_score . Then we need to insert at
-    -- the end of the model simulation weight -log_score and observe rep[i] ~
-    -- Categorical stationary_probs , for one suggested version of the model. I
-    -- think this is understandable logic for @dlunde , if not correct CorePPL
-    -- code. Otherwise, ask me."
+    -- TODO
+    -- for i in rep indices:
+    --   observe rep[i] ~ Categorical stationary_probs
   else
     weight (negf inf)
 );
@@ -482,6 +485,9 @@ match probs_tree with ProbsNode n then
     left=left,
     right=right
   } in
+
+  -- TODO Repay _all_ debts here recursively, perhaps stored in the HistoryTree
+  -- weight -log_score
 
   mu
   -- TODO We currently only return mu, but the actual return value should be:
