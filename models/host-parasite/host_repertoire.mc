@@ -16,7 +16,11 @@ let transpose: Matrix Float -> Matrix Float =
   lam m. never -- TODO
 
 let matrixExponential: Matrix Float -> Matrix Float =
-  lam m. never -- TODO Fredrik will send code from MrBayes
+  lam m. never -- TODO Daniel. From Fredrik below. Or use some external.
+     -- This subroutine is a translation of the ALGOL procedure HQR2,
+     -- Num. Math. 14, 219,231(1970) by Martin, Peters, and Wilkinson.
+     -- Handbook for Automatic Computation, vol. II - Linear Algebra,
+     -- pp. 357-391 (1971).
 
 let matrixMulScalar: Float -> Matrix Float -> Matrix Float =
    lam s. lam m.
