@@ -5,9 +5,11 @@ include "math.mc"
 --- Matrices ---
 ----------------
 
--- Matrix stuff, we need to implement this (in the Miking standard library). We
+-- TODO Matrix stuff, we need to implement this (in the Miking standard library). We
 -- should probably do it for tensors instead (and also add support for tensors
 -- in CorePPL)
+--
+-- TODO Check how matrices are handled in OCaml, implement externals?
 type Matrix a = [[a]] -- TODO Tensor[a] instead of [[a]]?
 
 let transpose: Matrix Float -> Matrix Float =
