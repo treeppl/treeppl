@@ -13,6 +13,7 @@ Unit tests available via:
 include "../treeppl-ast.mc"
 include "../src-location.mc"
 include "mexpr/ast.mc"
+include "mexpr/ast-builder.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/type-check.mc"
 
@@ -186,8 +187,12 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
     --if (nameGetStr t.ident) in ids then TmExt {t with inexpr = inexpr}
     match setMem (nameGetStr t.ident) ids with true then TmExt {t with inexpr = inexpr}
     else inexpr
-  | expr -> smap_Expr_Expr (filterExternalMap ids) expr
-  | TmLet t -> filterExternalMap ids t.inexpr -- strips all the lets
+  -- strip everything but externals
+  | TmLet {inexpr = inexpr}
+  | TmRecLets {inexpr = inexpr}
+  | TmType {inexpr = inexpr}
+  | TmConDef {inexpr = inexpr} -> filterExternalMap ids inexpr
+  | expr -> unit_
 
   -- a type with useful information passed down from compile
   type TpplCompileContext = {
@@ -210,6 +215,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
     let externals = parseMCoreFile (concat tpplSrcLoc "/externals/ext.mc") in
     let exts = setOfSeq cmpString ["externalLog", "externalExp"] in
     let externals = filterExternalMap exts externals in  -- strip everything but needed stuff from externals
+    -- printLn (mexprToString externals);
     let externals = symbolize externals in
     let externalMap = constructExternalMap externals in
     let compileContext: TpplCompileContext = {
@@ -475,7 +481,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
 
   | ForLoopStmtTppl x -> lam cont.
     let var_ = lam n. TmVar {ident = n, ty = tyunknown_, info = x.info, frozen = false} in
-    let lam_ = lam n. lam body. TmLam {ident = n, ty = tyunknown_, info = x.info, body = body, tyAnnot = tyunknown_, tyIdent = tyunknown_} in
+    let lam_ = lam n. lam body. TmLam {ident = n, ty = tyunknown_, info = x.info, body = body, tyAnnot = tyunknown_, tyParam = tyunknown_} in
     let match_ = lam target. lam pat. lam thn. lam els. TmMatch { target = target, pat = pat, thn = thn, els = els, info = x.info, ty = tyunknown_ } in
     let app_ = lam l. lam r. TmApp { lhs = l, rhs = r, info = x.info, ty = tyunknown_ } in
     let consPat_ = lam head. lam rest. PatSeqEdge
@@ -628,7 +634,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
     let app_ = lam l. lam r. TmApp { lhs = l, rhs = r, info = x.info, ty = tyunknown_ } in
     let const_ = lam c. TmConst { info = x.info, val = c, ty = tyunknown_ } in
     let int_ = lam i. const_ (CInt { val = i }) in
-    let lam_ = lam n. lam body. TmLam {ident = n, tyAnnot = tyunknown_, tyIdent = tyunknown_, body = body, ty = tyunknown_, info = x.info} in
+    let lam_ = lam n. lam body. TmLam {ident = n, tyAnnot = tyunknown_, tyParam = tyunknown_, body = body, ty = tyunknown_, info = x.info} in
     let addi_ = lam l. lam r. app_ (app_ (const_ (CAddi ())) l) r in
     let subi_ = lam l. lam r. app_ (app_ (const_ (CSubi ())) l) r in
     let s = nameSym "start" in
