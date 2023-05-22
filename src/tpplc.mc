@@ -44,7 +44,7 @@ if eqString backend "rootppl" then
     let corePplAst: Expr = compile input file in
     --  TODO(vsenderov,2022-05-10): Maybe parse from the command line
     let outfile = "out.cu" in
-    let options = {default with method = "rootppl-smc"} in
+    let options = {default with method = "smc-bpf", target = "rootppl"} in
     printLn "NEVER!";
     let prog: Expr = typeCheck corePplAst in
     --let prog = corePplAst in
@@ -71,7 +71,7 @@ else -- defaulting to MExpr
 
     let corePplAst: Expr = compile input file in
     --dprint corePplAst;
-    let options = { default with method = "mexpr-smc-bpf", particles = 1 } in
+    let options = { default with method = "smc-bpf", particles = 1, target = "mexpr" } in
     -- printLn (mexprPPLToString corePplAst);
     --let prog = corePplAst in
     let prog: Expr = typeCheck corePplAst in
