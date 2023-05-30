@@ -198,6 +198,8 @@ function model(parasite_tree: Tree, interactions: LabeledMatrix,
     // the empty set. Alternatives include the stationary proba-
     // bilities of the independence model, or some estimate of the
     // stationary repertoire probabilities from the full model
+    //
+    // Daniel: This if-statement differs from the current CorePPL version
     if (sum (rep) == 0)
         factor -INFINITY
     else
@@ -241,7 +243,7 @@ function get_proposal_params(parasite_tree: Tree, interactions: LabeledMatrix,
     msgTree = postorder_msgs(parasite_tree, interactions, Q)
 
     // NB! Assuming we have
-    pis = rep (stationary_probs(Q), times=length(msgTree.out_msg))
+    pis = rep (stationary_probs, times=length(msgTree.out_msg))
 
     return final_probs(msgTree, pis, Q, tune)
 }
@@ -267,6 +269,7 @@ function postorder_msgs(tree: Tree, interactions: LabeledMatrix, Q: RateMatrix) 
     left_in_msg  = message( left.out_msg, Tleft)
     right_in_msg = message(right.out_msg, Tright)
 
+    // Daniel: Missing normalization here?
     out_msg      = left_in_msg * right_in_msg
 
     return MsgNode(age=tree.age, label=tree.label, left_in_msg=left_in_msg, right_in_msg=right_in_msg, out_msg=out_msg)
@@ -287,8 +290,8 @@ function final_probs(tree: MsgTree, root_msg: Real[][3], Q: RateMatrix, tune: Re
     left_root_msg  = message(root_msg*tree.right_in_msg, Tleft)
     right_root_msg = message(root_msg*tree.left_in_msg , Tright)
 
-    left  =  final_probs(tree.left,  left_up_msg, Q, tune)
-    right =  final_probs(tree.left, right_up_msg, Q, tune)
+    left  =  final_probs(tree.left,  left_root_msg, Q, tune)
+    right =  final_probs(tree.left, right_root_msg, Q, tune)
 
     return ProbsNode(age=tree.age, label=tree.label, left=left, right=right, probs=probs)
 }
@@ -376,7 +379,7 @@ function simulate_history (from: HistoryPoint, to: HistoryPoint, mp: ModelParams
 // Propose events from independence model
 function propose_events (host_index: Int, from: HistoryPoint, to: HistoryPoint, Q: Real[][]) : Event[]
 {
-    if (host > length(from.repertoire))
+    if (host_index > length(from.repertoire))
         return []
 
     events = propose_events_for_host (host_index, from.age, to.age,
@@ -407,9 +410,8 @@ function propose_events_for_host (host_index: Int, from_age: Real, end_age: Real
         case from_state == 1 | [0,2]
         case from_state == 2 | [0,1]
 
-    state_probs = normalize ([Q[from_state][to_states[1]], Q[from_state][to_states[2]])
+    state_probs = normalize (Q[from_state][to_states[1]], Q[from_state][to_states[2]])
 
-    propose new_state ~ Categorical (state_probs, to_states)
     propose new_state ~ Categorical (state_probs, to_states)
 
     event = Event(age=new_age, host=host_index, from_state=from_state, to_state=new_state)
