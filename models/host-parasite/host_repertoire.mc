@@ -1,5 +1,6 @@
 include "map.mc"
 include "math.mc"
+include "seq.mc"
 
 ----------------
 --- Matrices ---
@@ -11,6 +12,8 @@ include "math.mc"
 --
 -- TODO Check how matrices are handled in OCaml, implement externals?
 type Matrix a = [[a]] -- TODO Tensor[a] instead of [[a]]?
+
+type Vector a = [a]
 
 let transpose: Matrix Float -> Matrix Float =
   lam m. never -- TODO
@@ -51,9 +54,9 @@ let normalizeMessage: Message -> Message =
 let mulMessage: Message -> Message -> Message =
   lam m1. lam m2. never -- TODO
 
+-- Raises each element to the power of the float argument
 let messageElementPower: Message -> Float -> Message =
-  -- TODO
-  lam m. never
+  lam m. lam f. never -- TODO
 
 -------------
 --- Trees ---
@@ -100,8 +103,6 @@ let getMsgTreeAge: MsgTree -> Float = lam tree.
   else match tree with MsgNode n then n.age
   else never
 
-let getAge: MsgTree -> Float = lam tree.
-
 type ProbsTree
 con ProbsLeaf: {
   age: Float,
@@ -119,6 +120,11 @@ con ProbsNode: {
 let getProbs: ProbsTree -> Message = lam tree.
   match tree with ProbsLeaf l then l.probs
   else match tree with ProbsNode n then n.probs
+  else never
+
+let getProbsAge: ProbsTree -> Float = lam tree.
+  match tree with ProbsLeaf l then l.age
+  else match tree with ProbsNode n then n.age
   else never
 
 type Event = {age: Float, host: Int, from_state: Int, to_state: Int}
@@ -139,7 +145,6 @@ con HistoryNode: {
   history: [HistoryPoint],
   left: HistoryTree,
   right: HistoryTree,
-  debt: Float --TODO Daniel
 } -> HistoryTree
 
 ------------------------
@@ -161,7 +166,7 @@ mexpr
 -----------------------
 
 recursive let postorder_msgs:
-  Tree -> Matrix Int -> Matrix Float -> MsgTree =
+  Tree -> Matrix Char -> Matrix Float -> MsgTree =
     lam tree. lam interactions. lam q.
     match tree with Leaf t then
       MsgLeaf {
@@ -218,7 +223,7 @@ recursive let final_probs:
       let left_root_msg =
         message (mulMessage root_msg (t.right_in_msg)) tLeft in
       let right_root_msg =
-        message (mulMessage root_msg (t.left_in_msg) tRight in
+        message (mulMessage root_msg (t.left_in_msg)) tRight in
 
       let left = final_probs (t.left) left_root_msg q tune in
       let right = final_probs (t.left) right_root_msg q tune in
@@ -229,25 +234,22 @@ in
 let message: Message -> Matrix Float -> Message =
   lam start_msg. lam p.
     -- Assumption: v is a row vector
+    -- TODO Waiting for Fredrik and Mariana to confirm that this is the
+    -- intended operation
     map (lam v. matrixMul v p) start_msg
 in
 
-let observation_message: Map String Int -> Message =
+let observation_message: Vector Char -> Message =
   lam interactions.
-    -- TODO Daniel
-    -- msg: Real[][3]
-    -- for c in interactions {
-    --     msg[i] =
-    --         case c == "0" | [1.0, 0.0, 0.0]
-    --         case c == "1" | [0.0, 1.0, 0.0]
-    --         case c == "2" | [0.0, 0.0, 1.0]
-    --         case c == "?" | [1.0, 1.0, 1.0]
-    --         // default |  ERROR?
-    -- }
-
-    -- return msg
-
-    never
+    map (lam c.
+        switch c
+          case '0' then [1.,0.,0.]
+          case '1' then [0.,1.,0.]
+          case '2' then [0.,0.,1.]
+          case '?' then [1.,1.,1.]
+          case _ then error "Unknown character"
+        end
+      ) interactions
 in
 
 let rate: [Int] -> Int -> Int -> ModelParams -> Float =
@@ -296,6 +298,7 @@ let total_rate: [Int] -> ModelParams -> Float =
     never
 in
 
+-- TODO Bookmark
 recursive let simulate_by_event:
   [Int] -> [Event] -> Int -> Float -> Float -> ModelParams -> [HistoryPoint] =
     lam rep. lam events. lam event_index. lam from_age. lam end_age. lam mp.
@@ -329,42 +332,117 @@ in
 let simulate_history:
   HistoryPoint -> HistoryPoint -> ModelParams -> [HistoryPoint] =
     lam from. lam to. lam mp.
-      never --TODO Daniel
+      let unordered_events: [Event] = propose_events from to (mp.q) in
+      let events = sort (lam x. lam y. gtf x.age y.age) unordered_events in
+      simulate_by_event rep events 1 from.age to.age
 in
 
 recursive let simulate: ProbsTree -> HistoryPoint -> ModelParams -> HistoryTree =
  lam tree. lam start. lam mp.
-   never --TODO Daniel
+   let probs: Message = getProbs tree in
+   let rep: [Int] = map (lam p.
+     -- This should use `propose` eventually, now `assume` and `weight` manually
+     -- TODO Handle proposal debts
+     assume (Categorical p)
+   ) probs in
+
+   let stop: HistoryPoint = { age = getProbsAge tree, repertoire = rep } in
+   let history = simulate_history start stop mp in
+
+   match tree with ProbsLeaf l then
+     HistoryLeaf {
+      age = l.age, label = l.label, repertoire = rep, history = history
+     }
+   else match tree with ProbsNode n then
+     let left = simulate n.left rep mp in
+     let right = simulate n.right rep mp in
+     HistoryNode {
+       age = n.age, label = n.label, repertoire = rep,
+       history = history, left = left, right = right
+     }
+   else never
 in
 
 let propose_exponential_max_t: Float -> Float -> Float =
   lam rate. lam max_t.
-    never --TODO Daniel
+    let u_min = exp (mulf rate max_t) in
+    -- This should use `propose` eventually, now `assume` and `weight` manually
+    -- TODO Handle proposal debts
+    let u = assume (Uniform u_min 1.0) in
+    divf (log u) rate
 in
 
 recursive let propose_events_for_host:
   Int -> Float -> Float -> Int -> Int -> Matrix Float -> [Event] =
-    lam host_index. lam from_age. lam end_age. lam from_state. lam end_state. lam q.
-    never --TODO Daniel
+    lam host_index. lam from_age. lam end_age.
+    lam from_state. lam end_state. lam q.
+      let rate = negf (get (get q from_state) from_state) in
+
+      let t =
+        if neqi from_state end_state then
+          propose_exponential_max_t rage (subi from_age end_age)
+        else
+          -- This should use `propose` eventually, now `assume` and `weight`
+          -- manually.
+          -- TODO Handle proposal debts
+          assume t (Exponential rate)
+      in
+
+      let new_age = subi from_age t in
+
+      if lti new_age end_age then
+        []
+      else
+        let to_states =
+          switch from_state
+            case 0 then [1,2]
+            case 1 then [0,2]
+            case 2 then [0,1]
+          end
+        in
+
+        let state_probs = normalize [
+          get (get q from_state) (get to_states 1),
+          get (get q from_state) (get to_states 2),
+        ] in
+
+        -- This should use `propose` eventually, now `assume` and `weight`
+        -- manually.
+        -- TODO Handle proposal debts
+        let new_state = assume (Categorical (state_probs)) in
+        let new_state = get to_states new_state in
+
+        let event: Event = {
+          age = new_age, host = host_index,
+          from_state = from_state, to_state = new_state
+        } in
+
+        concat event
+          (propose_events_for_host
+             host_index new_age end_age new_state end_state q)
 in
 
 recursive let propose_events:
   Int -> HistoryPoint -> HistoryPoint -> Matrix Float -> [Event] =
     lam host_index. lam from. lam to. lam q.
-      never --TODO Daniel
+      if (gti host_index (length from.repertoire)) then
+        []
+      else
+        let events = propose_events_for_host host_index from.age to.age
+                       (get from.repertoire host_index)
+                       (get to.repertoire host_index) q in
+        concat events (propose_events (addi host_index 1) from to q)
 in
 
 let get_proposal_params:
-  Tree -> Matrix Int -> Matrix Float -> [Float] -> Float -> ProbsTree =
+  Tree -> Matrix Char -> Matrix Float -> [Float] -> Float -> ProbsTree =
     lam parasite_tree. lam interactions. lam q. lam stationary_probs. lam tune.
 
       let msgTree: MsgTree = postorder_msgs parasite_tree interactions q in
 
-      let pis: Message =
-        create (length (getOutMsg msgTree)) (lam. stationary_probs q) in
+      let pis: Message = create (length (getOutMsg msgTree)) stationary_probs in
 
       final_probs msgTree pis q tune
-
 in
 
 ------------------------------
@@ -436,7 +514,7 @@ let r: Matrix Float = [
 let q: Matrix Float = matrixMulScalar mu r in
 
 -- Hardcoded, should be done in preprocessing --
-let n_hosts = 5 in
+let n_hosts = 5 in -- Not needed anywhere it seems
 let d_matrix = host_distances in
 let d_average = 4.4 in
 ------------------------------------------------
@@ -444,7 +522,7 @@ let d_average = 4.4 in
 let mp: ModelParams =
   { q = q, d_matrix = d_matrix, d_average = d_average, beta = beta } in
 
--- TODO Daniel. Notes from Fredrik below.
+-- Fredriks notes below for the calculation of stationary:probs
 -- Assume 0-indexing.
 -- lambda:[Float] -- Contains lambda_01, lambda_10, lambda_12, lambda_21
 -- pi:[Float] -- Contains the stationary probs
@@ -452,33 +530,30 @@ let mp: ModelParams =
 -- pi[1] = 1. / (1.0 + (lambda[1]/lambda[0]) + (lambda[2]/lambda[3]))
 -- pi[0] = pi[1] * (lambda[1]/lambda[0])
 -- pi[2] = 1. - pi[0] - pi[1]
---
--- let stationary_probs = ... in
+let pi1 = divf 1. (addf (addf 1. (divf (get lambda 1) (get lambda 0)))
+                     (divf (get lambda 2) (get lambda 3))) in
+let pi0 = mulf pi1 (divf (get lambda 1) (get lambda 0)) in
+let pi2 = subf (subf 1. pi0) pi1 in
+let stationary_probs = [pi0,pi1,pi2] in
 
 let probs_tree: ProbsTree =
   get_proposal_params parasite_tree interactions q stationary_probs tune in
 
--- TODO We need to return and store the debts in the root of the history tree
-let rep: [(Int)] = create n_hosts (lam i.
-  let p = get (getProbs probs_tree) i in
-  -- This should use `propose` eventually, now `assume` and `weight` manually
-  let v = assume (Categorical p) in
-  -- TODO Correct name for pmflogprobcategorical
-  let debt = pmfLogProbCategorical p v in
-  (v, debt)
-) in
+let rep: [Int] = map (lam p.
+    -- This should use `propose` eventually, now `assume` and `weight` manually
+    -- TODO Handle proposal debts
+    assume (Categorical p)
+  ) (getProbs probs_tree) in
 
 (
   if any (eqi 2) rep then
-    -- TODO
-    -- for i in rep indices:
-    --   observe rep[i] ~ Categorical stationary_probs
+    iter (lam r. observe r (Categorical stationary_probs)) rep
   else
     weight (negf inf)
 );
 
 match probs_tree with ProbsNode n then
-  let historyPoint = { age = n.age, repertoire = rep } in
+  let historyPoint: HistoryPoint = { age = n.age, repertoire = rep } in
   let left = simulate n.left historyPoint mp in
   let right = simulate n.right historyPoint mp in
   let historyTree = HistoryNode {
@@ -489,9 +564,6 @@ match probs_tree with ProbsNode n then
     left=left,
     right=right
   } in
-
-  -- TODO Repay _all_ debts here recursively, perhaps stored in the HistoryTree
-  -- weight -log_score
 
   mu
   -- TODO We currently only return mu, but the actual return value should be:
