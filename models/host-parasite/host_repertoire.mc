@@ -11,25 +11,22 @@ include "seq.mc"
 -- in CorePPL)
 --
 -- TODO Check how matrices are handled in OCaml, implement externals?
-type Matrix a = [[a]] -- TODO Tensor[a] instead of [[a]]?
 
-type Vector a = [a]
-
-let transpose: Matrix Float -> Matrix Float =
+let transpose: Tensor[Float] -> Tensor[Float] =
   lam m. never -- TODO
 
-let matrixExponential: Matrix Float -> Matrix Float =
+let matrixExponential: Tensor[Float] -> Tensor[Float] =
   lam m. never -- TODO Daniel. From Fredrik below. Or use some external.
      -- This subroutine is a translation of the ALGOL procedure HQR2,
      -- Num. Math. 14, 219,231(1970) by Martin, Peters, and Wilkinson.
      -- Handbook for Automatic Computation, vol. II - Linear Algebra,
      -- pp. 357-391 (1971).
 
-let matrixMulScalar: Float -> Matrix Float -> Matrix Float =
+let matrixMulScalar: Float -> Tensor[Float] -> Tensor[Float] =
    lam s. lam m.
     map (lam row. map (lam e. mulf s e) row) m
 
-let matrixMul: Matrix Float -> Matrix Float -> Matrix Float =
+let matrixMul: Tensor[Float] -> Tensor[Float] -> Tensor[Float] =
   lam m1. lam m2. never -- TODO
 
 ----------------
@@ -42,10 +39,10 @@ let matrixMul: Matrix Float -> Matrix Float -> Matrix Float =
 type Label = Int
 
 -- Always three elements, but not expressed in type
-type Message = [[Float]]
+type Message = Tensor[Float]
 
 -- Standard normalization. Should also return the normalizing constant?
-let normalize: [Float] -> [Float] = lam v. never -- TODO
+let normalize: Tensor[Float] -> Tensor[Float] = lam v. never -- TODO
 
 let normalizeMessage: Message -> Message =
   lam m. map normalize m
@@ -152,8 +149,8 @@ con HistoryNode: {
 ------------------------
 
 type ModelParams = {
-  q: Matrix Float,
-  d_matrix: Matrix Float,
+  q: Tensor[Float],
+  d_matrix: Tensor[Float],
   d_average: Float,
   beta: Float
 }
@@ -166,7 +163,7 @@ mexpr
 -----------------------
 
 recursive let postorder_msgs:
-  Tree -> Matrix Char -> Matrix Float -> MsgTree =
+  Tree -> Tensor[Char] -> Tensor[Float] -> MsgTree =
     lam tree. lam interactions. lam q.
     match tree with Leaf t then
       MsgLeaf {
@@ -204,7 +201,7 @@ recursive let postorder_msgs:
 in
 
 recursive let final_probs:
-  MsgTree -> Message -> Matrix Float -> Float -> ProbsTree =
+  MsgTree -> Message -> Tensor[Float] -> Float -> ProbsTree =
     lam tree. lam root_msg. lam q. lam tune.
 
     let probs: Message =
@@ -231,7 +228,7 @@ recursive let final_probs:
       ProbsNode { age=t.age, label=t.label, left=left, right=right, probs=probs }
 in
 
-let message: Message -> Matrix Float -> Message =
+let message: Message -> Tensor[Float] -> Message =
   lam start_msg. lam p.
     -- Assumption: v is a row vector
     -- TODO Waiting for Fredrik and Mariana to confirm that this is the
@@ -239,7 +236,7 @@ let message: Message -> Matrix Float -> Message =
     map (lam v. matrixMul v p) start_msg
 in
 
-let observation_message: Vector Char -> Message =
+let observation_message: Tensor[Char] -> Message =
   lam interactions.
     map (lam c.
         switch c
@@ -259,8 +256,14 @@ let rate: [Int] -> Int -> Int -> ModelParams -> Float =
 
     let base_rate = get (get mp.q from_state) to_state in
 
-    -- TODO Check TreePPL source, update
-    if gti from_state to_state then base_rate else
+    if gti from_state to_state then
+      let c =
+        foldl (lam acc. lam e. if eqi e 2 then addi acc 1 else acc) 0 rep in
+      if and (eqi from_state 2) (eqi c 1) then
+        0
+      else
+        base_rate
+    else
 
       -- TODO Daniel Filtering operation
       let current_hosts =
@@ -326,7 +329,9 @@ recursive let simulate_by_event:
 
         -- return cons hp (simulate_by_event (new_rep, events, event_index+1, the_event.age, end_age, mp))
 
-        never
+        cons hp
+          (simulate_by_event new_rep events
+             (addi event_index 1) the_event.age end_age mp)
 in
 
 let simulate_history:
@@ -373,7 +378,7 @@ let propose_exponential_max_t: Float -> Float -> Float =
 in
 
 recursive let propose_events_for_host:
-  Int -> Float -> Float -> Int -> Int -> Matrix Float -> [Event] =
+  Int -> Float -> Float -> Int -> Int -> Tensor[Float] -> [Event] =
     lam host_index. lam from_age. lam end_age.
     lam from_state. lam end_state. lam q.
       let rate = negf (get (get q from_state) from_state) in
@@ -423,7 +428,7 @@ recursive let propose_events_for_host:
 in
 
 recursive let propose_events:
-  Int -> HistoryPoint -> HistoryPoint -> Matrix Float -> [Event] =
+  Int -> HistoryPoint -> HistoryPoint -> Tensor[Float] -> [Event] =
     lam host_index. lam from. lam to. lam q.
       if (gti host_index (length from.repertoire)) then
         []
@@ -435,7 +440,7 @@ recursive let propose_events:
 in
 
 let get_proposal_params:
-  Tree -> Matrix Char -> Matrix Float -> [Float] -> Float -> ProbsTree =
+  Tree -> Tensor[Char] -> Tensor[Float] -> [Float] -> Float -> ProbsTree =
     lam parasite_tree. lam interactions. lam q. lam stationary_probs. lam tune.
 
       let msgTree: MsgTree = postorder_msgs parasite_tree interactions q in
@@ -476,7 +481,7 @@ let parasite_tree: Tree = Node{
   label = "index_11"
 } in
 
-let interactions: Matrix Char = [
+let interactions: Tensor[Char] = [
   -- Row labels: T1, T2, T3, T4, T5, T6
   -- Column labels: H1, H2, H3, H4, H5
   ['2','2','0','0','0'],
@@ -487,7 +492,7 @@ let interactions: Matrix Char = [
   ['0','0','0','0','2']
 ] in
 
-let host_distances: Matrix Float = [
+let host_distances: Tensor[Float] = [
   -- Row and column labels: H1, H2, H3, H4, H5
   [0.,0.8630075756,2.6699063134,2.6699063134,2.6699063134],
   [0.8630075756,0.,2.6699063134,2.6699063134,2.6699063134],
@@ -505,13 +510,13 @@ let lambda: [Float] = assume (Dirichlet [1.,1.,1.,1.]) in
 let mu: Float = assume (Exponential 10.) in
 let beta: Float = assume (Exponential 1.) in
 
-let r: Matrix Float = [
+let r: Tensor[Float] = [
   [negf (get lambda 0), (get lambda 0), 0.],
   [get lambda 1, negf (addf (get lambda 1) (get lambda 2)), get lambda 2],
   [0., get lambda 3, negf (get lambda 3)]
 ] in
 
-let q: Matrix Float = matrixMulScalar mu r in
+let q: Tensor[Float] = matrixMulScalar mu r in
 
 -- Hardcoded, should be done in preprocessing --
 let n_hosts = 5 in -- Not needed anywhere it seems
