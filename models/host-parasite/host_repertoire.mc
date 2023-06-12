@@ -5,16 +5,6 @@ include "matrix.mc"
 include "tensor.mc"
 
 ----------------
---- Matrices ---
-----------------
-
--- TODO Matrix stuff, we need to implement this (in the Miking standard library). We
--- should probably do it for tensors instead (and also add support for tensors
--- in CorePPL)
---
--- TODO Check how matrices are handled in OCaml, implement externals?
-
-----------------
 --- Messages ---
 ----------------
 
@@ -26,20 +16,27 @@ type Label = Int
 -- Always three elements, but not expressed in type
 type Message = [Tensor[Float]]
 
--- Standard normalization. Should also return the normalizing constant?
-let normalizeVector: Tensor[Float] -> Tensor[Float] = lam v. never -- TODO
-let normalize: [Float] -> [Float] = lam v. never -- TODO
+-- Vector normalization
+let normalizeVector: Tensor[Float] -> Tensor[Float] = lam v.
+  let sum = tensorFold addf 0. v in
+  tensorCreateCArrayFloat (tensorShape v) (lam i. divf (tensorGetExn v i) sum)
+
+-- Sequence normalization
+let normalize: [Float] -> [Float] = lam seq.
+  let sum = foldl addf 0. seq in
+  map (lam f. divf f sum) seq
 
 let normalizeMessage: Message -> Message =
   lam m. map normalizeVector m
 
 -- Elementwise multiplication of state likelihoods/probabilities
-let mulMessage: Message -> Message -> Message =
-  lam m1. lam m2. never -- TODO
+let mulMessage: Message -> Message -> Message = zipWith matrixElemMul
 
 -- Raises each element to the power of the float argument
 let messageElementPower: Message -> Float -> Message =
-  lam m. lam f. never -- TODO
+  lam m. lam f. map (lam v.
+    tensorCreateCArrayFloat (tensorShape v) (lam i. pow (tensorGetExn v i) f)
+  ) m
 
 -------------
 --- Trees ---
@@ -242,41 +239,40 @@ in
 -- TODO Bookmark
 let rate: [Int] -> Int -> Int -> ModelParams -> Float =
   lam rep. lam host_index. lam to_state. lam mp.
-    never
-    -- let from_state: Int = get rep host_index in
+    let from_state: Int = get rep host_index in
 
-    -- let base_rate = get (get mp.q from_state) to_state in
+    let base_rate = tensorGetExn mp.q [from_state,to_state] in
 
-    -- if gti from_state to_state then
-    --   let c =
-    --     foldl (lam acc. lam e. if eqi e 2 then addi acc 1 else acc) 0 rep in
-    --   if and (eqi from_state 2) (eqi c 1) then
-    --     0
-    --   else
-    --     base_rate
-    -- else
+    if gti from_state to_state then
+      let c =
+        foldl (lam acc. lam e. if eqi e 2 then addi acc 1 else acc) 0 rep in
+      if and (eqi from_state 2) (eqi c 1) then
+        0.
+      else
+        base_rate
+    else
 
-    --   -- TODO Daniel Filtering operation
-    --   let current_hosts =
-    --     if eqi from_state 0 then
-    --       -- current_hosts = which(rep %in% [1,2])
-    --       never
-    --     else
-    --       -- current_hosts = which(rep == 2)
-    --       never
-    --   in
+      -- TODO Daniel Filtering operation
+      let current_hosts =
+        if eqi from_state 0 then
+          -- current_hosts = which(rep %in% [1,2])
+          never
+        else
+          -- current_hosts = which(rep == 2)
+          never
+      in
 
-    --   -- d = mean (mp.D[host_index][current_hosts])
+      -- d = mean (mp.D[host_index][current_hosts])
 
-    --   -- return base_rate * (exp(-mp.beta*(d/mp.d_average))
+      -- return base_rate * (exp(-mp.beta*(d/mp.d_average))
 
-    --   never
+      never
 in
 
 let total_rate: [Int] -> ModelParams -> Float =
   lam rep. lam mp.
 
-    -- TODO
+    -- TODO Daniel
     -- lossRates =
     --   length(rep==1) -- rep==1 filters rep only for hosts with state 1
     --   *mp.Q[1][0] + length(rep==2)*mp.Q[2][1]
