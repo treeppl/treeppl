@@ -357,8 +357,8 @@ recursive let propose_events_for_host:
         in
 
         let state_probs = normalize [
-          tensorGetExn (tensorSliceExn q [from_state]) [get to_states 1],
-          tensorGetExn (tensorSliceExn q [from_state]) [get to_states 2]
+          tensorGetExn q [from_state, get to_states 1],
+          tensorGetExn q [from_state, get to_states 2]
         ] in
 
         -- This should use `propose` eventually, now `assume` and `weight`
