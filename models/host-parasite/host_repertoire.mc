@@ -16,10 +16,17 @@ type Label = Int
 -- Always three elements, but not expressed in type
 type Message = [Tensor[Float]]
 
+-- Alias
+let tc = tensorCreateCArrayFloat
+
 -- Vector normalization
 let normalizeVector: Tensor[Float] -> Tensor[Float] = lam v.
   let sum = tensorFold addf 0. v in
-  tensorCreateCArrayFloat (tensorShape v) (lam i. divf (tensorGetExn v i) sum)
+  tc (tensorShape v) (lam i. divf (tensorGetExn v i) sum)
+
+-- Mean of a tensor (e.g., vectors and matrices)
+let tensorMean : Tensor[Float] -> Float = lam t.
+  divf (tensorFold addf 0. t) (int2float (tensorSize t))
 
 -- Sequence normalization
 let normalize: [Float] -> [Float] = lam seq.
@@ -35,7 +42,7 @@ let mulMessage: Message -> Message -> Message = zipWith matrixElemMul
 -- Raises each element to the power of the float argument
 let messageElementPower: Message -> Float -> Message =
   lam m. lam f. map (lam v.
-    tensorCreateCArrayFloat (tensorShape v) (lam i. pow (tensorGetExn v i) f)
+    tc (tensorShape v) (lam i. pow (tensorGetExn v i) f)
   ) m
 
 -------------
@@ -236,7 +243,6 @@ recursive let final_probs:
     else never
 in
 
--- TODO Bookmark
 let rate: [Int] -> Int -> Int -> ModelParams -> Float =
   lam rep. lam host_index. lam to_state. lam mp.
     let from_state: Int = get rep host_index in
@@ -252,40 +258,44 @@ let rate: [Int] -> Int -> Int -> ModelParams -> Float =
         base_rate
     else
 
-      -- TODO Daniel Filtering operation
-      let current_hosts =
+      let current_hosts: [Int] =
         if eqi from_state 0 then
           -- current_hosts = which(rep %in% [1,2])
-          never
+          indices (lam h. if leqi h 2 then geqi h 1 else false) rep
         else
           -- current_hosts = which(rep == 2)
-          never
+          indices (eqi 2) rep
       in
 
       -- d = mean (mp.D[host_index][current_hosts])
+      let d =
+        tensorMean (tensorSubSeqExn tc mp.d_matrix [[host_index],current_hosts])
+      in
 
-      -- return base_rate * (exp(-mp.beta*(d/mp.d_average))
+      mulf base_rate (exp (negf (mulf mp.beta (divf d mp.d_average))))
 
-      never
 in
 
 let total_rate: [Int] -> ModelParams -> Float =
   lam rep. lam mp.
+    let lossRates1 =
+      mulf (int2float (length (indices (eqi 1) rep)))
+        (tensorGetExn mp.q [1,0]) in
+    let lossRates2 =
+      let l = length (indices (eqi 2) rep) in
+      if eqi 1 l then 0.
+      else mulf (int2float l) (tensorGetExn mp.q [2,1])
+    in
 
-    -- TODO Daniel
-    -- lossRates =
-    --   length(rep==1) -- rep==1 filters rep only for hosts with state 1
-    --   *mp.Q[1][0] + length(rep==2)*mp.Q[2][1]
+    let gainRates =
+      foldli (lam acc. lam i. lam r.
+          if or (eqi r 1) (eqi r 2) then
+            addf acc (rate rep i (addi (get rep i) 1) mp)
+          else acc
+        ) 0. rep
+    in
 
-    -- gainRates = 0.0
-    -- for (i in 1 to length(rep)) {
-    --     if (rep[i] %in% [1,2])
-    --         gainRates += rate (rep, i, rep[i]+1, mp)
-    -- }
-
-    -- return lossRates + gainRates
-
-    never
+    addf (addf lossRates1 lossRates2) gainRates
 in
 
 recursive let simulate_by_event:
