@@ -181,7 +181,7 @@ recursive let postorder_msgs:
       MsgLeaf {
         age = 0.,
         label = t.label,
-        out_msg = observation_message (tensorSliceExn interactions [t.label])
+        out_msg = observation_message (tensorSubExn interactions t.label 1)
       }
     else match tree with Node t then
       let left = postorder_msgs t.left interactions q in
@@ -237,7 +237,7 @@ recursive let final_probs:
         message (mulMessage root_msg (t.left_in_msg)) tRight in
 
       let left = final_probs (t.left) left_root_msg q tune in
-      let right = final_probs (t.left) right_root_msg q tune in
+      let right = final_probs (t.right) right_root_msg q tune in
 
       ProbsNode { age=t.age, label=t.label, left=left, right=right, probs=probs }
     else never
@@ -417,7 +417,7 @@ recursive let simulate: ProbsTree -> HistoryPoint -> ModelParams -> HistoryTree 
    let rep: [Int] = map (lam p.
      -- This should use `propose` eventually, now `assume` and `weight` manually
      -- TODO Handle proposal debts
-     assume (Categorical (tensorToSeqExn p))
+     assume (Categorical (vecToSeqExn p))
    ) probs in
 
    let stop: HistoryPoint = { age = getProbsAge tree, repertoire = rep } in
@@ -540,7 +540,7 @@ let pi1 = divf 1. (addf (addf 1. (divf (get lambda 1) (get lambda 0)))
                      (divf (get lambda 2) (get lambda 3))) in
 let pi0 = mulf pi1 (divf (get lambda 1) (get lambda 0)) in
 let pi2 = subf (subf 1. pi0) pi1 in
-let stationary_probs = cvecCreate 3 [pi0,pi1,pi2] in
+let stationary_probs = rvecCreate 3 [pi0,pi1,pi2] in
 
 let probs_tree: ProbsTree =
   get_proposal_params parasite_tree interactions q stationary_probs tune in
@@ -548,12 +548,12 @@ let probs_tree: ProbsTree =
 let rep: [Int] = map (lam p.
     -- This should use `propose` eventually, now `assume` and `weight` manually
     -- TODO Handle proposal debts
-    assume (Categorical (tensorToSeqExn p))
+    assume (Categorical (vecToSeqExn p))
   ) (getProbs probs_tree) in
 
 (
   if any (eqi 2) rep then
-    iter (lam r. observe r (Categorical (tensorToSeqExn stationary_probs))) rep
+    iter (lam r. observe r (Categorical (vecToSeqExn stationary_probs))) rep
   else
     weight (negf inf)
 );
