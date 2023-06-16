@@ -77,6 +77,8 @@ match result with ParseOK r in
     use TreePPLThings in
     match parseTreePPLExn filename content with  file in
     let corePplAst: Expr = compile input file in
+    --let prog: Expr = typeCheck corePplAst in
+    --let prog: Expr = lowerProj prog in
     -- Now we have the coreppl AST. Can we follow the cppl logic again?
     let ast = corePplAst in
     let noInfer = not (hasInfer ast) in
@@ -94,23 +96,6 @@ match result with ParseOK r in
       let ast = mexprCpplCompile options noInfer ast in
     --dprint corePplAst;
     --printLn (mexprPPLToString corePplAst);
-    --? let prog: Expr = typeCheck corePplAst in
-    --? let prog: Expr = lowerProj prog in
-    --? match programModelTransform options prog with (runtimes, prog) in
-    -- (viktors, 2023-05-19) Copied this from cppl command line
-    -- ?let ast = prog in
-    --? if eqString options.target "rootppl" then
-    --?  if mapIsEmpty runtimes then
-    --?    let ast =
-    --?      if options.transform then transform ast
-    --?      else ast
-    --?    in
-    --?    let ast = rootPPLCompile options ast in
-    --?    buildRootPPL options ast
-    --?  else error "Use of infer is not supported by RootPPL backend"
-    --?else
-    --?  let runtimes = combineRuntimes options runtimes in
-    --?  let ast = mexprCompile options runtimes prog in
 
     --(vsenderov, 2023-06-16 We use our own output for now for now)
       writeFile outName (use MExpr in concat "mexpr\n" (mexprToString ast));
