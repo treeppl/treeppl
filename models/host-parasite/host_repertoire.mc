@@ -169,8 +169,6 @@ in
 let message: Message -> Tensor[Float] -> Message =
   lam start_msg. lam p.
     -- Assumption: v is a row vector
-    -- TODO Waiting for Fredrik and Mariana to confirm that this is the
-    -- intended operation
     map (lam v. matrixMul v p) start_msg
 in
 
@@ -302,7 +300,7 @@ recursive let simulate_by_event:
   [Int] -> [Event] -> Int -> Float -> Float -> ModelParams -> [HistoryPoint] =
     lam rep. lam events. lam event_index. lam from_age. lam end_age. lam mp.
       let l = length events in
-      if gti event_index l then
+      if geqi event_index l then
         let change_rate: Float = total_rate rep mp in
         observe 0 (Poisson (mulf change_rate
                               (subf ((last events).age) end_age)));
@@ -328,6 +326,8 @@ recursive let simulate_by_event:
              (addi event_index 1) the_event.age end_age mp)
 in
 
+
+
 let propose_exponential_max_t: Float -> Float -> Float =
   lam rate. lam max_t.
     let u_min = exp (mulf rate max_t) in
@@ -352,7 +352,6 @@ recursive let propose_events_for_host:
           -- TODO Handle proposal debts
           assume (Exponential rate)
       in
-
       let new_age = subf from_age t in
 
       if ltf new_age end_age then
@@ -367,8 +366,8 @@ recursive let propose_events_for_host:
         in
 
         let state_probs = normalize [
-          tensorGetExn q [from_state, get to_states 1],
-          tensorGetExn q [from_state, get to_states 2]
+          tensorGetExn q [from_state, get to_states 0],
+          tensorGetExn q [from_state, get to_states 1]
         ] in
 
         -- This should use `propose` eventually, now `assume` and `weight`
@@ -391,7 +390,7 @@ in
 recursive let propose_events:
   Int -> HistoryPoint -> HistoryPoint -> Tensor[Float] -> [Event] =
     lam host_index. lam from. lam to. lam q.
-      if (gti host_index (length from.repertoire)) then
+      if (geqi host_index (length from.repertoire)) then
         []
       else
         let events = propose_events_for_host host_index from.age to.age
@@ -403,12 +402,11 @@ in
 let simulate_history:
   HistoryPoint -> HistoryPoint -> ModelParams -> [HistoryPoint] =
     lam from. lam to. lam mp.
-      -- TODO Missing argument (host_index) to propose_events
-      let unordered_events: [Event] = propose_events never from to (mp.q) in
+      let unordered_events: [Event] = propose_events 0 from to (mp.q) in
       let cmp = lam x. lam y. if gtf x.age y.age then 1 else negi 1 in
       let events = sort cmp unordered_events in
-      let rep = never in -- TODO rep unbound
-      simulate_by_event rep events 1 from.age to.age mp
+      let rep = from.repertoire in
+      simulate_by_event rep events 0 from.age to.age mp
 in
 
 recursive let simulate: ProbsTree -> HistoryPoint -> ModelParams -> HistoryTree =
@@ -428,9 +426,6 @@ recursive let simulate: ProbsTree -> HistoryPoint -> ModelParams -> HistoryTree 
       age = l.age, label = l.label, repertoire = rep, history = history
      }
    else match tree with ProbsNode n then
-     -- TODO Check that the "stop" argument is correct here for both left and
-     -- right. The argument was simply "rep" in the TreePPL pseudo code, which
-     -- didn't type check.
      let left = simulate n.left stop mp in
      let right = simulate n.right stop mp in
      HistoryNode {
