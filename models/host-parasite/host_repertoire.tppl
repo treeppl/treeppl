@@ -383,8 +383,8 @@ function simulate (tree: ProbsTree, start: HistoryPoint, mp: ModelParams) : Hist
         return HistoryLeaf (age=tree.age, label=tree.label,
                            repertoire=rep, history=history)
 
-    left  = simulate (tree.left , rep, mp)
-    right = simulate (tree.right, rep, mp)
+    left  = simulate (tree.left , stop, mp)
+    right = simulate (tree.right, stop, mp)
 
     return HistoryNode (age=tree.age, label=tree.label,
                         repertoire=rep, history=history,
@@ -397,7 +397,7 @@ function simulate (tree: ProbsTree, start: HistoryPoint, mp: ModelParams) : Hist
 // condition the simulation on those events.
 function simulate_history (from: HistoryPoint, to: HistoryPoint, mp: ModelParams) : HistoryPoint[]
 {
-    unordered_events = propose_events (from, to, mp.Q)
+    unordered_events = propose_events (1, from, to, mp.Q)
 
     events = sort (unordered_events, function(x,y) { x.age > y.age })
 
