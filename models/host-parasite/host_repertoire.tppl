@@ -471,7 +471,9 @@ function simulate_by_event (rep: Int[], events: Event[], event_index: Int,
     // End case, deal with last time segment
     if event_index > length(events) {
         change_rate = total_rate (rep, mp)
-        observe 0 ~ Poisson(change_rate*(events[length(events)].age-end_age))
+        start_age =
+          if length(events == 0) then from_age else events[length(events)].age
+        observe 0 ~ Poisson(change_rate*(start_age-end_age))
         return []
     }
 
