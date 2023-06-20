@@ -541,7 +541,7 @@ function total_rate (rep: Int[], mp: ModelParams)
 
     gainRates = 0.0
     for (i in 1 to length(rep)) {
-        if (rep[i] %in% [1,2])
+        if (rep[i] %in% [0,1])
             gainRates += rate (rep, i, rep[i]+1, mp)
     }
 

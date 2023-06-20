@@ -287,7 +287,7 @@ let total_rate: [Int] -> ModelParams -> Float =
 
     let gainRates =
       foldli (lam acc. lam i. lam r.
-          if or (eqi r 1) (eqi r 2) then
+          if or (eqi r 0) (eqi r 1) then
             addf acc (rate rep i (addi (get rep i) 1) mp)
           else acc
         ) 0. rep
@@ -302,8 +302,9 @@ recursive let simulate_by_event:
       let l = length events in
       if geqi event_index l then
         let change_rate: Float = total_rate rep mp in
+        let start_age = if null events then from_age else (last events).age in
         observe 0 (Poisson (mulf change_rate
-                              (subf ((last events).age) end_age)));
+                              (subf start_age end_age)));
         []
       else
         let the_event: Event = get events event_index in
