@@ -455,11 +455,11 @@ function propose_events_for_host (host_index: Int, from_age: Real, end_age: Real
 // distributions directly in TreePPL.
 function propose_exponential_max_t (rate: Real, max_t: Real)
 {
-    u_min = exp (rate * max_t)
+    u_min = exp (-(rate * max_t))
 
     propose u ~ Uniform (u_min, 1.0)
 
-    return log (u) / rate
+    return -log (u) / rate
 }
 
 
