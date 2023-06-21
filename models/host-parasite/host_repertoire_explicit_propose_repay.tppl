@@ -429,6 +429,11 @@ function propose_events_for_host (host_index: Int, from_age: Real, end_age: Real
     else
         propose t ~ Exponential (rate)
 
+    // Calculate debt as if we drew all values from the appropriate
+    // distrbution (we repay the debt for the conditional draw wrt
+    // unconditional draw in the function propose_exponential_max_t
+    log_debt += -Exponential(rate).score(t)
+
     new_age = from_age - t
 
     if (new_age < end_age)
@@ -450,16 +455,19 @@ function propose_events_for_host (host_index: Int, from_age: Real, end_age: Real
 
 
 // Propose from conditional exponential distribution with rate 'rate'
-// but with support only on (0, max_t).
+// but with support only on (0, max_t). We repay the debt immediately
+// with respect to the unconditional exponential.
 // NB! It might be convenient to be able to fully specify custom
 // distributions directly in TreePPL.
+// NB! The weight statement is not at an alignment point.
 function propose_exponential_max_t (rate: Real, max_t: Real)
 {
-    u_min = exp (rate * max_t)
+    u_min = exp (-rate * max_t)
 
-    propose u ~ Uniform (u_min, 1.0)
+    assume u ~ Uniform (u_min, 1.0)
+    weight (log((1.0-u_min)))   // logpdf of unif(a,b) is log(1/(b-a))
 
-    return log (u) / rate
+    return -log (u) / rate
 }
 
 
