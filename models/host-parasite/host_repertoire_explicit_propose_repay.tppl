@@ -1,0 +1,552 @@
+/**
+ *  Host repertoire model
+ *
+ *  This file implements the host repertoire model described by Braga et al
+ *  2020 (https://doi.org/10.1093/sysbio/syaa019).
+ *
+ *  The model assumes that the hosts used by a parasite can be described by a
+ *  vector (the host repertoire). Each element in this vector describes the
+ *  state of the host-parasite interaction. In the simplest version of the
+ *  model, we only consider two interaction states: the parasite uses the host
+ *  (1) or it does not use the host (0). In the three-state case, considered
+ *  here, the parasites are assumed either to not use the host (0), potentially
+ *  use it (1), or prefer it (2). The model can easily be extended to more
+ *  interaction states, if desired.
+ *
+ *  The dynamics of the model is described by a rate matrix that accommodates
+ *  some effects depending on the current host repertoire. Thus, the host
+ *  states in the repertoire do not evolve independently of each other, which
+ *  poses a challenge in inference. However, the 'independence model', that
+ *  assumes independent evolution of host states under a rate matrix that is
+ *  not modified by the states of other hosts in the repertoire, is useful as a
+ *  proposal distribution.
+ *
+ *  An important model assumption is that a host repertoire cannot be empty.
+ *  Tree generation processes are not considered in the current version of the
+ *  model. This means that we can ignore extinct side branches in the parasite
+ *  tree. Further- more, the hosts are assumed to be constant throughtout the
+ *  evolution of the parasites, an assumption that should be relaxed in future
+ *  versions of the model. See Braga at al (2020) for more discussion of the
+ *  model.
+ *
+ *  The model script expects the following in-data:
+ *   -- The parasite tree should be a time-calibrated tree, with internal node
+ *   labels and leaf labels. The labels can be arbitrary strings but they need
+ *   to be unique for each node. The tree must be binary (fully resolved). The
+ *   analysis is conditioned on this input tree.
+ *   -- The interaction matrix. This matrix specifies the observed interactions
+ *   as a matrix with labeled rows and columns.  The row labels should
+ *   correspond to the tip labels in the parasite tree. The column labels
+ *   should correspond to the host labels, also used as the row and column
+ *   labels in the host distance matrix. The labels need to be unique. The
+ *   observations are specified as single characters, with "0", "1" and "2"
+ *   describing each one of the host states, and "?" signifying that the state
+ *   of the interaction is unknown (has not been observed).
+ *   -- Host distance matrix. This is a labeled symmetric matrix where row and
+ *   column labels fit the host labels. The values are positive reals
+ *   describing the distance between host pairs. The diagonal values should be
+ *   0 or empty. The off- diagonal values should be symmetric. The distances
+ *   may be computed from a phylogenetic tree over the hosts, so that they are
+ *   phylogenetic distances, but this is not necessary.
+ *
+ *  The model parameters are:
+ *   -- mu: the overall rate of repertoire evolution
+ *   -- lambda_ij: the base rate of change from host state i to host state j
+ *   -- beta: the influence of host distance on rates of gains
+ *
+ *  The script outputs the following data:
+ *   -- Posterior samples of mu, lambda, and beta
+ *   -- Posterior samples of the repertoire histories. We use a decorated tree
+ *   for this, where nodes are decorated with sampled repertoires, and the
+ *   history of repertoire change leading up to that repertoire. The history is
+ *   described as a sequence of repertoires, with a time point (age) associated
+ *   with each repertoire. Leaves and branches of the tree are labeled as they
+ *   are in the input parasite tree. The hosts in the repertoires are listed in
+ *   the same order as in the input interaction matrix.
+ */
+
+
+
+/*---------------- Built-in types -----------------------------*/
+
+
+// We are assuming that the built-in tree type is structured as follows.  We do
+// not think this should be part of the script. Note that this tree is a binary
+// time tree, which is perhaps the most useful type of tree, but we will need
+// to support other tree types as well.
+/*
+type Tree =
+    | Leaf(age: Real, label: String)
+    | Node(age: Real, left: Tree, right: Tree, label: String)
+*/
+
+// For communicating interaction and host distance data, we would like
+// to use labeled matrices containing different types of data. The idea
+// is to be able to reference columns and rows in these matrices
+// using strings. These data structures are similar to data frames
+// and similar objects, which are fundamental in R. These data
+// structures can also easily be used across model types. Importantly
+// they allow safe communication across interfaces because they use
+// unique string labels, which are typically the primary way of linking
+// objects like tree leaves to observations in phylogenetic models in
+// other environments like R (and presumably python).
+//
+// At this point, it is unclear to us how to describe this data type
+// in TreePPL. We simply call it LabeledMatrix in the script below.
+
+
+/*---------------- Model-specific types -----------------------------*/
+
+
+// Tree decorated with postorder messages from belief propagation.
+// Postorder = backwards in time
+type MsgTree =
+ | MsgLeaf(age: Real, label: String, out_msg: Real[][3])
+ | MsgNode(age: Real, label: String, left: MsgTree, right: MsgTree,
+           left_in_msg: Real[][3], right_in_msg: Real[][3], out_msg: Real[][3])
+
+// Tree decorated with final probabilities from belief propagation,
+// tuned so that they are useful for proposals.
+type ProbsTree =
+ | ProbsLeaf(age: Real, label: String, probs: Real[][3])
+ | ProbsNode(age: Real, label: String, probs: Real[][3],
+             left: ProbsTree, right: ProbsTree)
+
+// Event type used to store information about one host-repertoire change
+// We keep the from_state here just in case we want to use it for debugging
+type Event(age: Real, host: Int, from_state: Int, to_state: Int)
+
+// History point type used to store repertoire snapshots at the repertoire
+// start ages repertoire start age = time of the event that led to that
+// combination
+type HistoryPoint (age: Real, repertoire: Int[])
+
+// Tree decorated with ancestral host repertoires and branch repertoire histories
+type HistoryTree =
+  | HistoryLeaf(age: Real, label: String, repertoire: Int[], history: HistoryPoint[])
+  | HistoryNode(age: Real, label: String, repertoire: Int[], history: HistoryPoint[],
+                left: HistoryTree, right: HistoryTree)
+
+
+/**
+ *  Model
+ *
+ *  @param lambda: vector of transition rates. lambda[0]: switch_rate_0_to_1,
+ *  lambda[1]: switch_rate_1_to_0 lambda[2]: switch_rate_1_to_2, lambda[3]:
+ *  switch_rate_2_to_1. Transition rates are given as proportions of the total
+ *  off-diagonal rate, that is, the sum of lambdas is 1.0.
+ *  @param mu: rescale all rates in lambda with mu. Referred to as the maximum
+ *  rate (or rate, for short) of host repertoire evolution, since
+ *  0≤mu*lambda_i≤mu for all i (all lambdas <= 1.0).
+ *  @param beta: phylogenetic distance parameter, determining strength of the
+ *  host distance effect on host repertoire evolution
+ *
+ *  Note:
+ *  Rescaling of Q-matrix might be needed for some datasets, for some not (?? I
+ *  do not understand this -- Fredrik)
+ *  There is a scaling option in  RevBayes that affects the value of mu. I do
+ *  not think we need it -- Mariana
+ *
+ *  TrePPL syntax notes:
+ *    -- (1) We use 1-indexing, second-nature to R users (which will be most of
+ *    the organism biologists)
+ *    -- (2) Using slicing of arrays using a vector of indices, as in R
+ *    -- (3) Using %in% operator to determine set membership
+ *    -- (4) Using automatic function application over vector elements as in R
+ *    -- (5) Using mutable variables in a few places and += operator but this
+ *    is not necessary
+ *    -- (6) Using lambda for the sort function, which is convenient
+ *    -- (7) Using labeled arguments in a few places
+ *    -- (8) Assuming that functions can be used before they are defined, which
+ *    makes the script easier to read (Fredrik thinks)
+ *    -- (9) Can we specify default parameters? It would be convenient for
+ *    things like tuning parameters. If so, is the syntax for 'tune' below
+ *    reasonable?
+ *
+ *  Missing functions that should be built in:
+ *    -- sum(x: Real[])
+ *    -- mean(x: Real[])
+ *    -- which(x: A[], function(element of A): bool) -- like 'which' in R
+ *    -- rep(x: A, times: Int) -- like 'rep' in R
+ *    -- arithmetic operations (multiplication, exponentiation) for matrices
+ *    and vectors
+ *    -- t(x: A[][]) -- matrix transpose
+ *    -- stationary_probs(Q: Real[][]) -- function for computing the stationary
+ *    probabilities for a rate matrix Q
+ *
+ * NB: Using the convention here that the model function is a regular function
+ * called 'model'.  (like the 'main' function in C). The caller must provide
+ * all parameters of the 'model' function. This makes it clear which function
+ * we are calling from R or Python.
+ */
+function model(parasite_tree: Tree, interactions: LabeledMatrix,
+               host_distances: LabeledMatrix, tune: Real = 0.9) {
+
+    // Set priors for model parameters
+    lambda ~ Dirichlet(1,1,1,1)
+    mu ~ Exponential(10)
+    beta ~ Exponential(1)
+
+    // Set transition rate matrix for three-state independence model. We assume
+    // that we can multiply a matrix by a scalar.
+    R = [[-lambda[0],              lambda[0],       0.0],
+         [ lambda[1], -(lambda[1]+lambda[2]), lambda[2]],
+         [      0.0,              lambda[3], -lambda[3]]]
+    Q = mu*R
+
+    // Package model parameters into an object for convenient calling
+    // Note that we make sure here that interactions and host distances
+    // match, regardless of whether the input order is the same.
+    // Alternatively, we need to assume that this is the case.
+    D: Real[][]
+    tot_dist = 0.0
+    n_hosts = length(host_distances[1])
+    for (i in 1 to n_hosts) {
+        for (j in 1 to n_hosts) {
+            D[i][j] = host_distances[colnames(interactions)[i]][colnames(interactions)[j]]
+            if (i<j)
+                tot_dist += D[i][j]
+        }
+    }
+    d = tot_dist / n_hosts*(n_hosts-1)/2
+    mp = ModelParams (Q=Q, D=D, d_average=d, beta=beta)
+
+    // Derive params for ancestral repertoire proposals from independence model
+    probs_tree = get_proposal_params (parasite_tree, interactions, Q, tune)
+
+    // Propose a repertoire for the root of the parasite tree
+    rep: Int[]
+    for i in 1 to n_hosts {
+        propose rep[i] ~ Categorical (probs_tree.probs[i], [0,1,2])
+    }
+
+    // Factor in the prior probability of the repertoire. Here
+    // we assume equal prior probability on all repertoires except
+    // the empty set. Alternatives include the stationary proba-
+    // bilities of the independence model, or some estimate of the
+    // stationary repertoire probabilities from the full model
+    //
+    // Daniel: This if-statement differs from the current CorePPL version
+    if (sum (rep) == 0)
+        factor -INFINITY
+    else
+        factor -n_host * log(3)   // unconditional prob for possible repertoires
+
+    // Simulate repertoire history on the parasite tree
+    left  = simulate (probs_tree.left , rep, Q, D, d)
+    right = simulate (probs_tree.right, rep, Q, D, d)
+    historyTree = HistoryNode(age=probs_tree.age, label=probs_tree.label,
+                              repertoire=rep, history=[],
+                              left=left, right=right)
+
+    return {historyTree=historyTree, lambda=lambda, mu=mu, beta=beta}
+}
+
+
+/*---------------- Proposal distribution parameters --------------------------*/
+
+
+/**
+ * get_proposal_params
+ *
+ * This functions uses belief propagation under the independence
+ * model, and an anneling parameter 'tune', to obtain parameters
+ * for the proposals of ancestral repertoires.
+ *
+ * Parameters:
+ *   @param parasite_tree: parasite tree
+ *   @param interactions: interaction matrix
+ *   @param Q: rate matrix for the independence model
+ *   @param tune: parameter in (0,1) determining how much
+ *                we should trust the independence model
+ *
+ * Return value:
+ *   A ProbsTree containing the final repertoire state proposal
+ *   probabilities for all nodes in the parasite tree.
+ */
+function get_proposal_params(parasite_tree: Tree, interactions: LabeledMatrix,
+                             Q: RateMatrix, stationary_probs: Real[], tune: Real): ProbsTree
+{
+    msgTree = postorder_msgs(parasite_tree, interactions, Q)
+
+    // NB! Assuming we have
+    pis = rep (stationary_probs, times=length(msgTree.out_msg))
+
+    return final_probs(msgTree, pis, Q, tune)
+}
+
+
+// Compute postorder messages on the observed parasite tree
+function postorder_msgs(tree: Tree, interactions: LabeledMatrix, Q: RateMatrix) : MsgTree
+{
+    if tree is Leaf
+        return MsgLeaf(age=0.0, label=tree.label, out_msg=observation_message(interactions[tree.label])
+
+    left  = postorder_msgs(tree.left , interactions, Q)
+    right = postorder_msgs(tree.right, interactions, Q)
+
+    // This assumes that we can do matrix exponentiation and that
+    // multiplication of two vectors means element-wise multiplication. 't' is
+    // the transpose function; we need the transposed transition matrix as we
+    // are going backward in time. For multiplication of a vector and a matrix,
+    // we assume that the vector is a row vector.  tree.age-left.age gives the
+    // branch length for the left daughter
+    Tleft  = t(exp(Q*(tree.age-left.age)))
+    Tright = t(exp(Q*(tree.age-right.age)))
+
+    left_in_msg  = message( left.out_msg, Tleft)
+    right_in_msg = message(right.out_msg, Tright)
+
+    // Daniel: Missing normalization here?
+    out_msg      = left_in_msg * right_in_msg
+
+    return MsgNode(age=tree.age, label=tree.label, left=left, right=right, left_in_msg=left_in_msg, right_in_msg=right_in_msg, out_msg=out_msg)
+}
+
+
+// Compute final probabilities from belief propagation on the observed parasite
+// tree
+function final_probs(tree: MsgTree, root_msg: Real[][3], Q: RateMatrix, tune: Real) : ProbsTree
+{
+    probs = (tree.out_msg * root_msg)^tune
+
+    if tree is Leaf
+        return ProbsLeaf(age=0.0, label=tree.label, probs=probs)
+
+    Tleft  = exp(Q*(tree.age-tree.left.age))
+    Tright = exp(Q*(tree.age-tree.right.age))
+
+    left_root_msg  = message(root_msg*tree.right_in_msg, Tleft)
+    right_root_msg = message(root_msg*tree.left_in_msg , Tright)
+
+    left  =  final_probs(tree.left,  left_root_msg, Q, tune)
+    right =  final_probs(tree.left, right_root_msg, Q, tune)
+
+    return ProbsNode(age=tree.age, label=tree.label, left=left, right=right, probs=probs)
+}
+
+
+// Compute a message
+function message(start_msg: Real[][3], T: Real[3][3])
+{
+    end_msg: Real[][3]
+
+    // We assume we can do multiplication of a vector and a matrix. In
+    // this type of operation, we assume that the vector is a row vector.
+    // In R it is assumed to be a column vector instead, so this can be
+    // discussed. Note use of 1-based indexing and 'lengths' to get a
+    // vector of the lengths of the different dimensions of a matrix type.
+    for (i=1 to lengths(start_msg)[1])
+        end_msg[i] = start_msg[i]*T
+
+    return end_msg
+}
+
+
+// Compute leaf message from observed interactions
+function observation_message(interactions: Character[]) : Real[][3]
+{
+    msg: Real[][3]
+
+    for c in interactions {
+        msg[i] =
+            case c == "0" | [1.0, 0.0, 0.0]
+            case c == "1" | [0.0, 1.0, 0.0]
+            case c == "2" | [0.0, 0.0, 1.0]
+            case c == "?" | [1.0, 1.0, 1.0]
+            // default |  ERROR?
+    }
+
+    return msg
+}
+
+
+
+/*---------------- Model functions -----------------------------*/
+
+
+// Simulate an evolutionary history for the host repertoires
+function simulate (tree: ProbsTree, start: HistoryPoint, mp: ModelParams) : HistoryTree
+{
+    // Propose a repertoire. The propose statement means that the simulation
+    // should be "penalized" for the probability associated with the draw. This
+    // can be done at any point in the inference.
+    rep: Int[]
+    for i in 1 to lengths(probs)[1] {
+        propose rep[i] ~ Categorical (tree.probs[i], [0,1,2])
+    }
+
+    stop = HistoryPoint (age=tree.age, repertoire=rep)
+    history = simulate_history (start, stop, mp)
+
+    if tree is Leaf
+        return HistoryLeaf (age=tree.age, label=tree.label,
+                           repertoire=rep, history=history)
+
+    left  = simulate (tree.left , stop, mp)
+    right = simulate (tree.right, stop, mp)
+
+    return HistoryNode (age=tree.age, label=tree.label,
+                        repertoire=rep, history=history,
+                        left=left, right=right)
+}
+
+
+// Simulate history conditional on initial repertoire, start time, and end
+// time. We first propose events from the independence model and then
+// condition the simulation on those events.
+function simulate_history (from: HistoryPoint, to: HistoryPoint, mp: ModelParams) : HistoryPoint[]
+{
+    unordered_events = propose_events (1, from, to, mp.Q)
+
+    events = sort (unordered_events, function(x,y) { x.age > y.age })
+
+    return simulate_by_event (rep, events, 1, from.age, to.age, mp)
+}
+
+
+// Propose events from independence model
+function propose_events (host_index: Int, from: HistoryPoint, to: HistoryPoint, Q: Real[][]) : Event[]
+{
+    if (host_index > length(from.repertoire))
+        return []
+
+    events = propose_events_for_host (host_index, from.age, to.age,
+                                      from.repertoire[host_index], to.repertoire[host_index], Q)
+
+    return cat (events, propose_events (host_index + 1, from, to, Q))
+}
+
+
+// Propose events for one host
+function propose_events_for_host (host_index: Int, from_age: Real, end_age: Real,
+                                  from_state: Int, end_state: Int, Q: Real[][])
+{
+    rate = -Q[from_state+1][from_state+1]
+
+    if (from_state != end_state)
+        t = propose_exponential_max_t (rate, from_age - end_age)
+    else
+        propose t ~ Exponential (rate)
+
+    new_age = from_age - t
+
+    if (new_age < end_age)
+        return []
+
+    to_states =
+        case from_state == 0 | [1,2]
+        case from_state == 1 | [0,2]
+        case from_state == 2 | [0,1]
+
+    state_probs = normalize (Q[from_state+1][to_states[1]+1], Q[from_state+1][to_states[2]+1])
+
+    propose new_state ~ Categorical (state_probs, to_states)
+
+    event = Event(age=new_age, host=host_index, from_state=from_state, to_state=new_state)
+
+    return  cat (event, propose_events_for_host (host_index, new_age, end_age, new_state, end_state, Q))
+}
+
+
+// Propose from conditional exponential distribution with rate 'rate'
+// but with support only on (0, max_t).
+// NB! It might be convenient to be able to fully specify custom
+// distributions directly in TreePPL.
+function propose_exponential_max_t (rate: Real, max_t: Real)
+{
+    u_min = exp (rate * max_t)
+
+    propose u ~ Uniform (u_min, 1.0)
+
+    return log (u) / rate
+}
+
+
+// Simulate repertoire evolution from full model, one event
+// at a time. We return the sequence of repertoires.
+function simulate_by_event (rep: Int[], events: Event[], event_index: Int,
+                            from_age: Real, end_age: Real, mp: ModelParams)
+{
+    // End case, deal with last time segment
+    if event_index > length(events) {
+        change_rate = total_rate (rep, mp)
+        observe 0 ~ Poisson(change_rate*(from_age-end_age))
+        return []
+    }
+
+    // Typical case
+    the_event = events[event_index]
+    rate = rate (rep, the_event.host, the_event.to_state, mp)
+    change_rate = total_rate (rep, mp)
+
+    // Note that the first statement will capture the cases where the proposed
+    // history is impossible because the repertoire we are supposed to go to is
+    // empty (the rate is zero).
+    observe true ~ Bernoulli(prob=rate/change_rate)
+    observe (from_age - the_event.age) ~ Exponential(rate=change_rate)
+
+    new_rep: Int[]
+    for i in 1 to length(rep) {
+    	if (i==the_event.host)
+        	new_rep[i] = the_event.to_state
+        else
+        	new_rep[i] = rep[i]
+    }
+
+    hp = HistoryPoint (age=the_event.age, repertoire=new_rep)
+
+    return cat (hp, simulate_by_event (new_rep, events, event_index+1, the_event.age, end_age, mp))
+}
+
+
+// Compute rate for a proposed event
+function rate (rep: Int[], host_index: Int, to_state: Int, mp: ModelParams)
+{
+    from_state = rep[host_index]
+
+    base_rate = mp.Q[from_state+1][to_state+1]
+
+    // Losses are easy, no cross-repertoire modification used here
+    if (from_state > to_state)
+      if (from_state == 2 && length(rep==2) == 1)
+        return 0
+      else
+        return base_rate
+
+    // We have a gain rate, so we need to factor in beta-dependent
+    // cross-repertoire effect
+    if (from_state == 0)
+    	current_hosts = which(rep %in% [1,2])
+    else
+        current_hosts = which(rep == 2)
+
+    // NB! Using R indexing style here to generate vector from matrix
+    d = mean (mp.D[host_index][current_hosts])
+
+    return base_rate * (exp(-mp.beta*(d/mp.d_average))
+}
+
+
+// Compute total rate of change from a repertoire
+function total_rate (rep: Int[], mp: ModelParams)
+{
+
+    lossRates1 = length(rep==1)*mp.Q[2][1]
+    lossRates2 =
+      if(length(rep==2) == 1)
+        0
+      else
+        length(rep==2)*mp.Q[3][2]
+
+    gainRates = 0.0
+    for (i in 1 to length(rep)) {
+        if (rep[i] %in% [0,1])
+            gainRates += rate (rep, i, rep[i]+1, mp)
+    }
+
+    return lossRates1 + lossRates2 + gainRates
+}
+
+
+
