@@ -464,8 +464,12 @@ function propose_exponential_max_t (rate: Real, max_t: Real)
 {
     u_min = exp (-rate * max_t)
 
+    // This is an example of a propose with immediate repay
+    // log pdf of unif(a,b) is log(1/(b-a)) = -log(b-a)
+    // Since we want to factor with -log pdf, this results in
+    // factor (log(b-a))
     assume u ~ Uniform (u_min, 1.0)
-    weight (log((1.0-u_min)))   // logpdf of unif(a,b) is log(1/(b-a))
+    weight (log((1.0-u_min)))   // Could also be written as weight (-Uniform(u_min, 1.0).score(u))
 
     return -log (u) / rate
 }
