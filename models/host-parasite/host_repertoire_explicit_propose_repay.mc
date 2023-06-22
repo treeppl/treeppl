@@ -331,11 +331,12 @@ in
 
 let propose_exponential_max_t: Float -> Float -> Float =
   lam rate. lam max_t.
-    let u_min = exp (mulf rate max_t) in
-    -- This should use `propose` eventually, now `assume` and `weight` manually
-    -- TODO Handle proposal debts
+    let u_min = exp (negf (mulf rate max_t)) in
+    -- This is equivalent to a propose with immediate
+    -- repay
     let u = assume (Uniform u_min 1.0) in
-    divf (log u) rate
+    weight (log (subf 1.0 b));
+    divf (negf(log u)) rate
 in
 
 recursive let propose_events_for_host:
