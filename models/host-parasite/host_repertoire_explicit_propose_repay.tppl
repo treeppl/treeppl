@@ -223,7 +223,7 @@ function model(parasite_tree: Tree, interactions: LabeledMatrix,
 
     // Propose a repertoire for the root of the parasite tree
     rep: Int[]
-    log_score = 0.0
+    log_rep_debt = 0.0
     for i in 1 to n_hosts {
         assume rep[i] ~ Categorical (probs_tree.probs[i], [0,1,2])
         log_rep_debt += Categorical(probs_tree.probs[i], [0,1,2]).score(rep[i])
@@ -233,16 +233,8 @@ function model(parasite_tree: Tree, interactions: LabeledMatrix,
     if (!(2 %in% rep))  // R syntax
         weight -infty
 
-    // Simulate repertoire history on the parasite tree
-    left  = simulate (probs_tree.left , rep, Q, D, d)
-    right = simulate (probs_tree.right, rep, Q, D, d)
-    historyTree = HistoryNode(age=probs_tree.age, label=probs_tree.label,
-                              repertoire=rep, history=[], log_rep_debt=log_rep_debt,
-                              left=left, right=right)
-
-    // Factor in the debt of the proposed ancestral repertoires at nodes
-    // in the historyTree. Also factor in the log score of the root
-    // repertoire, assuming equal prior probability on all possible
+    // We want the net debt so we also factor in the log score of the
+    // root repertoire, assuming equal prior probability on all possible
     // repertoires, that is, all repertoires with at least one host in state
     // 2; the others can be in any of the states {0,1,2}. There are 3^(n_host)
     // repertoires in total. There are 2^(n_host) repertoires that only have
@@ -250,7 +242,17 @@ function model(parasite_tree: Tree, interactions: LabeledMatrix,
     // allowed repertoires is then 3^(n_host)-2^(n_host), and the probability
     // each is the inverse of that.
     log_score_root = -log(3^(n_host) - 2^(n_host))
-    factor (log_score_root - get_rep_debt(historyTree))
+ 
+    // Simulate repertoire history on the parasite tree
+    left  = simulate (probs_tree.left , rep, Q, D, d)
+    right = simulate (probs_tree.right, rep, Q, D, d)
+    historyTree = HistoryNode(age=probs_tree.age, label=probs_tree.label,
+                              repertoire=rep, history=[], log_rep_debt=log_rep_debt-log_score_root,
+                              left=left, right=right)
+
+    // Factor in the net debt of the proposed ancestral repertoires at nodes
+    // and leaves in the historyTree.
+    factor (-get_rep_debt(historyTree))
 
     return {historyTree=historyTree, lambda=lambda, mu=mu, beta=beta}
 }
@@ -381,9 +383,12 @@ function observation_message(interactions: Character[]) : Real[][3]
 // Simulate an evolutionary history for the host repertoires
 function simulate (tree: ProbsTree, start: HistoryPoint, mp: ModelParams) : HistoryTree
 {
-    // Propose a repertoire. The propose statement means that the simulation
+    // Propose a repertoire. The propose mechanism means that the simulation
     // should be "penalized" for the probability associated with the draw. This
-    // can be done at any point in the inference.
+    // can be done at any point in the inference but it makes sense to do this
+    // at the end, when the history over the entire tree has been considered.
+    // For leaves, there is also a score from the observations. We factor that
+    // in here so that 
     rep: Int[]
     log_rep_debt = 0.0
     for i in 1 to lengths(probs)[1] {
@@ -394,9 +399,16 @@ function simulate (tree: ProbsTree, start: HistoryPoint, mp: ModelParams) : Hist
     stop = HistoryPoint (age=tree.age, repertoire=rep)
     history = simulate_history (start, stop, mp)
 
-    if tree is Leaf
+    if tree is Leaf {
+        log_score = 0.0
+        obs_msg = observation_message(tree.label)
+
+        for i in 1 to length(obs_msg)[1]
+            log_score += Categorical (obs_msg[i], [0,1,2]),score(rep[i])
+ 
         return HistoryLeaf (age=tree.age, label=tree.label,
-                           repertoire=rep, history=history, log_rep_debt=log_rep_debt)
+                           repertoire=rep, history=history, log_rep_debt=log_rep_debt - log_score)
+    }
 
     left  = simulate (tree.left , stop, mp)
     right = simulate (tree.right, stop, mp)
@@ -575,7 +587,6 @@ function rate (rep: Int[], host_index: Int, to_state: Int, mp: ModelParams)
 // Compute total rate of change from a repertoire
 function total_rate (rep: Int[], mp: ModelParams)
 {
-
     lossRates1 = length(rep==1)*mp.Q[2][1]
     lossRates2 =
       if(length(rep==2) == 1)
