@@ -77,10 +77,10 @@ match result with ParseOK r in
     use TreePPLThings in
     match parseTreePPLExn filename content with  file in
     let corePplAst: Expr = compile input file in
-    --let prog: Expr = typeCheck corePplAst in
-    --let prog: Expr = lowerProj prog in
+    let prog: Expr = typeCheck corePplAst in
+    let prog: Expr = lowerProj prog in
     -- Now we have the coreppl AST. Can we follow the cppl logic again?
-    let ast = corePplAst in
+    let ast = prog in
     let noInfer = not (hasInfer ast) in
     if eqString options.target "rootppl" then
       if noInfer then
