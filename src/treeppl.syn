@@ -7,6 +7,7 @@ token String {
   repr = StringRepr {},
   constructor = StringTok,
   fragment = StringTokenParser,
+  ty = String,
 }
 token LIdent {
   repr = LIdentRepr {},
@@ -68,7 +69,7 @@ start FileTppl
 /-
 A TreePPL file consists of one more declarations.
 -/
-prod FileTppl: FileTppl = decl:DeclTppl+
+prod DeclSequence: FileTppl = decl:DeclTppl+
 
 /-
 Type usage
@@ -78,7 +79,7 @@ Real
 Real[]
 Int[10]
 -/
-prod TypeTppl: TypeTppl = name:UName
+prod TypeUsage: TypeTppl = name:UName
 prod SequenceTypeTppl: TypeTppl = ty:TypeTppl "[" size:Integer? "]"
 
 prod AtomicReal: TypeTppl = "Real"
@@ -101,7 +102,7 @@ prod Fun: DeclTppl =
 A (type) constructor is similar to a function but needs to have at least one
 argument, and does not have the optional postfix :SomeType
 -/
-prod Con: Con =
+prod TypeCon: Con =
  name:UName "{"( fields:{name:LIdent ":" ty:TypeTppl} ("," fields:{name:LIdent ":" ty:TypeTppl})*)? "}"
 
 /- Here is how you declare a type -/
@@ -117,7 +118,7 @@ prod Type: DeclTppl =
 Expressions
 -/
 prod Integer: ExprTppl = val:Integer
-prod String: ExprTppl = val:String
+prod TpplString: ExprTppl = val:String
 prod Real: ExprTppl = val:Real
 prod Variable: ExprTppl = ident:LName
 prod True: ExprTppl = "true"
