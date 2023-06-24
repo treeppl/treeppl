@@ -1,0 +1,79 @@
+// This script uses Nicolas's algorithm,
+// as a comparison for the algorithm that
+// proposes events
+var mymodel = function() {
+
+  // Switch rates
+  var r_0 = 3.0
+  var r_1 = 1.0
+
+  var start_state = 0
+  var stop_state  = 1
+
+  var start_time =  1.0
+  var stop_time  =  0.0
+  
+  var res = propose_event(start_state,stop_state,start_time,stop_time,r_0,r_1)
+
+//  console.log(res)
+
+  var n_events = res.switch_times.length
+
+//  var log_score = sim_event(start_state,start_time,stop_time,0,res.switch_times,r_0,r_1)
+
+//  console.log(log_score)
+
+//  factor (log_score-res.log_debt)
+
+  return n_events
+}
+
+var propose_event = function(state, stop_state, start_time, stop_time, r_0, r_1) {
+
+  var rate = (state == 0 ? r_0 : r_1 )
+  
+  var t = (state != stop_state ? sample_exp_max_t(rate, start_time - stop_time) :
+           sample( Exponential({a: rate})))
+  
+  var log_debt = Exponential({a: rate}).score(t)  
+
+//  console.log(t, log_debt, state, stop_state, start_time, stop_time)
+
+  var new_time = start_time - t
+
+  if (new_time < stop_time)
+    return { log_debt: log_debt, switch_times: [ ]}
+
+  var res = propose_event(1 - state, stop_state, new_time, stop_time, r_0, r_1)
+
+//  console.log(res)
+
+  return {log_debt: (res.log_debt + log_debt), switch_times: [new_time].concat(res.switch_times)}
+}
+
+var sample_exp_max_t = function(rate, max_time) {
+  
+  var a = Math.exp(-rate*max_time)
+  var u = sample( Uniform({a: a, b:1.0}) )
+  
+  factor (-Uniform({a:a,b:1.0}).score(u))
+  return (-Math.log(u) / rate)
+}
+
+var sim_event = function(state, time, stop_time, index, events, r_0, r_1) {
+
+  var rate = (state == 0 ? r_0 : r_1)
+
+  if (index >= events.length)
+    return Poisson({mu: rate*(time - stop_time)}).score(0)
+  
+  var t = time - events[index]
+
+  var log_score = Exponential({a: rate}).score(t)
+
+  return log_score + sim_event(1-state, events[index], stop_time, index+1, events, r_0, r_1)
+}
+
+var dist = Infer({method:'SMC',particles:100000,model:mymodel})
+dist.normalizationConstant
+
