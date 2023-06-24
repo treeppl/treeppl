@@ -1,0 +1,147 @@
+// Hypothetical TreePPL script for inference of phylogenetic
+// placement. We assume we have a query sequence we want to
+// place in a tree with inferred ancestral sequences and
+// inferred substitution model.
+
+// The placement is based on some distance measure from
+// the query to each of the branches in the given tree,
+// which is converted to a proposal distribution. Here,
+// we assume that the proposal distribution is computed
+// outside of the program. If we instead incorporate it
+// in the TreePPL script, it opens up the possibility of
+// doing online inference with essentially the same script.
+
+// DATA
+
+// Data is a matrix of type character, with each row
+// consisting of the aligned DNA sequence for a single
+// taxon. The nucleotide is specified as
+//   "A" for adenine
+//   "C" for cytosine
+//   "G" for guanine
+//   "T" for thymine
+//   "?" for any of the above
+//   "-" a gap, usually treated the same as "?"
+// IUPAC has single-character codes for all possible
+// combinations of the four nucleotides, but typically
+// only those given above are used.
+data = [ ["C", "C", "A", "G", "T", "A", "A", "A", "A", "T", "C", "C", "T", "T", "G"],
+         ["C", "C", "A", "G", "A", "C", "A", "A", "A", "T", "C", "A", "C", "C", "A"],
+         ["A", "A", "C", "C", "A", "G", "C", "A", "A", "A", "G", "A", "T", "T", "A"],
+         ["A", "A", "C", "C", "A", "T", "A", "C", "A", "A", "G", "G", "T", "C", "A"]]
+
+// For this problem, we also have a query sequence, and samples of the tree and of the
+// substitution process, say a GTR+Gamma model (rate matrix and siterates vector).
+
+query = ["C", "G", "A", "C", "T", "A", "G", "A", "A", "T", "C", "T", "T", "C", "G"]
+
+// TYPES
+
+// We need an input tree with indices we can use in the output
+type Tree =
+    | Leaf(age: Real, index: Int, seq: Int[])
+    | Node(age: Real, index: Int, seq: Int[], left: Tree, right: Tree)
+
+// For now, the type RateMatrix can be treated
+// as a Real matrix, but we might want to give
+// it additional properties in the future
+type RateMatrix = Real[][]
+
+
+// MODEL FUNCTIONS
+
+// We need a function translating observations to observed sequences for leaves.
+// See tree inference script for more comments.
+function observe_model(seq_data: Character[]) : Int[] {
+
+    seq = Int[length(seq_data)]
+
+    for (i in 1:length(seq_data)) {
+
+        switch(seq_data[i]) :
+            case "A" : seq[i] = 0
+            case "C" : seq[i] = 1
+            case "G" : seq[i] = 2
+            case "T" : seq[i] = 3
+            case "?", case "-" : assume seq[i] ~ Categorical([0.25,0.25,0.25,0.25],[0,1,2,3])
+            default : ERROR("Input data incorrect")
+    }
+    return seq
+}
+
+// Insert the sequence in the tree
+// With smart indexing, this could be a lot faster I guess...
+function insert_sequence(tree: Tree, child_index: Int, query_seq: Int[], clock_rate: Real, site_rates: Real, q: RateMatrix) {
+
+    if (tree.index == child_index)
+        return true
+
+    if (tree is Leaf)
+        return false
+
+    insert_left  = insert_sequence(tree.left , child_index, query_seq, clock_rate, site_rates, q)
+    insert_right = insert_sequence(tree.right, child_index, query_seq, clock_rate, site_rates, q)
+
+    if (!(insert_left | insert_right))
+        return false
+
+     // Declare the sequence of the new internal node
+     seq = Int[length(tree.seq)]
+       
+     child_age = (insert_left ? tree.left.age : tree.right.age)
+     child_seq = (insert_left ? tree.left.seq : tree.right.seq)
+
+     assume age ~ Uniform(child_age, tree.age)
+
+     for (i in 1:length(tree.seq)) {
+            factor (-CTMC(tree.seq[i], q, site_rates[i]*clock_rate*(tree.age-child_age)).score(child_seq[i]))
+            assume seq[i] ~ CTMC(tree.seq[i], q, site_rates[i]*clock_rate*(tree.age-age))
+            assume child_seq[i] ~ CTMC(seq[i], q, site_rates[i]*clock_rate*(age-child_age))
+            assume query_seq[i] ~ CTMC(seq[i], q, site_rates[i]*clock_rate*(age-0.0))   // Assuming the query sequent is extant (age=0.0)
+    }
+
+    // It should not be inserted below this node...
+    return false
+}
+
+
+// Evolve sequences over the tree in postorder fashion using
+// automatically matched propose and update statements
+function evolve_sequences(data: Character[][], tree, clock_rate, q, pi, site_rates) {
+
+    if (tree is Leaf)
+        return observe_model(data[tree.index])
+
+    left_seq  = evolve_sequences(data, tree.left , clock_rate, q, pi, site_rates)
+    right_seq = evolve_sequences(data, tree.right, clock_rate, q, pi, site_rates)
+
+    propose seq ~iid(ncol(data), Categorical(probs=pi,values=[0,1,2,3]))
+    
+    for (i in 1:length(seq)) {
+        if (tree.left is Node)
+            update left_seq[i]  ~ CTMC(seq[i], q, site_rates[i]*clock_rate)
+        if (tree.right is Node)
+            update right_seq[i] ~ CTMC(seq[i], q, site_rates[i]*clock_rate)
+
+    return seq
+}
+
+
+// MODEL
+
+function model(data: Character[][], tree: Tree, clock_rate: Real, site_rates: Real[], q: RateMatrix, query: Character[], proposal_dist: Real[]) : Int
+{
+    // Propose a putative position of the query sequence
+    propose child_index ~ Categorical(proposal_dist, values:seq(1,length(proposal_dist)))
+
+    // Convert the query data to a likely sequence
+    query_seq = observe_model(query)
+
+    // Compute the likelihood of inserting the sequence there
+    insert_sequence(tree, child_index, query_seq, clock_rate, site_rates, q, query_seq)
+
+    update child_index ~ DiscreteUniform(length(proposal_dist))
+
+    return child_index
+}
+
