@@ -229,9 +229,8 @@ function model(parasite_tree: Tree, interactions: LabeledMatrix,
         log_rep_debt += Categorical(probs_tree.probs[i], [0,1,2]).score(rep[i])
     }
 
-    // Make sure we have a possible root repertoire
-    if (!(2 %in% rep))  // R syntax
-        weight -infty
+    // Make sure we have a possible root repertoire, kill immediately otherwise
+    observe (2 %in% rep)  // R syntax
 
     // We want the net debt so we also factor in the log score of the
     // root repertoire, assuming equal prior probability on all possible
@@ -284,8 +283,7 @@ function get_proposal_params(parasite_tree: Tree, interactions: LabeledMatrix,
 {
     msgTree = postorder_msgs(parasite_tree, interactions, Q)
 
-    // NB! Assuming we have
-    pis = rep (stationary_probs, times=length(msgTree.out_msg))
+    pis = rep (stationary_probs, times=length(msgTree.out_msg))  // R syntax
 
     return final_probs(msgTree, pis, Q, tune)
 }
@@ -396,6 +394,9 @@ function simulate (tree: ProbsTree, start: HistoryPoint, mp: ModelParams) : Hist
         log_rep_debt += Categorical (tree.probs[i], [0,1,2]).score(rep[i])
     }
 
+    // Kill immediately if not a viable host repertoire
+    observe (2 %in% rep)    // Using R syntax
+
     stop = HistoryPoint (age=tree.age, repertoire=rep)
     history = simulate_history (start, stop, mp)
 
@@ -428,12 +429,12 @@ function simulate_history (from: HistoryPoint, to: HistoryPoint, mp: ModelParams
 
     events = sort (proposed_unordered_events.events, function(x,y) { x.age > y.age })
 
-    historyScore = simulate_by_event (rep, events, 1, from.age, to.age, mp, proposed_unsorted_events.log_debt)
+    history_score = simulate_by_event (rep, events, 1, from.age, to.age, mp, proposed_unsorted_events.log_debt)
 
     // Now we have both debt and score at an alignment point
-    factor(historyScore.log_score - proposed_unordered_events.log_debt)
+    factor(history_score.log_score - proposed_unordered_events.log_debt)
 
-    return historyScore.history
+    return history_score.history
 }
 
 
