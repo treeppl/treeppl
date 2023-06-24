@@ -187,16 +187,16 @@ function model(parasite_tree: Tree, interactions: LabeledMatrix,
     // Derive params for ancestral repertoire proposals from independence model
     probs_tree = get_proposal_params (parasite_tree, interactions, Q, tune)
 
-	// Propose repertoire for subroot
+	// Assume repertoire for subroot
     rep: Int[]
     for i in 1 to n_hosts {
-        propose rep[i] ~ Categorical ([1.0/3.0, 1.0/3.0, 1.0/3.0], [0,1,2])
+        assume rep[i] ~ Categorical ([1.0/3.0, 1.0/3.0, 1.0/3.0], [0,1,2])
     }
 	
 	// Check that we have at least one real host
 	if (length(rep==2)<1)
 		factor -INFINITY
-		 
+
     history_point = HistoryPoint(age=probs_tree.age*2.0, repertoire=rep)
     
     // Simulate repertoire history on the parasite tree
