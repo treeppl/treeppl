@@ -20,10 +20,10 @@
 // IUPAC has single-character codes for all possible
 // combinations of the four nucleotides, but typically
 // only those given above are used.
-D =  [ ["C", "C", "A", "G", "T", "A", "A", "A", "A", "T", "C", "C", "T", "T", "G"],
-       ["C", "C", "A", "G", "A", "C", "A", "A", "A", "T", "C", "A", "C", "C", "A"],
-       ["A", "A", "C", "C", "A", "G", "C", "A", "A", "A", "G", "A", "T", "T", "A"],
-       ["A", "A", "C", "C", "A", "T", "A", "C", "A", "A", "G", "G", "T", "C", "A"]]
+data =  [ ["C", "C", "A", "G", "T", "A", "A", "A", "A", "T", "C", "C", "T", "T", "G"],
+         ["C", "C", "A", "G", "A", "C", "A", "A", "A", "T", "C", "A", "C", "C", "A"],
+         ["A", "A", "C", "C", "A", "G", "C", "A", "A", "A", "G", "A", "T", "T", "A"],
+         ["A", "A", "C", "C", "A", "T", "A", "C", "A", "A", "G", "G", "T", "C", "A"]]
 
 // TYPES
 
@@ -117,13 +117,13 @@ function cluster(q: RateMatrix, trees: tree[], max_age: Real) : tree[]
 // update logic that we use for the internal nodes to achieve this
 // when we have the back-end conversion into belief propagation
 // figured out.
-function observe_model(data: Character[]) : Int[] {
+function observe_model(seq_data: Character[]) : Int[] {
 
-    seq = Int[length(data)]
+    seq = Int[length(seq_data)]
 
-    for (i in 1:length(data)) {
+    for (i in 1:length(seq_data)) {
 
-        switch(data[i]) :
+        switch(seq_data[i]) :
             case "A" : seq[i] = 0
             case "C" : seq[i] = 1
             case "G" : seq[i] = 2
@@ -149,7 +149,7 @@ function model(data: Character[][]) : Tree
     // Now illustrated in an R-like way
     leaves = Tree[nrow(data)]
     for (i in 1:nrow(data))
-        leaves[i] = Leaf(age=0.0, index=i, seq=observe_model(data[0]))
+        leaves[i] = Leaf(age=0.0, index=i, seq=observe_model(data[i]))
     
     // Build the tree by random clustering and return it (first element in return value)
     return cluster(q, trees, 0.0)[1]

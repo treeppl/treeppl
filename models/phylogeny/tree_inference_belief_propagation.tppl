@@ -20,10 +20,10 @@
 // IUPAC has single-character codes for all possible
 // combinations of the four nucleotides, but typically
 // only those given above are used.
-D =  [ ["C", "C", "A", "G", "T", "A", "A", "A", "A", "T", "C", "C", "T", "T", "G"],
-       ["C", "C", "A", "G", "A", "C", "A", "A", "A", "T", "C", "A", "C", "C", "A"],
-       ["A", "A", "C", "C", "A", "G", "C", "A", "A", "A", "G", "A", "T", "T", "A"],
-       ["A", "A", "C", "C", "A", "T", "A", "C", "A", "A", "G", "G", "T", "C", "A"]]
+data =  [ ["C", "C", "A", "G", "T", "A", "A", "A", "A", "T", "C", "C", "T", "T", "G"],
+         ["C", "C", "A", "G", "A", "C", "A", "A", "A", "T", "C", "A", "C", "C", "A"],
+         ["A", "A", "C", "C", "A", "G", "C", "A", "A", "A", "G", "A", "T", "T", "A"],
+         ["A", "A", "C", "C", "A", "T", "A", "C", "A", "A", "G", "G", "T", "C", "A"]]
 
 // TYPES
 
@@ -50,16 +50,13 @@ function message(start_msg: Message[], q: RateMatrix, time: Real) : Message[]
 {
     trans_matrix = transpose(matrix_exponential(q*time))
 
+    // Assuming that a vector is treated as a row vector in matrix operations
     end_msg = Message[length(start_msg)]
     for (i=1 to length(end_msg))    // Using R-like syntax for illustration, we need to sequence length here
-        end_msg[i] = multiplication_of_row_vector_with_matrix(start_msg[i],trans_matrix)
+        end_msg[i] = matrix_multiplication(start_msg[i],trans_matrix)
 
     return end_msg
 }
-
-// We are going to assume that we have support for a continuous-time discrete-state
-// Markov chain distribution, with parameters being the rate matrix and the time.
-// We will call this distribution CTMC.
 
 // This is the recursive function that builds the tree backwards in time using
 // a random coalescent process.
@@ -95,10 +92,10 @@ function cluster(q: RateMatrix, trees: tree[], max_age: Real) : tree[]
     // for the root sequence in the tree, that is, we are assuming stationarity at the root.
     // Assuming here that vectors are naturally row vectors (as opposed to R)
     stationary_probs = transpose([0.25,0.25,0.25,0.25])
-    log_like = Real[length(msg]
+    log_likes = Real[length(msg]
     for (i in 1:length(msg))
-        log_like[i] = log(matrix_multiplication(msg[i]*stationare_probs))
-    factor (sum(log_like))
+        log_likes[i] = log(matrix_multiplication(msg[i]*stationary_probs))
+    factor (sum(log_likes))
     
     // Combine picked pair of trees into a new node
 	parent = Node(age=age, msg=msg, left = left_child, right=right_child)
@@ -112,13 +109,13 @@ function cluster(q: RateMatrix, trees: tree[], max_age: Real) : tree[]
 }
    
 // We need a function computing the message for leaves.
-function observe_model(data: Character[]) : Message[] {
+function observe_message(seq_data: Character[]) : Message[] {
 
-    msg = Message[length(data)]
+    msg = Message[length(seq_data)]
 
-    for (i in 1:length(data)) {
+    for (i in 1:length(seq_data)) {
 
-        switch(data[i]) :
+        switch(seq_data[i]) :
             case "A" : msg[i] = [1.0, 0.0, 0.0, 0.0]
             case "C" : msg[i] = [0.0, 1.0, 0.0, 0.0]
             case "G" : msg[i] = [0.0, 0.0, 1.0, 0.0]
@@ -126,7 +123,7 @@ function observe_model(data: Character[]) : Message[] {
             case "?", case "-" : msg[i] = [1.0, 1.0, 1.0, 1.0]
             default : ERROR("Input data incorrect") 
     }
-    return seq;
+    return msg;
 }
 
 // MODEL
