@@ -89,7 +89,7 @@ function model(data: Character[][], tree: Tree, clock_rate: Real, query: Charact
     // It would make sense to combine MCMC and SMC for this problem, with MCMC
     // rejuvenation steps used for substituton model parameters and the age
     // of the new node inserted into the tree.
-    sample = substmodel_script.model(concat(data,query), tree, clock_rate)
+    sample = substmodel_script.model(concat(data,query), new_tree, clock_rate)  // Assuming here that concat adds the query as the final row to data
 
     // We just return the insertion point here but might be interested
     // in substitution model parameters and the age of the new node also
