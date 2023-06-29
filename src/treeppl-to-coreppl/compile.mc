@@ -1,8 +1,5 @@
 /-
 TreePPL Compiler and Unit Tests
-===============================
-
-Viktor Senderov, Daniel Lundén, and Viktor Palmkvist (2022)
 
 Unit tests available via:
 
@@ -520,7 +517,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
   | PrintStmtTppl x ->
     lam cont.
       foldr isemi_ cont
-        [ dprint_ (compileExprTppl x.real)
+        [ dprint_ (compileExprTppl x.printable)
         -- , print_ (str_ "\n") in
         , flushStdout_ unit_
         ]
@@ -924,6 +921,12 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       info = r.info
     }
 
+  | TpplStringExprTppl r ->
+    TmSeq {
+      tms = map char_ r.val.v,
+      ty = tyunknown_,
+      info = r.info
+    }
 end
 
 

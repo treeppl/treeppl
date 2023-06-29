@@ -1,0 +1,3 @@
+model function blub(x: Real) {
+  print("Hello world!");
+}

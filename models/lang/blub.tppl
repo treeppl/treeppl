@@ -1,0 +1,31 @@
+model function blub(x: Real) {
+  print(2.0 + 3.0);
+  print(2.0 * 3.0);
+  print(2.0 / 3.0);
+  print(2.0 - 3.0);
+
+  print(2.0 < 3.0);
+  print(2.0 <= 3.0);
+  print(2.0 == 3.0);
+  print(2.0 >= 3.0);
+  print(2.0 > 3.0);
+
+  print(true && true);
+  print(true && false);
+  print(false && true);
+  print(false && false);
+
+  print(true || true);
+  print(true || false);
+  print(false || true);
+  print(false || false);
+
+  print(!false);
+  print(!true);
+  for i in 1 to 10 {
+    print(i);
+    if Real(i) > 5.0 {
+      return;
+    }
+  }
+}

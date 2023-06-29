@@ -36,5 +36,5 @@ test: src/treeppl-to-coreppl/compile.mc
 	mi run src/treeppl-to-coreppl/compile.mc --test
 
 clean:
-	rm src/treeppl-ast.mc
-	rm build/*
+	rm -f src/treeppl-ast.mc
+	rm -f build/*
