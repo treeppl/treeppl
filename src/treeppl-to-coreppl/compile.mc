@@ -211,7 +211,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
   sem compile: Expr -> FileTppl -> Expr
 
   sem compile (input: Expr) =
-  | FileTppl x ->
+  | DeclSequenceFileTppl x ->
     let externals = parseMCoreFile (concat tpplSrcLoc "/externals/ext.mc") in
     let exts = setOfSeq cmpString ["externalLog", "externalExp"] in
     let externals = filterExternalMap exts externals in  -- strip everything but needed stuff from externals
@@ -296,7 +296,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
   sem compileTpplTypeDecl: TpplCompileContext -> DeclTppl -> (Option {v:Name, i:Info}, [({v:Name, i:Info}, Type)])
   sem compileTpplTypeDecl context =
   | TypeDeclTppl x ->
-    let f = lam c. match c with Con c in
+    let f = lam c. match c with TypeCon c in
       let mkField = lam x. (x.name.v, compileTypeTppl x.ty) in
       let tycon = tyWithInfo x.name.i (ntycon_ x.name.v) in
       let record = tyWithInfo x.info (tyrecord_ (map mkField c.fields)) in
@@ -337,7 +337,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
   sem compileTypeTppl: TypeTppl -> Type
 
   sem compileTypeTppl =
-  | TypeTppl x -> TyCon {
+  | TypeUsageTypeTppl x -> TyCon {
       ident = x.name.v,
       info = x.name.i
     }
