@@ -1,0 +1,98 @@
+// Hypothetical TreePPL script for inference of phylogenetic
+// placement. We assume we have a query sequence we want to
+// place in a tree, presumably from a more comprehensive
+// analysis. We have an alignment of the marker in the
+// query sequence for the leaves in the given tree, and
+// we assume that the query sequence is aligned to that
+// data matrix.
+
+// Here, we first insert the sequence randomly into the
+// tree. Then we call the substitution model script to
+// weight the new tree. Note that the substitution model
+// script does not need an interior node index, so this
+// is not part of its Tree type.
+
+
+// DATA
+
+// Alignment of marker gene for tips in the tree
+data = [ ["C", "C", "A", "G", "T", "A", "A", "A", "A", "T", "C", "C", "T", "T", "G"],
+         ["C", "C", "A", "G", "A", "C", "A", "A", "A", "T", "C", "A", "C", "C", "A"],
+         ["A", "A", "C", "C", "A", "G", "C", "A", "A", "A", "G", "A", "T", "T", "A"],
+         ["A", "A", "C", "C", "A", "T", "A", "C", "A", "A", "G", "G", "T", "C", "A"]]
+
+// For this problem, we also have a query sequence aligned to the data matrix.
+query = ["C", "G", "A", "C", "T", "A", "G", "A", "A", "T", "C", "T", "T", "C", "G"]
+
+
+// TYPES
+
+// The tree needs to have indices for internal nodes as it is those indices we
+// will infer a distribution on.
+type Tree =
+    | Leaf(age: Real, index: Int)
+    | Node(age: Real, index: Int, left: Tree, right: Tree)
+
+
+// MODEL FUNCTIONS
+
+// Count the number of nodes in the tree
+function count_nodes(tree: Tree): Int {
+
+    if (tree is Leaf)
+        return 1
+
+    return 1 + n_nodes(tree.left) + n_nodes(tree.right) 
+}
+
+// Insert the sequence in the tree. With smart indexing,
+// this could be a lot faster and more efficient I guess...
+function insert_sequence(tree: Tree, anc: Tree, child_index: Int, query_index: Int) : Tree {
+
+    if (tree.index != child_index) {
+        if (tree is Leaf)
+            return tree
+        else
+            return Tree(index=tree.index, age=tree.age, left=insert_sequence(tree.left, tree, child_index, query_index),
+                        right=insert_sequence(tree.right, tree, child_index, query_index))
+    }
+
+    // Add the query sequence to the tree
+    assume age ~ Uniform(tree.age, anc.age)
+
+    // Create the new nodes in the tree
+    new_leaf = Leaf(index=query.index, age=0.0)
+    new_node = Tree(index=query_index+1, age=age, left=new_leaf, right=tree)
+
+    return new_node
+}
+
+
+
+// MODEL
+
+function model(data: Character[][], tree: Tree, clock_rate: Real, query: Character[]) : Int
+{
+    // We assume that the tree nodes are indexed {1,2,...,n_nodes}, with the last index
+    // being the root index. We assume also that the query sequence should be placed within
+    // the tree, that is, not below the current root node
+    n_nodes = count_nodes(tree)
+    query_index = n_nodes+1
+
+    // Draw a random node index, below which node we place the query sequence
+    child_index = DiscreteUniform(seq(1,n_nodes-1)) // using R function
+
+    new_tree = Tree(age=tree.age, index=tree.index, tree.left=insert_sequence(tree.left, tree, child_index, query_index),
+                    tree.right=insert_sequence(tree.right, tree, child_index, query_index)
+
+    // Rely on the substmodel script to compute the likelihood of the new tree
+    // It would make sense to combine MCMC and SMC for this problem, with MCMC
+    // rejuvenation steps used for substituton model parameters and the age
+    // of the new node inserted into the tree.
+    sample = substmodel_script.model(concat(data,query), new_tree, clock_rate)  // Assuming here that concat adds the query as the final row to data
+
+    // We just return the insertion point here but might be interested
+    // in substitution model parameters and the age of the new node also
+    return child_index
+}
+

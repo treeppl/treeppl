@@ -1,0 +1,157 @@
+// Hypothetical TreePPL script for tree inference under the
+// Jukes Cantor model with a strict clock prior. This is
+// the naive version; for effective inference, belief
+// propagation needs to be implemented in the back end.
+
+// The initial aim is to convert this type of script in
+// the back end to the belief propagation version
+
+// DATA
+
+// Data is a matrix of type character, with each row
+// consisting of the aligned DNA sequence for a single
+// taxon. The nucleotide is specified as
+//   "A" for adenine
+//   "C" for cytosine
+//   "G" for guanine
+//   "T" for thymine
+//   "?" for any of the above
+//   "-" a gap, usually treated the same as "?"
+// IUPAC has single-character codes for all possible
+// combinations of the four nucleotides, but typically
+// only those given above are used.
+data =  [ ["C", "C", "A", "G", "T", "A", "A", "A", "A", "T", "C", "C", "T", "T", "G"],
+         ["C", "C", "A", "G", "A", "C", "A", "A", "A", "T", "C", "A", "C", "C", "A"],
+         ["A", "A", "C", "C", "A", "G", "C", "A", "A", "A", "G", "A", "T", "T", "A"],
+         ["A", "A", "C", "C", "A", "T", "A", "C", "A", "A", "G", "G", "T", "C", "A"]]
+
+// TYPES
+
+type Tree =
+    | Leaf(age: Real, index: Int, seq: Int[])
+    | Node(age: Real, seq: Int[], left: Tree, right: Tree)
+
+// For now, the type RateMatrix can be treated
+// as a Real matrix, but we might want to give
+// it additional properties in the future
+type RateMatrix = Real[][]
+
+
+// MODEL FUNCTIONS
+
+// We are going to assume that we have support for a continuous-time discrete-state
+// Markov chain distribution, with parameters being the rate matrix and the time.
+// We will call this distribution CTMC. It should work like a categorical distribution
+// with the probabilities being the probabilities of the four different states in the
+// forward direction, given the starting state.
+
+// This is the recursive function that builds the tree backwards in time using
+// a random coalescent process.
+function cluster(q: RateMatrix, trees: tree[], max_age: Real) : tree[]
+{
+    // Termination check
+    if (length(trees) == 1)
+        return trees
+
+    // Randomly sample two indices in the trees vector
+    // We will combine these
+    pair = sample(2,1:length(trees))    // Using R syntax to illustrate
+
+    // Get convenient names for the selected trees
+    left_child  = trees[pair[1]]
+    right_child = trees[pair[2]]
+
+    // Get the age of the new node
+    assume t ~ Exponential(rate=10.0)
+    age = max_age + t
+
+    // It will be useful to know the length of the aligned sequences
+    seq_len = length(left_child.seq)
+
+    // Get the sequence of the new node
+    // Since we are running the process backwards, we
+    // cannot specify its distribution yet. We assume
+    // for now it is drawn from the stationary distribution
+    // of the process, which is [0.25,0.25,0.25,0.25] and
+    // update the distribution later. Note that we assume
+    // the four nucleotides have been converted to int states
+    // [0,1,2,3].
+    // I am using the idea of iid statements here, they are like
+    // applying an assume or observe to a vector of specified length
+    assume seq ~iid(seq_len,Categorical(probs=[0.25,0.25,0.25,0.25],values=[0,1,2,3]))
+	
+    // Now we can observe the child sequences given the ancestral sequences. The
+    // child sequences will have been assumed if they are not tip sequences, so
+    // we need to factor out the probability of the assumed sequence. In the end,
+    // also the tip sequences will be assumed, see comment for observe_model below.
+    // If we do implement an assume-update logic in the end for the cases when
+    // proposed random variables can be matched perfectly to random variables in
+    // the model, then the observe below would be an update and the factor would
+    // not be needed. The first assume for the seq variable would then be a propose
+    // instead.
+    for (i in 1:seq_len) {
+        observe left_child.seq[i] ~ CTMC(seq(i], q, age-left_child.age)
+        if (left_child is Node)
+            factor (-Categorical(probs=[0.25,0.25,0.25,0.25],values=[0,1,2,3]).score(left_child.seq[i]))    // Using WebPPL score fxn for log pdf
+        observe right_child.seq[i] ~ CTMC(seq[i], q, age-right_child.age) 
+        if (right_child is Node)
+            factor (-Categorical(probs=[0.25,0.25,0.25,0.25],values=[0,1,2,3]).score(right_child.seq[i]))
+    }
+    
+    // Combine picked pair of trees into a new node
+	parent = Node(age=age, seq=seq, left=left_child, right=right_child)
+
+	// Compute new_trees list
+    // Using R syntax to illustrate
+    new_trees = c(trees[-ordered_pair],parent)
+
+	// cluster new_trees
+	cluster(q, new_trees, age)
+}
+   
+// We need a function returning the tip sequence coded as ints
+// To simplify, we just draw a state for the sites where the
+// observation is "?" or "-". In reality, we might want to
+// integrate over all states in those cases; this is standard
+// practice. In principle, we should use the same assume and
+// update logic that we use for the internal nodes to achieve this
+// when we have the back-end conversion into belief propagation
+// figured out.
+function observe_model(seq_data: Character[]) : Int[] {
+
+    seq = Int[length(seq_data)]
+
+    for (i in 1:length(seq_data)) {
+
+        switch(seq_data[i]) :
+            case "A" : seq[i] = 0
+            case "C" : seq[i] = 1
+            case "G" : seq[i] = 2
+            case "T" : seq[i] = 3
+            case "?", case "-" : assume seq[i] ~ Categorical([0.25,0.25,0.25,0.25],[0,1,2,3])
+            default : ERROR("Input data incorrect") 
+    }
+    return seq
+}
+
+// MODEL
+
+function model(data: Character[][]) : Tree
+{
+    // Define the scaled rate matrix for Jukes-Cantor
+    q = [[     -1.0, (1.0/3.0), (1.0/3.0), (1.0/3.0)],
+         [(1.0/3.0),      -1.0, (1.0/3.0), (1.0/3.0)],
+         [(1.0/3.0), (1.0,3.0),      -1.0, (1.0/3.0)],
+         [(1.0/3.0), (1.0/3.0), (1.0/3.0),      -1.0]]
+
+    // Define the initial trees vector (containing leaves)
+    // This should be done in a more functional style eventually
+    // Now illustrated in an R-like way
+    leaves = Tree[nrow(data)]
+    for (i in 1:nrow(data))
+        leaves[i] = Leaf(age=0.0, index=i, seq=observe_model(data[i]))
+    
+    // Build the tree by random clustering and return it (first element in return value)
+    return cluster(q, trees, 0.0)[1]
+}
+
