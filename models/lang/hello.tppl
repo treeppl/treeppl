@@ -1,3 +1,16 @@
-model function blub(x: Real) {
-  print("Hello world!");
+
+function bb(y: Real) {
+  return (y + 1.0);
+}
+
+function aa() {
+  print("test test");
+  return 5.0;
+}
+
+
+model function blub(x: Real) { 
+  //printLn(concat("Hello", "world!"));
+  //bb(2.0);
+  aa();
 }

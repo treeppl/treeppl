@@ -544,8 +544,17 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
         rhs = compileExprTppl arg,
         ty = tyunknown_
       } in
-    foldl app f x.args
-
+    -- (vsenderov, 2023-07-18): If we are compiling a nullary function,
+    -- the rhs is not well defined as the result compileExprTppl,
+    -- since arg does not exist.
+    -- Therefore wrap in lambda of int and do f(0) like in the if-statement code.
+    -- Can it be done more beautifully using unit_?
+    if null x.args then
+      let g = lam_ "" tyint_ f in
+      withInfo x.info (app_ g (int_ 0))
+    else
+      foldl app f x.args
+    
   | BernoulliExprTppl d ->
     TmDist {
       dist = DBernoulli {

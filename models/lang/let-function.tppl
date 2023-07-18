@@ -1,0 +1,17 @@
+function add2(x: Real, y: Real): Real {
+  let r = x + y;
+  return r;
+}
+
+function min(a: Real, b: Real): Real {
+  if a <= b {
+    return a;
+  }
+  return b;
+}
+
+model function blub(x: Real) { 
+  let r = add2(10.0, 5.0);
+  print (r);
+  return r;
+}
