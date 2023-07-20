@@ -1,16 +1,17 @@
+/*
+ * File: hello.tppl
+ * Description: Hello, world! Our first program.
+ * Compilation:
+ *   tpplc models/lang/hello.tppl models/data/standard.mc out.mc && mi compile out.mc
+ * Execution: ./out 1 1
+ */
 
-function bb(y: Real) {
-  return (y + 1.0);
-}
-
-function aa() {
-  print("test test");
-  return 5.0;
-}
-
-
-model function blub(x: Real) { 
-  //printLn(concat("Hello", "world!"));
-  //bb(2.0);
-  aa();
+/*
+ * Model function
+ * Parameters: none
+ * Returns: nothing
+ * Side-effect: prints "Hello, world!"
+ */
+model function hello() { 
+  printLn("Hello, world!");
 }
