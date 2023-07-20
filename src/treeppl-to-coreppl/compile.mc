@@ -278,7 +278,13 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
         info = x.info
       }
     in
-    Some (foldl f invar x.args)
+    -- (vsenderov, 2023-07-20) Check if the arguments list is empty.
+    -- If it is, wrap the invar in a lambda of int and apply it to 0
+    if null x.args then
+      let g = lam_ "" tyint_ invar in
+      Some (withInfo x.info (app_ g (int_ 0)))
+    else
+      Some (foldl f invar x.args)
 
   sem parseArgument: {name:{v:Name, i:Info}, ty:TypeTppl} -> Expr
   sem parseArgument =
