@@ -22,7 +22,7 @@ install: build/${tppl_name}
 	chmod +x ${bin_path}/${tppl_name}
 	cp -rf $(tppl_src) $(src_path)
 	@echo "\n${RED}Attention:${RESET}"
-	@echo "${tppl_name} has been installed to ${bin_path} and the CorePPL sources have been installed to $(src_path)."
+	@echo "${tppl_name} has been installed to ${bin_path} and the TreePPL sources have been installed to $(src_path)."
 	@echo "Please, ensure that the PATH and the MCORE_LIBS environment variables have been set accordingly."
 	@echo "E.g. under Bash:"
 	@echo 'export PATH=$$PATH:'"${bin_path}"
