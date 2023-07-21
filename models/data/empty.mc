@@ -1,4 +1,3 @@
 -- empty data file
--- only includes the standard library
 
-include "standard.mc"
+include "treeppl::lib/standard.mc" -- only includes the standard library

@@ -2,12 +2,12 @@
 -- Provides some example inputs
 
 include "common.mc"
+include "string.mc"
+include "mexpr/ast.mc"
 
 -- Intrinsics have to be exposed as top level let bindings
 
 let concat = concat
 let print = print
-
--- Example inputs ("global constants")
-
-let p = 0.61804697157 -- inverse golden ratio
+let length = length
+let real2string = float2string
