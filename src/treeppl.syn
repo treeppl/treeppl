@@ -80,7 +80,7 @@ Real[]
 Int[10]
 -/
 prod TypeUsage: TypeTppl = name:UName
-prod SequenceTypeTppl: TypeTppl = ty:TypeTppl "[" size:Integer? "]"
+prod TypeSequence: TypeTppl = ty:TypeTppl "[" size:Integer? "]"
 
 prod AtomicReal: TypeTppl = "Real"
 prod AtomicBool: TypeTppl = "Bool"
@@ -175,6 +175,7 @@ prod Exponential: ExprTppl = "Exponential" "(" rate:ExprTppl ")"
 prod Gamma: ExprTppl = "Gamma" "(" shape:ExprTppl "," scale:ExprTppl ")"
 prod Gaussian: ExprTppl = "Gaussian" "(" mean:ExprTppl "," stdDev:ExprTppl ")"
 prod Poisson: ExprTppl = "Poisson" "(" rate:ExprTppl ")"
+prod Beta: ExprTppl = "Beta" "(" a:ExprTppl "," b:ExprTppl ")"
 
 
 prod Record: ExprTppl = "{" ((key:LName ("=" value:ExprTppl)?) ("," key:LName ("=" value:ExprTppl)?)*)? "}"

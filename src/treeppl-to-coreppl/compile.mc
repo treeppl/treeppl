@@ -357,6 +357,11 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       info = x.info
     }
 
+  | TypeSequenceTypeTppl x -> TySeq {
+    info = x.info,
+    ty = compileTypeTppl x.ty
+  }
+
   sem compileStmtTppl: TpplCompileContext -> StmtTppl -> (Expr -> Expr)
 
   sem compileStmtTppl (context: TpplCompileContext) =
@@ -566,7 +571,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       dist = DBernoulli {
         p = compileExprTppl d.prob
       },
-      ty = tyunknown_,
+      ty = tybool_,
       info = d.info
     }
 
@@ -585,7 +590,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       dist = DPoisson {
         lambda = compileExprTppl d.rate
       },
-      ty = tyunknown_,
+      ty = tyunknown_, -- TODO? (vsenderov, 2023-07-21) perhaps change to tyint_
       info = d.info
     }
 
@@ -594,7 +599,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       dist = DExponential {
         rate = compileExprTppl d.rate
       },
-      ty = tyunknown_,
+      ty = tyunknown_, -- TODO? (vsenderov, 2023-07-21) perhaps change to tyfloat_
       info = d.info
     }
 
@@ -604,9 +609,19 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
         k = compileExprTppl d.shape,
         theta = compileExprTppl d.scale
       },
-      ty = tyunknown_,
+      ty = tyunknown_, -- TODO? (vsenderov, 2023-07-21) perhaps change to tyfloat_
       info = d.info
     }
+
+  | BetaExprTppl d ->
+    TmDist {
+      dist = DBeta {
+        a = compileExprTppl d.a,
+        b = compileExprTppl d.b
+      },
+      ty = tyfloat_,
+      info = d.info
+    }  
 
   | VariableExprTppl v ->
     TmVar {
