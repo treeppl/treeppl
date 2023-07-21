@@ -1,0 +1,3 @@
+model function integerModel(n: Int) {
+  printLn(int2string(n));
+}

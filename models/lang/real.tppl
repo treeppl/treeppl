@@ -1,0 +1,3 @@
+model function realModel(p: Real) {
+  printLn(real2string(b));
+}
