@@ -279,10 +279,10 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       }
     in
     -- (vsenderov, 2023-07-20) Check if the arguments list is empty.
-    -- If it is, wrap the invar in a lambda of int and apply it to 0
+    -- If it is, don't wrap the invar in a lambda!
+    -- Only ensure that the function application happens
     if null x.args then
-      let g = lam_ "" tyint_ invar in
-      Some (withInfo x.info (app_ g (int_ 0)))
+      Some (app_ invar (int_ 0))
     else
       Some (foldl f invar x.args)
 
@@ -311,14 +311,26 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
   sem compileTpplFunction: TpplCompileContext -> DeclTppl -> Option RecLetBinding
   sem compileTpplFunction (context: TpplCompileContext) =
 
-  | FunDeclTppl f -> Some {
+  | FunDeclTppl f ->
+    let body = foldr (lam f. lam e. f e)
+      (withInfo f.info unit_)
+      (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body))
+    in 
+    Some {
       ident = f.name.v,
       tyBody = tyunknown_,
       tyAnnot = tyWithInfo f.name.i tyunknown_,
-      body =
-        foldr (lam f. lam e. f e)
-          (withInfo f.info unit_)
-          (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body)),
+      body = if null f.args then
+        -- vsenderov 2023-08-04 Taking care of nullary functions by wrapping them in a lambda
+        TmLam {
+          ident =  nameNoSym "_",
+          tyAnnot = TyInt { info = f.info },
+          tyParam = tyunknown_,
+          body = body,
+          ty = tyunknown_,
+          info = f.info
+        } else
+          body,
       info = f.info
     }
   | TypeDeclTppl _ -> None ()
@@ -555,14 +567,15 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
         rhs = compileExprTppl arg,
         ty = tyunknown_
       } in
-    -- (vsenderov, 2023-07-18): If we are compiling a nullary function,
-    -- the rhs is not well defined as the result compileExprTppl,
-    -- since arg does not exist.
-    -- Therefore wrap in lambda of int and do f(0) like in the if-statement code.
-    -- Can it be done more beautifully using unit_?
+    -- (vsenderov, 2023-08-04): If we are calling a nullary function,
+    -- in reailty the function is a function of int
     if null x.args then
-      let g = lam_ "" tyint_ f in
-      withInfo x.info (app_ g (int_ 0))
+      TmApp {
+        info = x.info,
+        lhs = f,
+        rhs = int_ 0,
+        ty = tyunknown_
+      }
     else
       foldl app f x.args
     
