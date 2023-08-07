@@ -9,7 +9,7 @@ src_path=${HOME}/.local/src/treeppl/
 tppl_src=src/.
 
 tppl_tmp_file := $(shell mktemp)
-build/${tppl_name}: $(shell find src -name "*.mc" -o -name "*.syn")
+build/${tppl_name}: $(shell find src -path 'src/lib' -prune -o \( -name "*.mc" -o -name "*.syn" \) -print)
 	mi syn src/treeppl.syn src/treeppl-ast.mc
 	time mi compile src/${tppl_name}.mc --output ${tppl_tmp_file}
 	mkdir -p build
