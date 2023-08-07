@@ -85,7 +85,7 @@ prod TypeSequence: TypeTppl = ty:TypeTppl "[" size:Integer? "]"
 prod AtomicReal: TypeTppl = "Real"
 prod AtomicBool: TypeTppl = "Bool"
 prod AtomicInt: TypeTppl = "Int"
-
+prod TpplStr: TypeTppl = "String"
 
 /-
 A function is declared with the keyword function, optionally preceeded by "model"

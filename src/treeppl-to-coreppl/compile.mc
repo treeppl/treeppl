@@ -374,6 +374,13 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
     ty = compileTypeTppl x.ty
   }
 
+  | TpplStrTypeTppl x -> TySeq {
+    info = x.info,
+    ty = TyChar {
+      info = NoInfo () -- I put the info up
+    }
+  }
+
   sem compileStmtTppl: TpplCompileContext -> StmtTppl -> (Expr -> Expr)
 
   sem compileStmtTppl (context: TpplCompileContext) =
