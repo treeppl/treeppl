@@ -11,3 +11,11 @@ let concat = concat
 let print = print
 let length = length
 let real2string = float2string
+
+let bool2string: Bool -> String  = lam b.
+  if b then
+    "True"
+  else
+    "False"
+
+let apply = map
