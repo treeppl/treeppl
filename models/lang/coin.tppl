@@ -6,20 +6,33 @@
  * Execution: ./out 100 1
  */
 
+/**
+ * Conditions the likelihood of the computation 
+ *   on an observed datapoint to come from a particular Bernoulli experiment 
+ * Parameters:
+ *   datapoint: Real
+ *   probability: Real in (0, 1), the probability of True in the Bernoulli experiment
+ * Returns: nothing
+ * Side-effects: reweighs the computation
+ */
+function flip(datapoint: Bool, probability: Real) {
+  observe datapoint ~ Bernoulli(probability);
+}
+
 /*
  * Model function
- * Parameters:
- *   coinflips: a sequence of booleans
+ * Data:
+ *   coinflips: Bool[]
  * Prior: 
- *   p ~ Beta(1, 1)
+ *   p ~ Beta(2, 2)
  * Posterior:
  *   p | coinflips
  */
-model function flip(coinflips: Bool[]): Bool {
-  assume p ~ Beta(1.0, 1.0); // prior
+model function coinModel(coinflips: Bool[]) {
+  assume p ~ Beta(2.0, 2.0); // prior
   let n = length(coinflips);
   for i in 1 to n {
-    observe coinflips[i] ~ Bernoulli(p); // likelihood
+    flip(coinflips[i], p); // likelihood
   }
   return(p); // posterior
 }
