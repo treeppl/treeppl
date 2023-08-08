@@ -1,0 +1,17 @@
+/*
+ * File: hello.tppl
+ * Description: Hello, world! Our first program.
+ * Compilation:
+ *   tpplc models/lang/hello.tppl models/data/standard.mc out.mc && mi compile out.mc
+ * Execution: ./out 1 1
+ */
+
+/*
+ * Model function
+ * Parameters: none
+ * Returns: nothing
+ * Side-effect: prints "Hello, world!"
+ */
+model function hello() { 
+  printLn("Hello, world!");
+}

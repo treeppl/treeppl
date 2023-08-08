@@ -80,12 +80,12 @@ Real[]
 Int[10]
 -/
 prod TypeUsage: TypeTppl = name:UName
-prod SequenceTypeTppl: TypeTppl = ty:TypeTppl "[" size:Integer? "]"
+prod TypeSequence: TypeTppl = ty:TypeTppl "[" size:Integer? "]"
 
 prod AtomicReal: TypeTppl = "Real"
 prod AtomicBool: TypeTppl = "Bool"
 prod AtomicInt: TypeTppl = "Int"
-
+prod TpplStr: TypeTppl = "String"
 
 /-
 A function is declared with the keyword function, optionally preceeded by "model"
@@ -175,6 +175,7 @@ prod Exponential: ExprTppl = "Exponential" "(" rate:ExprTppl ")"
 prod Gamma: ExprTppl = "Gamma" "(" shape:ExprTppl "," scale:ExprTppl ")"
 prod Gaussian: ExprTppl = "Gaussian" "(" mean:ExprTppl "," stdDev:ExprTppl ")"
 prod Poisson: ExprTppl = "Poisson" "(" rate:ExprTppl ")"
+prod Beta: ExprTppl = "Beta" "(" a:ExprTppl "," b:ExprTppl ")"
 
 
 prod Record: ExprTppl = "{" ((key:LName ("=" value:ExprTppl)?) ("," key:LName ("=" value:ExprTppl)?)*)? "}"
@@ -196,4 +197,4 @@ prod LogWeight: StmtTppl = "logWeight" value:ExprTppl ";"
 prod ForLoop: StmtTppl = "for" iterator:LName "in" range:ExprTppl "{" forStmts:StmtTppl* "}"
 prod Return: StmtTppl = "return" return:ExprTppl? ";"
 
-prod Print: StmtTppl = "print" "(" real:ExprTppl ")" ";"
+prod Print: StmtTppl = "dump" "(" printable:ExprTppl ")" ";"

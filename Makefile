@@ -9,7 +9,7 @@ src_path=${HOME}/.local/src/treeppl/
 tppl_src=src/.
 
 tppl_tmp_file := $(shell mktemp)
-build/${tppl_name}: $(shell find src -name "*.mc" -o -name "*.syn")
+build/${tppl_name}: $(shell find src -path 'src/lib' -prune -o \( -name "*.mc" -o -name "*.syn" \) -print)
 	mi syn src/treeppl.syn src/treeppl-ast.mc
 	time mi compile src/${tppl_name}.mc --output ${tppl_tmp_file}
 	mkdir -p build
@@ -22,7 +22,7 @@ install: build/${tppl_name}
 	chmod +x ${bin_path}/${tppl_name}
 	cp -rf $(tppl_src) $(src_path)
 	@echo "\n${RED}Attention:${RESET}"
-	@echo "${tppl_name} has been installed to ${bin_path} and the CorePPL sources have been installed to $(src_path)."
+	@echo "${tppl_name} has been installed to ${bin_path} and the TreePPL sources have been installed to $(src_path)."
 	@echo "Please, ensure that the PATH and the MCORE_LIBS environment variables have been set accordingly."
 	@echo "E.g. under Bash:"
 	@echo 'export PATH=$$PATH:'"${bin_path}"
@@ -36,5 +36,5 @@ test: src/treeppl-to-coreppl/compile.mc
 	mi run src/treeppl-to-coreppl/compile.mc --test
 
 clean:
-	rm src/treeppl-ast.mc
-	rm build/*
+	rm -f src/treeppl-ast.mc
+	rm -f build/*

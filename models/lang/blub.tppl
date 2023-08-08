@@ -1,0 +1,72 @@
+/*
+ * File: blub.tppl
+ * Description: Program to showcase data manipulation.
+ * Compilation:
+ *   tpplc models/lang/blub.tppl models/data/examples.mc out.mc && mi compile out.mc
+ * Execution: ./out 1 1
+ */
+
+/*
+ * Model function
+ * Parameters:
+ *   n: Int
+ *   pi: Real
+ *   trump: Bool
+ *   coinflips: Bool[]
+ *   text: String
+ * Returns: nothing
+ * Side-effect: prints things
+ */
+model function blub(n: Int, pi: Real, trump: Bool, coinflips: Bool[], text: String) {
+  printLn(text);
+  print(text);
+
+  printLn(int2string(n));
+  printLn(real2string(pi)); // will print only a few decimals
+  printLn(bool2string(true));
+
+  printLn(concat("Trump was elected: ", bool2string(trump)));
+
+  let testVec = [1, 2];
+  printLn(int2string(testVec[1]));
+  printLn(int2string(testVec[2]));
+
+  let coinFlipStr = apply(bool2string, coinflips);
+  printLn(concat("The length of the vector is ", int2string(length(coinflips))));
+  let y = join(coinFlipStr); //cannot use concat on more than two argumnets
+  printLn(y);
+
+  printLn(real2string(2.0 + 3.0));
+  printLn(real2string(2.0 * 3.0));
+  printLn(real2string(2.0 / 3.0));
+  printLn(real2string(2.0 - 3.0));
+
+  printLn(bool2string(2.0 < 3.0));
+  printLn(bool2string(2.0 <= 3.0));
+  printLn(bool2string(2.0 == 3.0));
+  printLn(bool2string(2.0 >= 3.0));
+  printLn(bool2string(2.0 > 3.0));
+
+  printLn(bool2string(true && true));
+  printLn(bool2string(true && false));
+  printLn(bool2string(false && true));
+  printLn(bool2string(false && false));
+
+  printLn(bool2string(true || true));
+  printLn(bool2string(true || false));
+  printLn(bool2string(false || true));
+  printLn(bool2string(false || false));
+
+  printLn(bool2string(!false));
+  printLn(bool2string(!true));
+
+  for i in 1 to 10 {
+    if Real(i) > 5.0 {
+      print("\n"); // cannot use printLn() as a nullary function
+      printLn(join([int2string(i), " is more than ", real2string(5.0)]));
+      return;
+    } else {
+      print(".");
+    }
+  }
+}

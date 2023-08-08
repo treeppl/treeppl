@@ -1,8 +1,5 @@
 /-
 TreePPL Compiler and Unit Tests
-===============================
-
-Viktor Senderov, Daniel Lundén, and Viktor Palmkvist (2022)
 
 Unit tests available via:
 
@@ -281,7 +278,13 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
         info = x.info
       }
     in
-    Some (foldl f invar x.args)
+    -- (vsenderov, 2023-07-20) Check if the arguments list is empty.
+    -- If it is, don't wrap the invar in a lambda!
+    -- Only ensure that the function application happens
+    if null x.args then
+      Some (app_ invar (int_ 0))
+    else
+      Some (foldl f invar x.args)
 
   sem parseArgument: {name:{v:Name, i:Info}, ty:TypeTppl} -> Expr
   sem parseArgument =
@@ -308,14 +311,26 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
   sem compileTpplFunction: TpplCompileContext -> DeclTppl -> Option RecLetBinding
   sem compileTpplFunction (context: TpplCompileContext) =
 
-  | FunDeclTppl f -> Some {
+  | FunDeclTppl f ->
+    let body = foldr (lam f. lam e. f e)
+      (withInfo f.info unit_)
+      (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body))
+    in 
+    Some {
       ident = f.name.v,
       tyBody = tyunknown_,
       tyAnnot = tyWithInfo f.name.i tyunknown_,
-      body =
-        foldr (lam f. lam e. f e)
-          (withInfo f.info unit_)
-          (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body)),
+      body = if null f.args then
+        -- vsenderov 2023-08-04 Taking care of nullary functions by wrapping them in a lambda
+        TmLam {
+          ident =  nameNoSym "_",
+          tyAnnot = TyInt { info = f.info },
+          tyParam = tyunknown_,
+          body = body,
+          ty = tyunknown_,
+          info = f.info
+        } else
+          body,
       info = f.info
     }
   | TypeDeclTppl _ -> None ()
@@ -353,6 +368,18 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
   | AtomicIntTypeTppl x -> TyInt {
       info = x.info
     }
+
+  | TypeSequenceTypeTppl x -> TySeq {
+    info = x.info,
+    ty = compileTypeTppl x.ty
+  }
+
+  | TpplStrTypeTppl x -> TySeq {
+    info = x.info,
+    ty = TyChar {
+      info = NoInfo () -- I put the info up
+    }
+  }
 
   sem compileStmtTppl: TpplCompileContext -> StmtTppl -> (Expr -> Expr)
 
@@ -520,7 +547,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
   | PrintStmtTppl x ->
     lam cont.
       foldr isemi_ cont
-        [ dprint_ (compileExprTppl x.real)
+        [ dprint_ (compileExprTppl x.printable)
         -- , print_ (str_ "\n") in
         , flushStdout_ unit_
         ]
@@ -547,14 +574,24 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
         rhs = compileExprTppl arg,
         ty = tyunknown_
       } in
-    foldl app f x.args
-
+    -- (vsenderov, 2023-08-04): If we are calling a nullary function,
+    -- in reailty the function is a function of int
+    if null x.args then
+      TmApp {
+        info = x.info,
+        lhs = f,
+        rhs = int_ 0,
+        ty = tyunknown_
+      }
+    else
+      foldl app f x.args
+    
   | BernoulliExprTppl d ->
     TmDist {
       dist = DBernoulli {
         p = compileExprTppl d.prob
       },
-      ty = tyunknown_,
+      ty = tybool_,
       info = d.info
     }
 
@@ -573,7 +610,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       dist = DPoisson {
         lambda = compileExprTppl d.rate
       },
-      ty = tyunknown_,
+      ty = tyunknown_, -- TODO? (vsenderov, 2023-07-21) perhaps change to tyint_
       info = d.info
     }
 
@@ -582,7 +619,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       dist = DExponential {
         rate = compileExprTppl d.rate
       },
-      ty = tyunknown_,
+      ty = tyunknown_, -- TODO? (vsenderov, 2023-07-21) perhaps change to tyfloat_
       info = d.info
     }
 
@@ -592,9 +629,19 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
         k = compileExprTppl d.shape,
         theta = compileExprTppl d.scale
       },
-      ty = tyunknown_,
+      ty = tyunknown_, -- TODO? (vsenderov, 2023-07-21) perhaps change to tyfloat_
       info = d.info
     }
+
+  | BetaExprTppl d ->
+    TmDist {
+      dist = DBeta {
+        a = compileExprTppl d.a,
+        b = compileExprTppl d.b
+      },
+      ty = tyfloat_,
+      info = d.info
+    }  
 
   | VariableExprTppl v ->
     TmVar {
@@ -924,6 +971,12 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       info = r.info
     }
 
+  | TpplStringExprTppl r ->
+    TmSeq {
+      tms = map char_ r.val.v,
+      ty = tyunknown_,
+      info = r.info
+    }
 end
 
 
