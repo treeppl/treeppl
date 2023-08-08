@@ -3,3 +3,5 @@ out.mc
 .DS_Store
 tool
 build/
+out
+out.mc
