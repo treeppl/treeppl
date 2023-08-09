@@ -248,8 +248,11 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
     in
     let input = foldl bindCon input constructors in
     let input = foldl bindType input typeNames in
+    let functionBindingsAndTypes = mapOption (compileTpplFunction compileContext) x.decl in
+    let functionBindings = map (lam x. x.0) functionBindingsAndTypes in
+    let modelTypes = map (lam x. join [x.1, [x.2]]) functionBindingsAndTypes in
     let complete = bind_ input (TmRecLets {
-      bindings = mapOption (compileTpplFunction compileContext) x.decl,
+      bindings = functionBindings,
       inexpr = invocation,
       ty = tyunknown_,
       info = x.info
@@ -308,15 +311,22 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
     (Some x.name, map f x.cons)
   | _ -> (None (), [])
 
-  sem compileTpplFunction: TpplCompileContext -> DeclTppl -> Option RecLetBinding
+  sem compileTpplFunction: TpplCompileContext -> DeclTppl -> Option (RecLetBinding, [Type], Type)
   sem compileTpplFunction (context: TpplCompileContext) =
 
   | FunDeclTppl f ->
+    let getType = lam arg.
+      compileTypeTppl arg.ty
+    in
+    let argTypes = map getType f.args in
     let body = foldr (lam f. lam e. f e)
       (withInfo f.info unit_)
       (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body))
     in 
-    Some {
+    let returnType = 
+      match f.returnTy with Some ty then compileTypeTppl ty else tyunknown_
+    in
+    Some ({
       ident = f.name.v,
       tyBody = tyunknown_,
       tyAnnot = tyWithInfo f.name.i tyunknown_,
@@ -332,7 +342,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
         } else
           body,
       info = f.info
-    }
+    }, argTypes, returnType)
   | TypeDeclTppl _ -> None ()
 
   sem compileFunArg: {name:{v:Name, i:Info}, ty:TypeTppl} -> (Expr -> Expr)
@@ -591,7 +601,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       dist = DBernoulli {
         p = compileExprTppl d.prob
       },
-      ty = tybool_,
+      ty = tyunknown_,
       info = d.info
     }
 
