@@ -224,6 +224,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       then x
       else printLn "You need a model function!"; exit 1
     in
+   match invocation with (invocation, argNameTypes, returnType) in
+
     let types = map (compileTpplTypeDecl compileContext) x.decl in
     let typeNames = mapOption (lam x. x.0) types in
     let constructors = join (map (lam x. x.1) types) in
@@ -248,11 +250,12 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
     in
     let input = foldl bindCon input constructors in
     let input = foldl bindType input typeNames in
-    let functionBindingsAndTypes = mapOption (compileTpplFunction compileContext) x.decl in
-    let functionBindings = map (lam x. x.0) functionBindingsAndTypes in
-    let modelTypes = map (lam x. join [x.1, [x.2]]) functionBindingsAndTypes in
+    --let functionBindingsAndTypes = mapOption (compileTpplFunction compileContext) x.decl in
+    --let functionBindings = map (lam x. x.0) functionBindingsAndTypes in
+    --let modelTypes = map (lam x. join [x.1, [x.2]]) functionBindingsAndTypes in
     let complete = bind_ input (TmRecLets {
-      bindings = functionBindings,
+      bindings = mapOption (compileTpplFunction compileContext) x.decl, --functionBindings,
+      -- inexpr = infer_ (Default {}) (ulam_ "" invocation), -- doesn't work until Daniel fixes something
       inexpr = invocation,
       ty = tyunknown_,
       info = x.info
@@ -260,12 +263,22 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
     let env = symEnvEmpty in
     symbolizeExpr ({env with varEnv = mapInsert "log" compileContext.logName (mapInsert "exp" compileContext.expName env.varEnv)}) complete
 
-  sem mInvocation: DeclTppl -> Option Expr
-  sem mInvocation =
+ sem mInvocation: DeclTppl -> Option (Expr, [(Name, Type)], Type)
+ sem mInvocation =
 
   | _ -> None ()
 
   | FunDeclTppl (x & {model = Some _}) ->
+    let getNameType = lam arg.
+      let aName: Name = nameSetNewSym arg.name.v in
+      (aName, compileTypeTppl arg.ty)
+    in
+    let argNameTypes: [(Name, Type)] = map getNameType x.args in
+    let returnType =
+      match x.returnTy with Some ty
+        then compileTypeTppl ty
+        else printLn "The model function must have a return type, even if it is Nothing!"; exit 1
+    in
     let invar = TmVar {
         ident = x.name.v,
         info = x.name.i,
@@ -285,9 +298,9 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
     -- If it is, don't wrap the invar in a lambda!
     -- Only ensure that the function application happens
     if null x.args then
-      Some (app_ invar (int_ 0))
+      Some ((app_ invar (int_ 0)), [], returnType) 
     else
-      Some (foldl f invar x.args)
+      Some ((foldl f invar x.args), argNameTypes, returnType)
 
   sem parseArgument: {name:{v:Name, i:Info}, ty:TypeTppl} -> Expr
   sem parseArgument =
@@ -311,22 +324,15 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
     (Some x.name, map f x.cons)
   | _ -> (None (), [])
 
-  sem compileTpplFunction: TpplCompileContext -> DeclTppl -> Option (RecLetBinding, [Type], Type)
+  sem compileTpplFunction: TpplCompileContext -> DeclTppl -> Option RecLetBinding
   sem compileTpplFunction (context: TpplCompileContext) =
 
   | FunDeclTppl f ->
-    let getType = lam arg.
-      compileTypeTppl arg.ty
-    in
-    let argTypes = map getType f.args in
     let body = foldr (lam f. lam e. f e)
       (withInfo f.info unit_)
       (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body))
     in 
-    let returnType = 
-      match f.returnTy with Some ty then compileTypeTppl ty else tyunknown_
-    in
-    Some ({
+    Some {
       ident = f.name.v,
       tyBody = tyunknown_,
       tyAnnot = tyWithInfo f.name.i tyunknown_,
@@ -342,7 +348,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
         } else
           body,
       info = f.info
-    }, argTypes, returnType)
+    }
   | TypeDeclTppl _ -> None ()
 
   sem compileFunArg: {name:{v:Name, i:Info}, ty:TypeTppl} -> (Expr -> Expr)
@@ -390,6 +396,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       info = NoInfo () -- I put the info up
     }
   }
+
+  | NothingTypeTppl x -> tyunit_
 
   sem compileStmtTppl: TpplCompileContext -> StmtTppl -> (Expr -> Expr)
 
