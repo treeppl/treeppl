@@ -332,10 +332,16 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       (withInfo f.info unit_)
       (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body))
     in 
+    let argTypes = map (lam a. compileTypeTppl a.ty) f.args in
+    let returnType = match f.returnTy with Some ty
+      then compileTypeTppl ty
+      else tyunknown_
+    in
+    let mType = foldr tyarrow_ returnType argTypes in
     Some {
       ident = f.name.v,
       tyBody = tyunknown_,
-      tyAnnot = tyWithInfo f.name.i tyunknown_,
+      tyAnnot = tyWithInfo f.name.i mType,
       body = if null f.args then
         -- vsenderov 2023-08-04 Taking care of nullary functions by wrapping them in a lambda
         TmLam {
