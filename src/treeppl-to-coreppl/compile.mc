@@ -15,6 +15,7 @@ include "mexpr/boot-parser.mc"
 include "mexpr/type-check.mc"
 include "mexpr/generate-json-serializers.mc"
 include "mexpr/utils.mc"
+include "mexpr/duplicate-code-elimination.mc"
 
 include "sys.mc"
 
@@ -167,36 +168,14 @@ lang LowerProjMatch = ProjMatchAst + MatchAst + DataPat + RecordPat + RecordType
       (foldl wrap errorMsg relevantConstructors)
 end
 
-lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Externals + MExprSym + FloatAst + ProjMatchAst + Resample + GenerateJsonSerializers
-
--- TODO If this works it should go to externals
-  sem constructExternalMap : Expr -> Map String Name
-  sem constructExternalMap =
-  | expr -> constructExternalMapH (mapEmpty cmpString) expr
-  sem constructExternalMapH : Map String Name -> Expr -> Map String Name
-  sem constructExternalMapH acc =
-  | TmExt t -> constructExternalMapH (mapInsert (nameGetStr t.ident) t.ident acc) t.inexpr
-  | expr -> sfold_Expr_Expr constructExternalMapH acc expr
-
-  -- smap_Expr_Expr, sfold_Expr_Expr explained in recursion cookbook
-  sem filterExternalMap: Set String -> Expr -> Expr
-  sem filterExternalMap ids =
-  | TmExt t ->
-    let inexpr = filterExternalMap ids t.inexpr in
-    --if (nameGetStr t.ident) in ids then TmExt {t with inexpr = inexpr}
-    match setMem (nameGetStr t.ident) ids with true then TmExt {t with inexpr = inexpr}
-    else inexpr
-  -- strip everything but externals
-  | TmLet {inexpr = inexpr}
-  | TmRecLets {inexpr = inexpr}
-  | TmType {inexpr = inexpr}
-  | TmConDef {inexpr = inexpr} -> filterExternalMap ids inexpr
-  | expr -> unit_
+lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Externals + MExprSym + FloatAst + ProjMatchAst + Resample + GenerateJsonSerializers + MExprEliminateDuplicateCode
 
   -- a type with useful information passed down from compile
   type TpplCompileContext = {
-    logName: Name,
-    expName: Name
+    serializeResult: Name,
+    logName: Name, expName: Name,
+    json2string: Name,
+    particles: Name, input: Name, some: Name
   }
 
   sem isemi_: Expr -> Expr -> Expr
@@ -207,30 +186,45 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       else infoTm l
     in withInfo info (semi_ l r)
 
-  sem compile: Expr -> Expr -> FileTppl -> Expr
-
-  sem compile input internals =
+  sem compile: FileTppl -> Expr
+  sem compile =
   | DeclSequenceFileTppl x ->
-    let externals = parseMCoreFileNoDeadCodeElim (concat tpplSrcLoc "/externals/ext.mc") in
-    let exts = setOfSeq cmpString ["externalLog", "externalExp"] in
-    let externals = filterExternalMap exts externals in  -- strip everything but needed stuff from externals
-    let externals = symbolize externals in
-    let internals = symbolize internals in
-    match findNamesOfStringsExn ["serializeResult"] internals with [serializeResult] in
-    let externalMap = constructExternalMap externals in
-    let compileContext: TpplCompileContext = {
-      logName = mapFindExn "externalLog" externalMap,
-      expName = mapFindExn "externalExp" externalMap
+
+    -- Retrieve standard library AST
+    let stdlib = parseMCorePPLFileLib false (concat tpplSrcLoc "/lib/standard.mc") in
+
+    -- Retrieve compiler library AST
+    let libCompile =
+      parseMCorePPLFileLib false
+        (concat tpplSrcLoc "/treeppl-to-coreppl/lib-compile.mc") in
+
+    -- Symbolize the compiler library AST: it is not visible in the compiled TreePPL program.
+    let libCompile = symbolize libCompile in
+
+    -- Extract names and use them to build the compile context
+    match findNamesOfStringsExn [
+      "serializeResult", "externalLog", "externalExp", "json2string",
+      "particles", "input", "Some"
+    ] libCompile with [sr, el, ee, j2s, p, i, s] in
+    let cc: TpplCompileContext = {
+      serializeResult = sr,
+      logName = el, expName = ee,
+      json2string = j2s,
+      particles = p,
+      input = i,
+      some = s
     } in
-    let input = bind_ externals input in
-    --dprint x;
+
+    -- Compile the model function
     let invocation = match findMap mInvocation x.decl with Some x
       then x
       else printLn "You need a model function!"; exit 1
     in
     match invocation with (invocation, argNameTypes, returnType) in
 
-    let types = map (compileTpplTypeDecl compileContext) x.decl in
+    -- Compile type definitions and generate required JSON
+    -- serializers/deserializers
+    let types = map (compileTpplTypeDecl cc) x.decl in
     let typeNames = mapOption (lam x. x.0) types in
     let constructors = join (map (lam x. x.1) types) in
     let bindType = lam inexpr. lam name.
@@ -252,23 +246,65 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
         info = pair.0 .i
       }
     in
-    let input = foldl bindCon input constructors in
-    let input = foldl bindType input typeNames in
-    let modelTypes: [Type] = concat (map (lam x. x.1) argNameTypes) [returnType] in
-    match addJsonSerializers modelTypes input with (result, serializers, envir) in
+    let types = foldl bindCon unit_ constructors in
+    let types = foldl bindType types typeNames in
+    let inputType: Type = tyrecord_ (map (lam t. (nameGetStr t.0, t.1)) argNameTypes) in
+    let modelTypes: [Type] = [inputType, returnType] in
+    match addJsonSerializers modelTypes types with (result, types, _) in
     match mapLookup returnType result with Some outputHandler in
+
+    -- Compile TreePPL functions
     let functions = TmRecLets {
-      bindings = mapOption (compileTpplFunction compileContext) x.decl, --functionBindings,
+      bindings = mapOption (compileTpplFunction cc) x.decl, --functionBindings,
       --inexpr = infer_ (Default {}) (ulam_ "" invocation), -- need to serialize on top, otherwise the Dist excapes
-      inexpr = invocation, -- will be thrown away due to subsequent bind_ 
+      inexpr = invocation, -- will be thrown away due to subsequent bind_
       ty = tyunknown_,
       info = x.info
     } in
-    let complete = bind_ serializers (bind_ functions (infer_ (Default {}) (ulam_ "" invocation))) in
-  
-    let complete = print_ (app_ (nvar_ envir.json2string) (app_ (app_ (nvar_ serializeResult) (outputHandler.serializer)) complete)) in 
-    let env = symEnvEmpty in
-    symbolizeExpr ({env with varEnv = mapInsert "log" compileContext.logName (mapInsert "exp" compileContext.expName env.varEnv)}) complete
+
+    -- Generate code that deserializes input
+    match mapLookup inputType result with Some inputHandler in
+    let error = error_ (str_ "Could not deserialize data input!") in
+    let m = nameSym "m" in
+    let input = bind_ (
+        ulet_ "r" (
+          match_
+            (app_ inputHandler.deserializer (nvar_ cc.input))
+            (npcon_ cc.some (npvar_ m))
+            (nvar_ m)
+            error
+        )
+      ) (bindall_ (map (lam t.
+        nulet_ t.0 (recordproj_ (nameGetStr t.0) (var_ "r"))
+      ) argNameTypes)) in
+    -- (map (lam x. x.0) argNameTypes)
+    --  mapLookup argType result -- gives us the deserializer
+    -- 1. Define a function that deserializes
+    -- A sequence of let bindings, one for every model parameter
+
+    -- Put everything together ...
+    let complete = bindall_ [
+      stdlib,
+      libCompile,
+      types,
+      functions,
+      input,
+      ulet_ "res" (infer_ (Default { runs = (nvar_ cc.particles) }) (ulam_ "" invocation)),
+      ulet_ "resJson"
+        (appf2_ (nvar_ cc.serializeResult) outputHandler.serializer (var_ "res")),
+      bindSemi_
+        (print_ (app_ (nvar_ cc.json2string) (var_ "resJson")))
+        (print_ (str_ "\n"))
+    ] in
+
+    -- ... and also make sure to remove duplicate definitions
+    let complete = eliminateDuplicateCode complete in
+
+    complete
+
+    -- NOTE(2023-08-11,dlunde): No need to symbolize here actually, the CorePPL compiler will symbolize everything anyway.
+    -- let env = symEnvEmpty in
+    -- symbolizeExpr ({env with varEnv = mapInsert "log" cc.logName (mapInsert "exp" cc.expName env.varEnv)}) complete
 
  sem mInvocation: DeclTppl -> Option (Expr, [(Name, Type)], Type)
  sem mInvocation =
@@ -277,7 +313,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
 
   | FunDeclTppl (x & {model = Some _}) ->
     let getNameType = lam arg.
-      let aName: Name = nameSetNewSym arg.name.v in
+      let aName: Name = arg.name.v in
       (aName, compileTypeTppl arg.ty)
     in
     let argNameTypes: [(Name, Type)] = map getNameType x.args in
@@ -305,7 +341,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     -- If it is, don't wrap the invar in a lambda!
     -- Only ensure that the function application happens
     if null x.args then
-      Some ((app_ invar (int_ 0)), [], returnType) 
+      Some ((app_ invar (int_ 0)), [], returnType)
     else
       Some ((foldl f invar x.args), argNameTypes, returnType)
 
@@ -338,7 +374,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     let body = foldr (lam f. lam e. f e)
       (withInfo f.info unit_)
       (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body))
-    in 
+    in
     let argTypes = if null f.args
       then [tyint_] -- nullary functions are ints
       else map (lam a. compileTypeTppl a.ty) f.args in
@@ -620,7 +656,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       }
     else
       foldl app f x.args
-    
+
   | BernoulliExprTppl d ->
     TmDist {
       dist = DBernoulli {
@@ -676,7 +712,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       },
       ty = tyfloat_,
       info = d.info
-    }  
+    }
 
   | VariableExprTppl v ->
     TmVar {

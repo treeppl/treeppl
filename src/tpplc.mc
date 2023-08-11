@@ -34,7 +34,7 @@ lang CPPLLang =
   -- Check if a CorePPL program uses infer
   sem hasInfer =
   | expr -> hasInferH false expr
-  
+
   sem hasInferH acc =
   | TmInfer _ -> true
   | expr -> sfold_Expr_Expr hasInferH acc expr
@@ -51,7 +51,7 @@ let tpplMenu = lam. join [
   "Options:\n",
   argHelpOptions config,
   "\n"
-] 
+]
 
 mexpr
 
@@ -63,7 +63,7 @@ use CPPLLang in
 let result = argParse default config in
 match result with ParseOK r in
   let options: Options = r.options in
-  -- Print menu if not exactly three file arguments
+  -- Print menu if not exactly two file arguments
   if neqi (length r.strings) 2 then
     print (tpplMenu ());
     exit 0
@@ -71,20 +71,14 @@ match result with ParseOK r in
     match r.strings with [filename, outName] in
     -- (vsenderov, 2023-06-16) until here the logic follows the cppl command line
     -- The data is an mcore file; that can be parsed with the bootparser
-    use BootParser in
-    let library = parseMCoreFile {
-        defaultBootParserParseMCoreFileArg with eliminateDeadCode = false, allowFree = true
-      } "src/lib/standard.mc" in
-    let internals = parseMCorePPLFileLib options.test "src/lib/internals.mc" in
-
     -- However, now filename is a tppl program so it has to be parsed with TreePPLThings
     let content = readFile filename in
     use TreePPLThings in
     match parseTreePPLExn filename content with  file in
-    let corePplAst: Expr = compile library internals file in
+    let corePplAst: Expr = compile file in
     -- TODO(vsenderov, 2023-08-08) serialization/ deserialization
     -- match compile input file with (corePplAst, modelTypes) in
-    let modelTypes = [ tyseq_ tybool_, tyfloat_ ] in 
+    -- let modelTypes = [ tyseq_ tybool_, tyfloat_ ] in
     -- However for user defined types, due to symbolize, we cannot show a hardcoded example here
     -- now we can run addJsonSerializers which returns three things:
     -- result, which is a Map from the Type to the Serializer/Deserializer thing
@@ -95,14 +89,15 @@ match result with ParseOK r in
     --match mapLookup (tyseq_ tybool_) result with Some s in
     --match mapLookup (tyfloat_) result with Some r in
     -- print (mexprPPLToString s.serializer);
-    
+
 
 -- Replace the placeholder with the actual serializer
 ---let modifiedAst = replaceSerializerPlaceholder r.serializer corePplAst in
 
 -- Continue with further processing using modifiedAst
 
-    
+    -- printLn (mexprPPLToString corePplAst);
+
     let prog: Expr = typeCheck corePplAst in
     let prog: Expr = lowerProj prog in
     -- Now we have the coreppl AST. Can we follow the cppl logic again?
@@ -121,11 +116,11 @@ match result with ParseOK r in
     else
       let ast = mexprCpplCompile options noInfer ast in
     --dprint corePplAst;
-    --printLn (mexprPPLToString corePplAst);
+    -- printLn (mexprPPLToString corePplAst);
 
     --(vsenderov, 2023-06-16 We use our own output for now for now)
       writeFile outName (use MExpr in concat "mexpr\n" (mexprToString ast));
-      
+
 
       -- Output the compiled OCaml code (unless --skip-final is specified)
       -- let xx = if options.skipFinal then

@@ -1,4 +1,4 @@
--- Exposes MCore features to TreePPL as part of a standard library
+-- Exposes CorePPL features to TreePPL as part of a standard library
 -- Provides some example inputs
 
 include "common.mc"
@@ -31,7 +31,7 @@ let coinflips = [true, true, true, false, true, false, false, true, true, false,
 let n = 7
 
 -- a negative integer
-let m = (negi 1) 
+let m = (negi 1)
 
 -- zero
 let z = 0
