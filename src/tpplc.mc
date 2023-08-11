@@ -17,6 +17,7 @@ include "treeppl-to-coreppl/compile.mc"
 include "coreppl::dppl-arg.mc" -- inherit cmd-line opts from cppl
 include "coreppl::coreppl-to-rootppl/compile.mc"
 include "coreppl::build.mc"
+include "coreppl::parser.mc"
 
 --lang CorePPLUsage =
 --  CPPLBackcompat + LoadRuntime +
@@ -74,11 +75,13 @@ match result with ParseOK r in
     let library = parseMCoreFile {
         defaultBootParserParseMCoreFileArg with eliminateDeadCode = false, allowFree = true
       } "src/lib/standard.mc" in
+    let internals = parseMCorePPLFileLib options.test "src/lib/internals.mc" in
+
     -- However, now filename is a tppl program so it has to be parsed with TreePPLThings
     let content = readFile filename in
     use TreePPLThings in
     match parseTreePPLExn filename content with  file in
-    let corePplAst: Expr = compile library file in
+    let corePplAst: Expr = compile library internals file in
     -- TODO(vsenderov, 2023-08-08) serialization/ deserialization
     -- match compile input file with (corePplAst, modelTypes) in
     let modelTypes = [ tyseq_ tybool_, tyfloat_ ] in 

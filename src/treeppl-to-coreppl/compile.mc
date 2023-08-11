@@ -14,6 +14,7 @@ include "mexpr/ast-builder.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/type-check.mc"
 include "mexpr/generate-json-serializers.mc"
+include "mexpr/utils.mc"
 
 include "sys.mc"
 
@@ -24,7 +25,7 @@ include "coreppl::coreppl.mc"
 include "coreppl::parser.mc"
 
 -- Version of parseMCoreFile needed to get input data into the program
-let parseMCoreFile = lam filename.
+let parseMCoreFileNoDeadCodeElim = lam filename.
   use BootParser in
     parseMCoreFile
       {defaultBootParserParseMCoreFileArg with eliminateDeadCode = false}
@@ -166,7 +167,7 @@ lang LowerProjMatch = ProjMatchAst + MatchAst + DataPat + RecordPat + RecordType
       (foldl wrap errorMsg relevantConstructors)
 end
 
-lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym + FloatAst + ProjMatchAst + Resample 
+lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Externals + MExprSym + FloatAst + ProjMatchAst + Resample + GenerateJsonSerializers
 
 -- TODO If this works it should go to externals
   sem constructExternalMap : Expr -> Map String Name
@@ -206,14 +207,16 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       else infoTm l
     in withInfo info (semi_ l r)
 
-  sem compile: Expr -> FileTppl -> Expr
+  sem compile: Expr -> Expr -> FileTppl -> Expr
 
-  sem compile (input: Expr) =
+  sem compile input internals =
   | DeclSequenceFileTppl x ->
-    let externals = parseMCoreFile (concat tpplSrcLoc "/externals/ext.mc") in
+    let externals = parseMCoreFileNoDeadCodeElim (concat tpplSrcLoc "/externals/ext.mc") in
     let exts = setOfSeq cmpString ["externalLog", "externalExp"] in
     let externals = filterExternalMap exts externals in  -- strip everything but needed stuff from externals
     let externals = symbolize externals in
+    let internals = symbolize internals in
+    match findNamesOfStringsExn ["serializeResult"] internals with [serializeResult] in
     let externalMap = constructExternalMap externals in
     let compileContext: TpplCompileContext = {
       logName = mapFindExn "externalLog" externalMap,
@@ -252,14 +255,18 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
     let input = foldl bindCon input constructors in
     let input = foldl bindType input typeNames in
     let modelTypes: [Type] = concat (map (lam x. x.1) argNameTypes) [returnType] in
-    --match addJsonSerializers modelTypes input with (result, ast2, envir) in
-    let complete = bind_ input (TmRecLets {
+    match addJsonSerializers modelTypes input with (result, serializers, envir) in
+    match mapLookup returnType result with Some outputHandler in
+    let functions = TmRecLets {
       bindings = mapOption (compileTpplFunction compileContext) x.decl, --functionBindings,
-      inexpr = infer_ (Default {}) (ulam_ "" invocation), -- doesn't work until Daniel fixes something
-      --inexpr = invocation,
+      --inexpr = infer_ (Default {}) (ulam_ "" invocation), -- need to serialize on top, otherwise the Dist excapes
+      inexpr = invocation, -- will be thrown away due to subsequent bind_ 
       ty = tyunknown_,
       info = x.info
-    }) in
+    } in
+    let complete = bind_ serializers (bind_ functions (infer_ (Default {}) (ulam_ "" invocation))) in
+  
+    let complete = print_ (app_ (nvar_ envir.json2string) (app_ (app_ (nvar_ serializeResult) (outputHandler.serializer)) complete)) in 
     let env = symEnvEmpty in
     symbolizeExpr ({env with varEnv = mapInsert "log" compileContext.logName (mapInsert "exp" compileContext.expName env.varEnv)}) complete
 
