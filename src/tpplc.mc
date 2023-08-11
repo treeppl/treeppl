@@ -7,8 +7,10 @@ TreePPL Compiler command line
 include "sys.mc"
 
 include "mexpr/ast.mc"
+include "mexpr/ast-builder.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/type-check.mc"
+include "mexpr/generate-json-serializers.mc"
 
 include "treeppl-to-coreppl/compile.mc"
 
@@ -26,7 +28,7 @@ include "coreppl::build.mc"
 -- (vsenderov, 2023-06-16 The CPPL language as defined in the cppl command line)
 lang CPPLLang =
   MExprAst + MExprCompile + TransformDist + MExprEliminateDuplicateCode +
-  MExprSubstitute + MExprPPL
+  MExprSubstitute + MExprPPL + GenerateJsonSerializers
 
   -- Check if a CorePPL program uses infer
   sem hasInfer =
@@ -44,7 +46,7 @@ end
 
 -- Command line menu for TreePPL
 let tpplMenu = lam. join [
-  "Usage: tpplc program.tppl in.mc out.mc [<options>]\n\n",
+  "Usage: tpplc program.tppl out.mc [<options>]\n\n",
   "Options:\n",
   argHelpOptions config,
   "\n"
@@ -61,22 +63,43 @@ let result = argParse default config in
 match result with ParseOK r in
   let options: Options = r.options in
   -- Print menu if not exactly three file arguments
-  if neqi (length r.strings) 3 then
+  if neqi (length r.strings) 2 then
     print (tpplMenu ());
     exit 0
   else
-    match r.strings with [filename, data, outName] in
+    match r.strings with [filename, outName] in
     -- (vsenderov, 2023-06-16) until here the logic follows the cppl command line
     -- The data is an mcore file; that can be parsed with the bootparser
     use BootParser in
-    let input = parseMCoreFile {
+    let library = parseMCoreFile {
         defaultBootParserParseMCoreFileArg with eliminateDeadCode = false, allowFree = true
-      } data in
+      } "src/lib/standard.mc" in
     -- However, now filename is a tppl program so it has to be parsed with TreePPLThings
     let content = readFile filename in
     use TreePPLThings in
     match parseTreePPLExn filename content with  file in
-    let corePplAst: Expr = compile input file in
+    let corePplAst: Expr = compile library file in
+    -- TODO(vsenderov, 2023-08-08) serialization/ deserialization
+    -- match compile input file with (corePplAst, modelTypes) in
+    let modelTypes = [ tyseq_ tybool_, tyfloat_ ] in 
+    -- However for user defined types, due to symbolize, we cannot show a hardcoded example here
+    -- now we can run addJsonSerializers which returns three things:
+    -- result, which is a Map from the Type to the Serializer/Deserializer thing
+    -- the AST
+    -- an environment, which contains the handles to the serializers and deserializers
+    --match addJsonSerializers modelTypes corePplAst with (result, corePplAst, envir) in
+    -- print (mexprPPLToString corePplAst);
+    --match mapLookup (tyseq_ tybool_) result with Some s in
+    --match mapLookup (tyfloat_) result with Some r in
+    -- print (mexprPPLToString s.serializer);
+    
+
+-- Replace the placeholder with the actual serializer
+---let modifiedAst = replaceSerializerPlaceholder r.serializer corePplAst in
+
+-- Continue with further processing using modifiedAst
+
+    
     let prog: Expr = typeCheck corePplAst in
     let prog: Expr = lowerProj prog in
     -- Now we have the coreppl AST. Can we follow the cppl logic again?

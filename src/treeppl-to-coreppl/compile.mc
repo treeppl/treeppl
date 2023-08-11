@@ -13,6 +13,7 @@ include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/type-check.mc"
+include "mexpr/generate-json-serializers.mc"
 
 include "sys.mc"
 
@@ -165,7 +166,7 @@ lang LowerProjMatch = ProjMatchAst + MatchAst + DataPat + RecordPat + RecordType
       (foldl wrap errorMsg relevantConstructors)
 end
 
-lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym + FloatAst + ProjMatchAst + Resample
+lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym + FloatAst + ProjMatchAst + Resample 
 
 -- TODO If this works it should go to externals
   sem constructExternalMap : Expr -> Map String Name
@@ -224,7 +225,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       then x
       else printLn "You need a model function!"; exit 1
     in
-   match invocation with (invocation, argNameTypes, returnType) in
+    match invocation with (invocation, argNameTypes, returnType) in
 
     let types = map (compileTpplTypeDecl compileContext) x.decl in
     let typeNames = mapOption (lam x. x.0) types in
@@ -250,13 +251,12 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
     in
     let input = foldl bindCon input constructors in
     let input = foldl bindType input typeNames in
-    --let functionBindingsAndTypes = mapOption (compileTpplFunction compileContext) x.decl in
-    --let functionBindings = map (lam x. x.0) functionBindingsAndTypes in
-    --let modelTypes = map (lam x. join [x.1, [x.2]]) functionBindingsAndTypes in
+    let modelTypes: [Type] = concat (map (lam x. x.1) argNameTypes) [returnType] in
+    --match addJsonSerializers modelTypes input with (result, ast2, envir) in
     let complete = bind_ input (TmRecLets {
       bindings = mapOption (compileTpplFunction compileContext) x.decl, --functionBindings,
-      -- inexpr = infer_ (Default {}) (ulam_ "" invocation), -- doesn't work until Daniel fixes something
-      inexpr = invocation,
+      inexpr = infer_ (Default {}) (ulam_ "" invocation), -- doesn't work until Daniel fixes something
+      --inexpr = invocation,
       ty = tyunknown_,
       info = x.info
     }) in
