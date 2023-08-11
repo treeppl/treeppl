@@ -12,6 +12,6 @@
  * Returns: nothing
  * Side-effect: prints "Hello, world!"
  */
-model function hello() : Nothing{ 
+model function hello() : () { 
   printLn("Hello, world!");
 }

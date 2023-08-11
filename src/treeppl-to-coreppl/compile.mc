@@ -332,7 +332,9 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       (withInfo f.info unit_)
       (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body))
     in 
-    let argTypes = map (lam a. compileTypeTppl a.ty) f.args in
+    let argTypes = if null f.args
+      then [tyint_] -- nullary functions are ints
+      else map (lam a. compileTypeTppl a.ty) f.args in
     let returnType = match f.returnTy with Some ty
       then compileTypeTppl ty
       else tyunknown_
@@ -344,6 +346,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       tyAnnot = tyWithInfo f.name.i mType,
       body = if null f.args then
         -- vsenderov 2023-08-04 Taking care of nullary functions by wrapping them in a lambda
+        print (join ["Warning: Zero-argument function, ", f.name.v.0, " converted to Int. "]);
+        printLn "Potential type errors might refer to Int type.";
         TmLam {
           ident =  nameNoSym "_",
           tyAnnot = TyInt { info = f.info },
