@@ -4,6 +4,7 @@
 include "common.mc"
 include "string.mc"
 include "mexpr/ast.mc"
+include "matrix.mc"
 
 -- Intrinsics have to be exposed as top level let bindings
 
