@@ -1,0 +1,93 @@
+{
+  "parasite_tree": {
+    "__constructor__": "Node",
+    "__data__": {
+      "label": "11",
+      "age": 10.0,
+      "left": {
+        "__constructor__": "Node",
+        "__data__": {
+          "label": "9",
+          "age": 3.360348,
+          "left": {
+            "__constructor__": "Node",
+            "__data__": {
+              "label": "7",
+              "age": 1.279190,
+              "left": {
+                "__constructor__": "Leaf",
+                "__data__": {
+                  "label": "1",
+                  "age": 0.0
+                }
+              },
+              "right": {
+                "__constructor__":"Leaf",
+                "__data__": {
+                  "label":"2",
+                  "age":0.0
+                }
+              }
+            }
+          },
+          "right": {
+            "__constructor__": "Node",
+            "__data__": {
+              "label": "8",
+              "age": 0.153814,
+              "left": {
+                "__constructor__": "Leaf",
+                "__data__": {    
+                  "label": "3",
+                  "age": 0.0
+                }  
+              },
+              "right": {
+                "__constructor__": "Leaf",
+                "__data__": {
+                  "label": "4",
+                  "age": 0.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "right": {
+        "__constructor__": "Node",
+        "__data__": {
+          "label": "10",
+          "age": 1.079144,
+          "left": {
+            "__constructor__": "Leaf",
+            "__data__": {
+              "label": "5",
+              "age": 0.0
+            }
+          },
+          "right": {
+            "__constructor__": "Leaf",
+            "__data__": {
+              "label": "6",
+              "age": 0.0
+            }
+          }  
+        }
+      }   
+    }
+  },
+  "ntips":6,
+  "nhosts":5,
+  "interactions":[2,2,0,0,0,
+                  2,2,0,0,0,
+                  0,0,2,2,0,
+                  0,0,2,2,0,
+                  0,0,0,0,2,
+                  0,0,0,0,2],
+  "host_distances":[0.0,0.8630075756,2.6699063134,2.6699063134,2.6699063134,
+                    0.8630075756,0.0,2.6699063134,2.6699063134,2.6699063134,
+                    2.6699063134,2.6699063134,0.0,1.2256551506,1.9598979474,
+                    2.6699063134,2.6699063134,1.2256551506,0.0,1.9598979474,
+                    2.6699063134,2.6699063134,1.9598979474,1.9598979474,0.0],
+  "tune":0.9
+}
