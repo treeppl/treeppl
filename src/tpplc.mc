@@ -66,7 +66,7 @@ match result with ParseOK r in
   -- Print menu if not exactly one file argument
   if neqi (length r.strings) 1 then
     print (tpplMenu ());
-    exit 0
+    if gti (length r.strings) 1 then exit 1 else exit 0
   else
     match r.strings with [filename] in
     -- (vsenderov, 2023-06-16) until here the logic follows the cppl command line
@@ -83,24 +83,20 @@ match result with ParseOK r in
     let prog: Expr = lowerProj prog in
 
     let outName = sysTempFileMake () in
-    printLn outName;
     writeFile outName (use MExpr in concat "mexpr\n" (mexprPPLToString prog));
 
-    printLn "HERE";
     -- NOTE(2023-08-16,dlunde): Makes it possible to use the --output-mc cppl command line flag to output the compiled _CorePPL_ program
     (if options.outputMc then
       sysCopyFile outName (concat options.output ".mc"); ()
     else ());
 
-    printLn "HERE";
-    printLn options.output;
     let msg = "Compilation from generated CorePPL code failed" in
     runCommandWithError
       ["cppl",
        "--output", options.output,
        outName] msg;
 
-    -- sysDeleteFile outName;
+    sysDeleteFile outName;
 
     ()
 
