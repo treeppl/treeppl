@@ -82,21 +82,24 @@ match result with ParseOK r in
     let prog: Expr = typeCheck corePplAst in
     let prog: Expr = lowerProj prog in
 
-    let outName = sysTempFileMake () in
-    writeFile outName (use MExpr in concat "mexpr\n" (mexprPPLToString prog));
+    let prog =  mexprCpplCompile options false prog in
+    buildMExpr options prog
 
-    -- NOTE(2023-08-16,dlunde): Makes it possible to use the --output-mc cppl command line flag to output the compiled _CorePPL_ program
-    (if options.outputMc then
-      sysCopyFile outName (concat options.output ".mc"); ()
-    else ());
+    -- let outName = sysTempFileMake () in
+    -- writeFile outName (use MExpr in concat "mexpr\n" (mexprPPLToString prog));
 
-    let msg = "Compilation from generated CorePPL code failed" in
-    runCommandWithError
-      ["cppl",
-       "--output", options.output,
-       outName] msg;
+    -- -- NOTE(2023-08-16,dlunde): Makes it possible to use the --output-mc cppl command line flag to output the compiled _CorePPL_ program
+    -- (if options.outputMc then
+    --   sysCopyFile outName (concat options.output ".mc"); ()
+    -- else ());
 
-    sysDeleteFile outName;
+    -- let msg = "Compilation from generated CorePPL code failed" in
+    -- runCommandWithError
+    --   ["cppl",
+    --    "--output", options.output,
+    --    outName] msg;
 
-    ()
+    -- sysDeleteFile outName;
+
+    -- ()
 
