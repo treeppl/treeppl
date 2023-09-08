@@ -249,6 +249,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     let types = foldl bindCon unit_ constructors in
     let types = foldl bindType types typeNames in
     let inputType: Type = tyrecord_ (map (lam t. (nameGetStr t.0, t.1)) argNameTypes) in
+    
     let modelTypes: [Type] = [inputType, returnType] in
     match addJsonSerializers modelTypes types with (result, types, _) in
     match mapLookup returnType result with Some outputHandler in
@@ -266,36 +267,36 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     match mapLookup inputType result with Some inputHandler in
     let error = error_ (str_ "Could not deserialize data input!") in
     let m = nameSym "m" in
-    let input = bind_ (
-        ulet_ "r" (
-          match_
-            (app_ inputHandler.deserializer (nvar_ cc.input))
-            (npcon_ cc.some (npvar_ m))
-            (nvar_ m)
-            error
-        )
-      ) (bindall_ (map (lam t.
-        nulet_ t.0 (recordproj_ (nameGetStr t.0) (var_ "r"))
-      ) argNameTypes)) in
+    let inputR = ulet_ "r" (
+      match_
+        (app_ inputHandler.deserializer (nvar_ cc.input))
+        (npcon_ cc.some (npvar_ m))
+        (nvar_ m)
+        error) in
+    let inputArgs = map
+      (lam t. nulet_ t.0 (recordproj_ (nameGetStr t.0) (var_ "r")))
+      argNameTypes in
     -- (map (lam x. x.0) argNameTypes)
     --  mapLookup argType result -- gives us the deserializer
     -- 1. Define a function that deserializes
     -- A sequence of let bindings, one for every model parameter
 
     -- Put everything together ...
-    let complete = bindall_ [
-      stdlib,
-      libCompile,
-      types,
-      functions,
-      input,
-      ulet_ "res" (infer_ (Default { runs = (nvar_ cc.particles) }) (ulam_ "" invocation)),
-      ulet_ "resJson"
-        (appf2_ (nvar_ cc.serializeResult) outputHandler.serializer (var_ "res")),
-      bindSemi_
-        (print_ (app_ (nvar_ cc.json2string) (var_ "resJson")))
-        (print_ (str_ "\n"))
-    ] in
+    let complete = bindall_ (join
+      [ [ stdlib
+        , libCompile
+        , types
+        , functions
+        ]
+      , inputArgs
+      , [ ulet_ "res" (infer_ (Default { runs = (nvar_ cc.particles) }) (ulam_ "" invocation))
+        , ulet_ "resJson"
+          (appf2_ (nvar_ cc.serializeResult) outputHandler.serializer (var_ "res"))
+        , bindSemi_
+          (print_ (app_ (nvar_ cc.json2string) (var_ "resJson")))
+          (print_ (str_ "\n"))
+        ]
+      ]) in
 
     -- ... and also make sure to remove duplicate definitions
     let complete = eliminateDuplicateCode complete in
@@ -442,7 +443,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     info = x.info,
     ty = compileTypeTppl x.ty
   }
-
+-- TODO type matrix
   | TpplStrTypeTppl x -> TySeq {
     info = x.info,
     ty = TyChar {
