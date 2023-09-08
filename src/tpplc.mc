@@ -16,7 +16,6 @@ include "treeppl-to-coreppl/compile.mc"
 
 include "coreppl::dppl-arg.mc" -- inherit cmd-line opts from cppl
 include "coreppl::coreppl-to-rootppl/compile.mc"
-include "coreppl::build.mc"
 include "coreppl::parser.mc"
 
 --lang CorePPLUsage =
@@ -26,24 +25,8 @@ include "coreppl::parser.mc"
 --	PIMHMethod + ProjMatchPprint
 --end
 
--- (vsenderov, 2023-06-16 The CPPL language as defined in the cppl command line)
-lang CPPLLang =
-  MExprAst + MExprCompile + TransformDist + MExprEliminateDuplicateCode +
-  MExprSubstitute + MExprPPL + GenerateJsonSerializers
 
-  -- Check if a CorePPL program uses infer
-  sem hasInfer =
-  | expr -> hasInferH false expr
 
-  sem hasInferH acc =
-  | TmInfer _ -> true
-  | expr -> sfold_Expr_Expr hasInferH acc expr
-
-end
-
-lang TreePPLThings = TreePPLAst + TreePPLCompile
-  + LowerProjMatch + ProjMatchTypeCheck + ProjMatchPprint
-end
 
 -- Command line menu for TreePPL
 let tpplMenu = lam. join [
@@ -55,8 +38,6 @@ let tpplMenu = lam. join [
 
 mexpr
 
--- (vsenderov, 2023-06-16 Changed this to CPPLLang as it is in the cppl command line)
--- use CorePPLUsage in
 use CPPLLang in
 
 -- Use the arg.mc library to parse arguments
@@ -69,22 +50,8 @@ match result with ParseOK r in
     if gti (length r.strings) 1 then exit 1 else exit 0
   else
     match r.strings with [filename] in
-    -- (vsenderov, 2023-06-16) until here the logic follows the cppl command line
-    -- The data is an mcore file; that can be parsed with the bootparser
-    -- However, now filename is a tppl program so it has to be parsed with TreePPLThings
-    let content = readFile filename in
-    use TreePPLThings in
-    match parseTreePPLExn filename content with  file in
-    let corePplAst: Expr = compile file in
-
-    -- printLn (mexprPPLToString corePplAst);
-
-    let prog: Expr = typeCheck corePplAst in
-    let prog: Expr = lowerProj prog in
-
-    let prog =  mexprCpplCompile options false prog in
-    buildMExpr options prog
-
+    compileTpplToExecutable filename options
+    
     -- let outName = sysTempFileMake () in
     -- writeFile outName (use MExpr in concat "mexpr\n" (mexprPPLToString prog));
 

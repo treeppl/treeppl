@@ -9,7 +9,16 @@ include "matrix.mc"
 -- Intrinsics have to be exposed as top level let bindings
 
 let concat = concat
-let print = print
+
+-- In TreePPL "printing" is only for debugging purposes 
+let print = lam s.
+  printError s;
+  flushStderr ()
+
+let printLn = lam s.
+  printError (join [s, "\n"]);
+  flushStderr ()
+
 let length = length
 let real2string = float2string
 

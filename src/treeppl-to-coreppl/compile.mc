@@ -24,6 +24,7 @@ include "coreppl::coreppl-to-mexpr/runtimes.mc"
 include "coreppl::coreppl-to-rootppl/compile.mc"
 include "coreppl::coreppl.mc"
 include "coreppl::parser.mc"
+include "coreppl::build.mc"
 
 -- Version of parseMCoreFile needed to get input data into the program
 let parseMCoreFileNoDeadCodeElim = lam filename.
@@ -287,8 +288,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
         , libCompile
         , types
         , functions
+        , inputR
         ]
-      , [ inputR ]
       , inputArgs
       , [ ulet_ "res" (infer_ (Default { runs = (nvar_ cc.particles) }) (ulam_ "" invocation))
         , ulet_ "resJson"
@@ -322,7 +323,10 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     let returnType =
       match x.returnTy with Some ty
         then compileTypeTppl ty
-        else printLn "The model function must have a return type, even if it is Nothing!"; exit 1
+        else
+          printError "Error: The model function must have a return type, even if it is void, i.e. `()`!\n";
+          flushStderr ();
+          exit 1
     in
     let invar = TmVar {
         ident = x.name.v,
@@ -391,8 +395,13 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       tyAnnot = tyWithInfo f.name.i mType,
       body = if null f.args then
         -- vsenderov 2023-08-04 Taking care of nullary functions by wrapping them in a lambda
-        print (join ["Warning: Zero-argument function, ", f.name.v.0, " converted to Int. "]);
-        printLn "Potential type errors might refer to Int type.";
+        printError (join [ "Information: Zero-argument function, `"
+                         , f.name.v.0
+                         , "`, converted to Int. "
+                         , "Potential type errors might refer to Int type."
+                         , "\n"
+                         ]);
+        flushStderr () ;
         TmLam {
           ident =  nameNoSym "_",
           tyAnnot = TyInt { info = f.info },
@@ -1053,59 +1062,93 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
 end
 
 
+lang CPPLLang =
+  MExprAst + MExprCompile + TransformDist + MExprEliminateDuplicateCode +
+  MExprSubstitute + MExprPPL + GenerateJsonSerializers
 
--- Parses a TreePPL file
-let parseTreePPLFile = lam filename.
-  let content = readFile filename in
-    use TreePPLAst in (parseTreePPLExn filename content)
+  -- Check if a CorePPL program uses infer
+  sem hasInfer =
+  | expr -> hasInferH false expr
 
--- Compiles a TreePPL program and input to a CorePPL string
+  sem hasInferH acc =
+  | TmInfer _ -> true
+  | expr -> sfold_Expr_Expr hasInferH acc expr
 
-let compileTreePPLToString = lam input:Expr. lam program:FileTppl.
-  use TreePPLCompile in
-    let corePplAst: Expr = compile input program in
-      use MExprPPL in
-        (mexprPPLToString corePplAst)
+end
 
--- Compiles a TreePPL program and input to a CorePPL AST
-let compileTreePPL = lam input:Expr. lam program:FileTppl.
-  use TreePPLCompile in
-    let corePplAst: Expr = compile input program in corePplAst
+
+lang TreePPLThings = TreePPLAst + TreePPLCompile
+    + LowerProjMatch + ProjMatchTypeCheck + ProjMatchPprint
+end
+
+
+let compileTpplToExecutable = lam filename: String. lam options: Options.
+  use TreePPLThings in
+    let content = readFile filename in
+    match parseTreePPLExn filename content with file in
+    let corePplAst: Expr = compile file in
+    --printLn (mexprPPLToString corePplAst);
+    let prog: Expr = typeCheck corePplAst in
+    let prog: Expr = lowerProj prog in
+    use CPPLLang in
+    let prog =  mexprCpplCompile options false prog in
+    buildMExpr options prog
+
+-- output needs to be an absolute path
+let runCompiledTpplProgram: Options -> String -> ExecResult =
+  lam options: Options. lam jsonData: String.
+  let cmd = [options.output, jsonData, int2string options.particles, "1"] in
+  let res: ExecResult = sysRunCommand cmd "" "." in -- one sweep
+  res
 
 mexpr
 
--- test the flip example, TODO should iterate through the files instead
-let testTpplProgram = parseTreePPLFile "models/flip/flip.tppl" in
-let testInput = parseMCoreFile "models/flip/data.mc" in
-let testMCoreProgram = parseMCorePPLFileNoDeadCodeElimination "models/flip/flip.mc" in
+let testOptions =  {
+    method = "is-lw",
+    target = "mexpr",
+    test = false,
+    particles = 1,
+    resample = "manual",
+    align = false,
+    printModel = false,
+    printMCore = false,
+    exitBefore = false,
+    skipFinal = false,
+    outputMc = false,
+    output = sysTempFileMake (), -- absolute path
+    transform = false,
+    printSamples = true,
+    stackSize = 10000,
+    cps = "partial",
+    earlyStop = true,
+    mcmcLightweightGlobalProb = 0.1,
+    mcmcLightweightReuseLocal = true,
+    printAcceptanceRate = false,
+    pmcmcParticles = 2,
+    seed = None (),
+    extractSimplification = "none"
+  } in
 
+-- test hello world
+let testTpplProgram = "models/lang/hello.tppl" in
+let testJsonInput = "models/data/coin.json" in
+compileTpplToExecutable testTpplProgram testOptions;
+let testProgramExecResult = runCompiledTpplProgram testOptions testJsonInput in
 
--- Doesn't work TODO
-use MExprPPL in
-utest compileTreePPL testInput testTpplProgram with testMCoreProgram using eqExpr in
+utest testProgramExecResult.returncode with 0 in
+utest testProgramExecResult.stderr with "Hello, world!\n" in
+sysDeleteFile testOptions.output;
 
--- test the if example, should iterate through the files instead
-let testTpplProgram = parseTreePPLFile "models/if/if.tppl" in
-let testInput = parseMCoreFile "models/if/data.mc" in
-let testMCoreProgram = parseMCorePPLFileNoDeadCodeElimination "models/if/if.mc" in
+-- test externals
+let testTpplProgram = "models/lang/externals.tppl" in
+let testJsonInput = "models/data/coin.json" in
+compileTpplToExecutable testTpplProgram testOptions;
+let testProgramExecResult = runCompiledTpplProgram testOptions testJsonInput in
 
---debug pretty printing
---use TreePPLCompile in
---printLn (mexprToString testMCoreProgram);
+utest testProgramExecResult.returncode with 0 in
+utest testProgramExecResult.stdout with "{\"samples\":[0.69314718056],\"weights\":[0.],\"normConst\":0.}\n" in
+sysDeleteFile testOptions.output;
 
---use MExprPPL in
-utest compileTreePPL testInput testTpplProgram with testMCoreProgram using eqExpr in
-
--- test the externals example, should iterate through the files instead
-let testTpplProgram = parseTreePPLFile "models/externals/externals.tppl" in
-let testInput = parseMCoreFile "models/externals/data.mc" in
-let testMCoreProgram = parseMCorePPLFileNoDeadCodeElimination "models/externals/externals.mc" in
-
---use MExprPPL in
-utest compileTreePPL testInput testTpplProgram with testMCoreProgram using eqExpr in
-
--- If you want to print out the strings, use the following:
--- use MExprPPL in
---utest compileTreePPLToString testInput testTpplProgram with (mexprPPLToString testMCoreProgram) using eqString in
+-- TODO(2023-09-08, vsenderov): need to test probailistic stuff as well such as coin.tppl
 
 ()

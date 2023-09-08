@@ -33,8 +33,12 @@ uninstall:
 	rm -rf $(src_path)
 
 test: src/treeppl-to-coreppl/compile.mc
-	mi run src/treeppl-to-coreppl/compile.mc --test
+	mi compile src/treeppl-to-coreppl/compile.mc --test
+	./compile
+	@echo 
+	rm -f compile
 
 clean:
 	rm -f src/treeppl-ast.mc
 	rm -f build/*
+	rm -f out compile
