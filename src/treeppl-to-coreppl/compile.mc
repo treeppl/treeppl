@@ -288,6 +288,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
         , types
         , functions
         ]
+      , [ inputR ]
       , inputArgs
       , [ ulet_ "res" (infer_ (Default { runs = (nvar_ cc.particles) }) (ulam_ "" invocation))
         , ulet_ "resJson"
