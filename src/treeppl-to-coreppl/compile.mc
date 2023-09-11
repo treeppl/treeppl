@@ -176,7 +176,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     serializeResult: Name,
     logName: Name, expName: Name,
     json2string: Name,
-    particles: Name, input: Name, some: Name
+    particles: Name, sweeps: Name, input: Name, some: Name
   }
 
   sem isemi_: Expr -> Expr -> Expr
@@ -206,13 +206,14 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     -- Extract names and use them to build the compile context
     match findNamesOfStringsExn [
       "serializeResult", "externalLog", "externalExp", "json2string",
-      "particles", "input", "Some"
-    ] libCompile with [sr, el, ee, j2s, p, i, s] in
+      "particles", "sweeps", "input", "Some"
+    ] libCompile with [sr, el, ee, j2s, p, sw, i, s] in
     let cc: TpplCompileContext = {
       serializeResult = sr,
       logName = el, expName = ee,
       json2string = j2s,
       particles = p,
+      sweeps = sw,
       input = i,
       some = s
     } in
@@ -283,6 +284,15 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     -- 1. Define a function that deserializes
     -- A sequence of let bindings, one for every model parameter
 
+    let inferCode = bindall_
+      [ ulet_ "res" (infer_ (Default { runs = (nvar_ cc.particles) }) (ulam_ "" invocation))
+      , ulet_ "resJson"
+        (appf2_ (nvar_ cc.serializeResult) outputHandler.serializer (var_ "res"))
+      , bindSemi_
+        (print_ (app_ (nvar_ cc.json2string) (var_ "resJson")))
+        (print_ (str_ "\n"))
+      ] in
+
     -- Put everything together ...
     let complete = bindall_ (join
       [ [ stdlib
@@ -292,13 +302,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
         , inputR
         ]
       , inputArgs
-      , [ ulet_ "res" (infer_ (Default { runs = (nvar_ cc.particles) }) (ulam_ "" invocation))
-        , ulet_ "resJson"
-          (appf2_ (nvar_ cc.serializeResult) outputHandler.serializer (var_ "res"))
-        , bindSemi_
-          (print_ (app_ (nvar_ cc.json2string) (var_ "resJson")))
-          (print_ (str_ "\n"))
-        ]
+      , [ appf2_ (var_ "repeat") (ulam_ "" inferCode) (nvar_ cc.sweeps) ]
       ]) in
 
     -- ... and also make sure to remove duplicate definitions
@@ -396,7 +400,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       tyAnnot = tyWithInfo f.name.i mType,
       body = if null f.args then
         -- vsenderov 2023-08-04 Taking care of nullary functions by wrapping them in a lambda
-        printError (join [ "Information: Zero-argument function, `"
+        printError (join [ "NOTE: Zero-argument function, `"
                          , f.name.v.0
                          , "`, converted to Int. "
                          , "Potential type errors might refer to Int type."
@@ -1096,9 +1100,9 @@ let compileTpplToExecutable = lam filename: String. lam options: Options.
     buildMExpr options prog
 
 -- output needs to be an absolute path
-let runCompiledTpplProgram: Options -> String -> ExecResult =
-  lam options: Options. lam jsonData: String.
-  let cmd = [options.output, jsonData, int2string options.particles, "1"] in
+let runCompiledTpplProgram: Options -> String -> Int -> ExecResult =
+  lam options: Options. lam jsonData: String. lam sweeps: Int.
+  let cmd = [options.output, jsonData, int2string options.particles, int2string sweeps] in
   let res: ExecResult = sysRunCommand cmd "" "." in -- one sweep
   res
 
@@ -1134,7 +1138,7 @@ let testOptions =  {
 let testTpplProgram = "models/lang/hello.tppl" in
 let testJsonInput = "models/data/coin.json" in
 compileTpplToExecutable testTpplProgram testOptions;
-let testProgramExecResult = runCompiledTpplProgram testOptions testJsonInput in
+let testProgramExecResult = runCompiledTpplProgram testOptions testJsonInput 1 in
 
 utest testProgramExecResult.returncode with 0 in
 utest testProgramExecResult.stderr with "Hello, world!\n" in
@@ -1144,10 +1148,65 @@ sysDeleteFile testOptions.output;
 let testTpplProgram = "models/lang/externals.tppl" in
 let testJsonInput = "models/data/coin.json" in
 compileTpplToExecutable testTpplProgram testOptions;
-let testProgramExecResult = runCompiledTpplProgram testOptions testJsonInput in
+let testProgramExecResult = runCompiledTpplProgram testOptions testJsonInput 1 in
 
 utest testProgramExecResult.returncode with 0 in
 utest testProgramExecResult.stdout with "{\"samples\":[0.69314718056],\"weights\":[0.],\"normConst\":0.}\n" in
+sysDeleteFile testOptions.output;
+
+-- test multiple print statements
+let testTpplProgram = "models/lang/blub.tppl" in
+let testJsonInput = "models/data/blub.json" in
+compileTpplToExecutable testTpplProgram testOptions;
+let testProgramExecResult = runCompiledTpplProgram testOptions testJsonInput 1 in
+
+utest testProgramExecResult.returncode with 0 in
+utest testProgramExecResult.stderr with 
+"blab
+
+blab
+7
+3.14159265359
+True
+Trump was elected: False
+1
+2
+The length of the vector is 20
+TrueTrueTrueFalseTrueFalseFalseTrueTrueFalseFalseFalseTrueFalseTrueFalseFalseTrueFalseFalse
+5.
+6.
+0.666666666667
+-1.
+True
+True
+False
+False
+False
+True
+False
+False
+False
+True
+True
+True
+False
+True
+False
+.....
+6 is more than 5.
+" in
+sysDeleteFile testOptions.output;
+
+-- test sweep number
+
+let testTpplProgram = "models/lang/coin.tppl" in
+let testJsonInput = "models/data/coin.json" in
+compileTpplToExecutable testTpplProgram testOptions;
+let testProgramExecResult = runCompiledTpplProgram testOptions testJsonInput 3 in
+
+utest testProgramExecResult.returncode with 0 in
+let numberLines = length (strSplit "\n" testProgramExecResult.stdout) in
+utest numberLines with 4 in -- NOTE(vsenderov, 2023-09-11): for some reason it needs to be one more
 sysDeleteFile testOptions.output;
 
 -- TODO(2023-09-08, vsenderov): need to test probailistic stuff as well such as coin.tppl

@@ -41,6 +41,9 @@ let serializeResult: all a. (a -> JsonValue) -> Dist(a) -> JsonValue =
 
 let particles = if leqi (length argv) 2 then 10 else string2int (get argv 2)
 
+let sweeps    = if leqi (length argv) 3 then 1 else string2int (get argv 3)
+
+
 let input: JsonValue =
   if leqi (length argv) 1 then error "You must provide a data file!"
   else jsonParseExn (readFile (get argv 1))
