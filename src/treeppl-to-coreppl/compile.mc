@@ -182,10 +182,11 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
   sem isemi_: Expr -> Expr -> Expr
   sem isemi_ l =
   | r ->
-    let info = match infoTm r with info & Info _
-      then info
-      else infoTm l
-    in withInfo info (semi_ l r)
+    let infoL = infoTm l in
+    let infoR = infoTm r in
+    let mergedInfo = mergeInfo infoL infoR in
+    withInfo mergedInfo (semi_ l r)
+    
 
   sem compile: FileTppl -> Expr
   sem compile =
