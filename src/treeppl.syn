@@ -80,7 +80,14 @@ Real[]
 Int[10]
 -/
 prod TypeUsage: TypeTppl = name:UName
-prod TypeSequence: TypeTppl = ty:TypeTppl "[" size:Integer? "]"
+prod TypeSequence: TypeTppl = ty:TypeTppl "[" "]"
+--- prod Matrix: TypeTppl = "Matrix" "[" ty:TypeTppl "]"
+--- Matrix<Int> Real<>
+--- List: Int[]
+--- Matirx: Int<>
+--- let myMatrix: Real<> = makeMatrix(4,4,[123123,312,132123..]) 
+--- let myMatrix: Real[[]] 
+
 
 prod AtomicReal: TypeTppl = "Real"
 prod AtomicBool: TypeTppl = "Bool"

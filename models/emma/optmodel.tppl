@@ -1,0 +1,51 @@
+/*
+ * File: optmodel.tppl
+ * Description: Probabilistic model taken from optimal metabarcoding, draft 2023-09-05
+ * Compilation with 10'000 particles:
+ *   tpplc models/lang/optmodel.tppl -p 10000 --output optmodel
+ * Execution with 10 sweeps (homogenate data H.json or lysate data L.json): 
+ *   ./optmodel models/data/H.json 10
+ */
+
+/*
+ * Model function
+ * Data:
+ *   Homogenate data in H.json or lysate data in L.json: 
+ * Priors: 
+ *   From optimal metabarcoding paper, Iwaszkiewicz-Eggebrecht et al., 2023
+ * Posterior:
+ *   returning k at the moment
+ */
+model function myModel(dataset: Int[][]) : Real  {
+  // Uncomment if you want to test the input
+  //printLn("Input:");
+  //let dataStr = apply(int2string, dataset[1]);
+  //printLn(join(dataStr));
+  assume k ~ Gamma(1.0, 10.0);
+  //printLn("k:");
+  //printLn(real2string(pi));
+  //printLn(real2string(10.0));
+  printLn(real2string(k));
+
+  assume logTheta ~ Gaussian(0.0, 2.0); 
+  let theta = exp(logTheta);
+
+  //let a = [1.0, 2.0, 3.0];
+  //let aTensor = tensorCreateCArrayFloat([3], a);  
+  
+  assume tau ~ Gamma(3.0, 1.0/27.0);
+  let sigma = sqrt(1.0 / tau);
+  assume mu ~ Gaussian(6.5, sigma); //Check sigma in Treeppl setting, or sigma squared?
+  
+  let nsamples = length(dataset); // nsamples is total number of samples, with index j
+  for j in 1 to nsamples { 
+    assume logC ~ Gaussian(mu, sigma); 
+    let c = exp(logC);
+    for i in 1 to 4 { //i is index of spike-in species, in this example 1 to 4
+      if Real(dataset[j][i]) > 0.0 {
+        observe Real(dataset[j][i]) ~ Gamma(k, c*theta);
+      }
+    }
+  }
+  return(k); 
+}
