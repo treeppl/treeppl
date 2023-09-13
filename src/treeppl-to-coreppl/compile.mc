@@ -468,6 +468,11 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
 
   | NothingTypeTppl x -> tyunit_
 
+  | TensorTypeTppl x -> TyTensor {
+    info = x.info,
+    ty = compileTypeTppl x.ty
+  }
+
   sem compileStmtTppl: TpplCompileContext -> StmtTppl -> (Expr -> Expr)
 
   sem compileStmtTppl (context: TpplCompileContext) =
