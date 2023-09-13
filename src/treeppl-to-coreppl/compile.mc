@@ -13,6 +13,9 @@ include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/type-check.mc"
+include "mexpr/generate-json-serializers.mc"
+include "mexpr/utils.mc"
+include "mexpr/duplicate-code-elimination.mc"
 
 include "sys.mc"
 
@@ -21,9 +24,10 @@ include "coreppl::coreppl-to-mexpr/runtimes.mc"
 include "coreppl::coreppl-to-rootppl/compile.mc"
 include "coreppl::coreppl.mc"
 include "coreppl::parser.mc"
+include "coreppl::build.mc"
 
 -- Version of parseMCoreFile needed to get input data into the program
-let parseMCoreFile = lam filename.
+let parseMCoreFileNoDeadCodeElim = lam filename.
   use BootParser in
     parseMCoreFile
       {defaultBootParserParseMCoreFileArg with eliminateDeadCode = false}
@@ -165,66 +169,65 @@ lang LowerProjMatch = ProjMatchAst + MatchAst + DataPat + RecordPat + RecordType
       (foldl wrap errorMsg relevantConstructors)
 end
 
-lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym + FloatAst + ProjMatchAst + Resample
-
--- TODO If this works it should go to externals
-  sem constructExternalMap : Expr -> Map String Name
-  sem constructExternalMap =
-  | expr -> constructExternalMapH (mapEmpty cmpString) expr
-  sem constructExternalMapH : Map String Name -> Expr -> Map String Name
-  sem constructExternalMapH acc =
-  | TmExt t -> constructExternalMapH (mapInsert (nameGetStr t.ident) t.ident acc) t.inexpr
-  | expr -> sfold_Expr_Expr constructExternalMapH acc expr
-
-  -- smap_Expr_Expr, sfold_Expr_Expr explained in recursion cookbook
-  sem filterExternalMap: Set String -> Expr -> Expr
-  sem filterExternalMap ids =
-  | TmExt t ->
-    let inexpr = filterExternalMap ids t.inexpr in
-    --if (nameGetStr t.ident) in ids then TmExt {t with inexpr = inexpr}
-    match setMem (nameGetStr t.ident) ids with true then TmExt {t with inexpr = inexpr}
-    else inexpr
-  -- strip everything but externals
-  | TmLet {inexpr = inexpr}
-  | TmRecLets {inexpr = inexpr}
-  | TmType {inexpr = inexpr}
-  | TmConDef {inexpr = inexpr} -> filterExternalMap ids inexpr
-  | expr -> unit_
+lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Externals + MExprSym + FloatAst + ProjMatchAst + Resample + GenerateJsonSerializers + MExprEliminateDuplicateCode
 
   -- a type with useful information passed down from compile
   type TpplCompileContext = {
-    logName: Name,
-    expName: Name
+    serializeResult: Name,
+    logName: Name, expName: Name,
+    json2string: Name,
+    particles: Name, sweeps: Name, input: Name, some: Name
   }
 
   sem isemi_: Expr -> Expr -> Expr
   sem isemi_ l =
   | r ->
-    let info = match infoTm r with info & Info _
-      then info
-      else infoTm l
-    in withInfo info (semi_ l r)
+    let infoL = infoTm l in
+    let infoR = infoTm r in
+    let mergedInfo = mergeInfo infoL infoR in
+    withInfo mergedInfo (semi_ l r)
+    
 
-  sem compile: Expr -> FileTppl -> Expr
-
-  sem compile (input: Expr) =
+  sem compile: FileTppl -> Expr
+  sem compile =
   | DeclSequenceFileTppl x ->
-    let externals = parseMCoreFile (concat tpplSrcLoc "/externals/ext.mc") in
-    let exts = setOfSeq cmpString ["externalLog", "externalExp"] in
-    let externals = filterExternalMap exts externals in  -- strip everything but needed stuff from externals
-    let externals = symbolize externals in
-    let externalMap = constructExternalMap externals in
-    let compileContext: TpplCompileContext = {
-      logName = mapFindExn "externalLog" externalMap,
-      expName = mapFindExn "externalExp" externalMap
+
+    -- Retrieve standard library AST
+    let stdlib = parseMCorePPLFileLib false (concat tpplSrcLoc "/lib/standard.mc") in
+
+    -- Retrieve compiler library AST
+    let libCompile =
+      parseMCorePPLFileLib false
+        (concat tpplSrcLoc "/treeppl-to-coreppl/lib-compile.mc") in
+
+    -- Symbolize the compiler library AST: it is not visible in the compiled TreePPL program.
+    let libCompile = symbolize libCompile in
+
+    -- Extract names and use them to build the compile context
+    match findNamesOfStringsExn [
+      "serializeResult", "externalLog", "externalExp", "json2string",
+      "particles", "sweeps", "input", "Some"
+    ] libCompile with [sr, el, ee, j2s, p, sw, i, s] in
+    let cc: TpplCompileContext = {
+      serializeResult = sr,
+      logName = el, expName = ee,
+      json2string = j2s,
+      particles = p,
+      sweeps = sw,
+      input = i,
+      some = s
     } in
-    let input = bind_ externals input in
-    --dprint x;
+
+    -- Compile the model function
     let invocation = match findMap mInvocation x.decl with Some x
       then x
       else printLn "You need a model function!"; exit 1
     in
-    let types = map (compileTpplTypeDecl compileContext) x.decl in
+    match invocation with (invocation, argNameTypes, returnType) in
+
+    -- Compile type definitions and generate required JSON
+    -- serializers/deserializers
+    let types = map (compileTpplTypeDecl cc) x.decl in
     let typeNames = mapOption (lam x. x.0) types in
     let constructors = join (map (lam x. x.1) types) in
     let bindType = lam inexpr. lam name.
@@ -246,23 +249,90 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
         info = pair.0 .i
       }
     in
-    let input = foldl bindCon input constructors in
-    let input = foldl bindType input typeNames in
-    let complete = bind_ input (TmRecLets {
-      bindings = mapOption (compileTpplFunction compileContext) x.decl,
-      inexpr = invocation,
+    let types = foldl bindCon unit_ constructors in
+    let types = foldl bindType types typeNames in
+    let inputType: Type = tyrecord_ (map (lam t. (nameGetStr t.0, t.1)) argNameTypes) in
+    
+    let modelTypes: [Type] = [inputType, returnType] in
+    match addJsonSerializers modelTypes types with (result, types, _) in
+    match mapLookup returnType result with Some outputHandler in
+
+    -- Compile TreePPL functions
+    let functions = TmRecLets {
+      bindings = mapOption (compileTpplFunction cc) x.decl, --functionBindings,
+      --inexpr = infer_ (Default {}) (ulam_ "" invocation), -- need to serialize on top, otherwise the Dist excapes
+      inexpr = invocation, -- will be thrown away due to subsequent bind_
       ty = tyunknown_,
       info = x.info
-    }) in
-    let env = symEnvEmpty in
-    symbolizeExpr ({env with varEnv = mapInsert "log" compileContext.logName (mapInsert "exp" compileContext.expName env.varEnv)}) complete
+    } in
 
-  sem mInvocation: DeclTppl -> Option Expr
-  sem mInvocation =
+    -- Generate code that deserializes input
+    match mapLookup inputType result with Some inputHandler in
+    let error = error_ (str_ "Could not deserialize data input!") in
+    let m = nameSym "m" in
+    let inputR = ulet_ "r" (
+      match_
+        (app_ inputHandler.deserializer (nvar_ cc.input))
+        (npcon_ cc.some (npvar_ m))
+        (nvar_ m)
+        error) in
+    let inputArgs = map
+      (lam t. nulet_ t.0 (recordproj_ (nameGetStr t.0) (var_ "r")))
+      argNameTypes in
+    -- (map (lam x. x.0) argNameTypes)
+    --  mapLookup argType result -- gives us the deserializer
+    -- 1. Define a function that deserializes
+    -- A sequence of let bindings, one for every model parameter
+
+    let inferCode = bindall_
+      [ ulet_ "res" (infer_ (Default { runs = (nvar_ cc.particles) }) (ulam_ "" invocation))
+      , ulet_ "resJson"
+        (appf2_ (nvar_ cc.serializeResult) outputHandler.serializer (var_ "res"))
+      , bindSemi_
+        (print_ (app_ (nvar_ cc.json2string) (var_ "resJson")))
+        (print_ (str_ "\n"))
+      ] in
+
+    -- Put everything together ...
+    let complete = bindall_ (join
+      [ [ stdlib
+        , libCompile
+        , types
+        , functions
+        , inputR
+        ]
+      , inputArgs
+      , [ appf2_ (var_ "repeat") (ulam_ "" inferCode) (nvar_ cc.sweeps) ]
+      ]) in
+
+    -- ... and also make sure to remove duplicate definitions
+    let complete = eliminateDuplicateCode complete in
+
+    complete
+
+    -- NOTE(2023-08-11,dlunde): No need to symbolize here actually, the CorePPL compiler will symbolize everything anyway.
+    -- let env = symEnvEmpty in
+    -- symbolizeExpr ({env with varEnv = mapInsert "log" cc.logName (mapInsert "exp" cc.expName env.varEnv)}) complete
+
+ sem mInvocation: DeclTppl -> Option (Expr, [(Name, Type)], Type)
+ sem mInvocation =
 
   | _ -> None ()
 
   | FunDeclTppl (x & {model = Some _}) ->
+    let getNameType = lam arg.
+      let aName: Name = arg.name.v in
+      (aName, compileTypeTppl arg.ty)
+    in
+    let argNameTypes: [(Name, Type)] = map getNameType x.args in
+    let returnType =
+      match x.returnTy with Some ty
+        then compileTypeTppl ty
+        else
+          printError "Error: The model function must have a return type, even if it is void, i.e. `()`!\n";
+          flushStderr ();
+          exit 1
+    in
     let invar = TmVar {
         ident = x.name.v,
         info = x.name.i,
@@ -282,9 +352,9 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
     -- If it is, don't wrap the invar in a lambda!
     -- Only ensure that the function application happens
     if null x.args then
-      Some (app_ invar (int_ 0))
+      Some ((app_ invar (int_ 0)), [], returnType)
     else
-      Some (foldl f invar x.args)
+      Some ((foldl f invar x.args), argNameTypes, returnType)
 
   sem parseArgument: {name:{v:Name, i:Info}, ty:TypeTppl} -> Expr
   sem parseArgument =
@@ -315,13 +385,28 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
     let body = foldr (lam f. lam e. f e)
       (withInfo f.info unit_)
       (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body))
-    in 
+    in
+    let argTypes = if null f.args
+      then [tyint_] -- nullary functions are ints
+      else map (lam a. compileTypeTppl a.ty) f.args in
+    let returnType = match f.returnTy with Some ty
+      then compileTypeTppl ty
+      else tyunknown_
+    in
+    let mType = foldr tyarrow_ returnType argTypes in
     Some {
       ident = f.name.v,
       tyBody = tyunknown_,
-      tyAnnot = tyWithInfo f.name.i tyunknown_,
+      tyAnnot = tyWithInfo f.name.i mType,
       body = if null f.args then
         -- vsenderov 2023-08-04 Taking care of nullary functions by wrapping them in a lambda
+        printError (join [ "NOTE: Zero-argument function, `"
+                         , f.name.v.0
+                         , "`, converted to Int. "
+                         , "Potential type errors might refer to Int type."
+                         , "\n"
+                         ]);
+        flushStderr () ;
         TmLam {
           ident =  nameNoSym "_",
           tyAnnot = TyInt { info = f.info },
@@ -373,13 +458,15 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
     info = x.info,
     ty = compileTypeTppl x.ty
   }
-
+-- TODO type matrix
   | TpplStrTypeTppl x -> TySeq {
     info = x.info,
     ty = TyChar {
       info = NoInfo () -- I put the info up
     }
   }
+
+  | NothingTypeTppl x -> tyunit_
 
   sem compileStmtTppl: TpplCompileContext -> StmtTppl -> (Expr -> Expr)
 
@@ -585,13 +672,13 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       }
     else
       foldl app f x.args
-    
+
   | BernoulliExprTppl d ->
     TmDist {
       dist = DBernoulli {
         p = compileExprTppl d.prob
       },
-      ty = tybool_,
+      ty = tyunknown_,
       info = d.info
     }
 
@@ -641,7 +728,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       },
       ty = tyfloat_,
       info = d.info
-    }  
+    }
 
   | VariableExprTppl v ->
     TmVar {
@@ -980,59 +1067,148 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
 end
 
 
+lang CPPLLang =
+  MExprAst + MExprCompile + TransformDist + MExprEliminateDuplicateCode +
+  MExprSubstitute + MExprPPL + GenerateJsonSerializers
 
--- Parses a TreePPL file
-let parseTreePPLFile = lam filename.
-  let content = readFile filename in
-    use TreePPLAst in (parseTreePPLExn filename content)
+  -- Check if a CorePPL program uses infer
+  sem hasInfer =
+  | expr -> hasInferH false expr
 
--- Compiles a TreePPL program and input to a CorePPL string
+  sem hasInferH acc =
+  | TmInfer _ -> true
+  | expr -> sfold_Expr_Expr hasInferH acc expr
 
-let compileTreePPLToString = lam input:Expr. lam program:FileTppl.
-  use TreePPLCompile in
-    let corePplAst: Expr = compile input program in
-      use MExprPPL in
-        (mexprPPLToString corePplAst)
+end
 
--- Compiles a TreePPL program and input to a CorePPL AST
-let compileTreePPL = lam input:Expr. lam program:FileTppl.
-  use TreePPLCompile in
-    let corePplAst: Expr = compile input program in corePplAst
+
+lang TreePPLThings = TreePPLAst + TreePPLCompile
+    + LowerProjMatch + ProjMatchTypeCheck + ProjMatchPprint
+end
+
+
+let compileTpplToExecutable = lam filename: String. lam options: Options.
+  use TreePPLThings in
+    let content = readFile filename in
+    match parseTreePPLExn filename content with file in
+    let corePplAst: Expr = compile file in
+    --printLn (mexprPPLToString corePplAst);
+    let prog: Expr = typeCheck corePplAst in
+    let prog: Expr = lowerProj prog in
+    use CPPLLang in
+    let prog =  mexprCpplCompile options false prog in
+    buildMExpr options prog
+
+-- output needs to be an absolute path
+let runCompiledTpplProgram: Options -> String -> Int -> ExecResult =
+  lam options: Options. lam jsonData: String. lam sweeps: Int.
+  let cmd = [options.output, jsonData, int2string options.particles, int2string sweeps] in
+  let res: ExecResult = sysRunCommand cmd "" "." in -- one sweep
+  res
 
 mexpr
 
--- test the flip example, TODO should iterate through the files instead
-let testTpplProgram = parseTreePPLFile "models/flip/flip.tppl" in
-let testInput = parseMCoreFile "models/flip/data.mc" in
-let testMCoreProgram = parseMCorePPLFileNoDeadCodeElimination "models/flip/flip.mc" in
+let testOptions =  {
+    method = "is-lw",
+    target = "mexpr",
+    test = false,
+    particles = 1,
+    resample = "manual",
+    align = false,
+    printModel = false,
+    printMCore = false,
+    exitBefore = false,
+    skipFinal = false,
+    outputMc = false,
+    output = sysTempFileMake (), -- absolute path
+    transform = false,
+    printSamples = true,
+    stackSize = 10000,
+    cps = "partial",
+    earlyStop = true,
+    mcmcLightweightGlobalProb = 0.1,
+    mcmcLightweightReuseLocal = true,
+    printAcceptanceRate = false,
+    pmcmcParticles = 2,
+    seed = None (),
+    extractSimplification = "none"
+  } in
 
+-- test hello world
+let testTpplProgram = "models/lang/hello.tppl" in
+let testJsonInput = "models/data/coin.json" in
+compileTpplToExecutable testTpplProgram testOptions;
+let testProgramExecResult = runCompiledTpplProgram testOptions testJsonInput 1 in
 
--- Doesn't work TODO
-use MExprPPL in
-utest compileTreePPL testInput testTpplProgram with testMCoreProgram using eqExpr in
+utest testProgramExecResult.returncode with 0 in
+utest testProgramExecResult.stderr with "Hello, world!\n" in
+sysDeleteFile testOptions.output;
 
--- test the if example, should iterate through the files instead
-let testTpplProgram = parseTreePPLFile "models/if/if.tppl" in
-let testInput = parseMCoreFile "models/if/data.mc" in
-let testMCoreProgram = parseMCorePPLFileNoDeadCodeElimination "models/if/if.mc" in
+-- test externals
+let testTpplProgram = "models/lang/externals.tppl" in
+let testJsonInput = "models/data/coin.json" in
+compileTpplToExecutable testTpplProgram testOptions;
+let testProgramExecResult = runCompiledTpplProgram testOptions testJsonInput 1 in
 
---debug pretty printing
---use TreePPLCompile in
---printLn (mexprToString testMCoreProgram);
+utest testProgramExecResult.returncode with 0 in
+utest testProgramExecResult.stdout with "{\"samples\":[0.69314718056],\"weights\":[0.],\"normConst\":0.}\n" in
+sysDeleteFile testOptions.output;
 
---use MExprPPL in
-utest compileTreePPL testInput testTpplProgram with testMCoreProgram using eqExpr in
+-- test multiple print statements
+let testTpplProgram = "models/lang/blub.tppl" in
+let testJsonInput = "models/data/blub.json" in
+compileTpplToExecutable testTpplProgram testOptions;
+let testProgramExecResult = runCompiledTpplProgram testOptions testJsonInput 1 in
 
--- test the externals example, should iterate through the files instead
-let testTpplProgram = parseTreePPLFile "models/externals/externals.tppl" in
-let testInput = parseMCoreFile "models/externals/data.mc" in
-let testMCoreProgram = parseMCorePPLFileNoDeadCodeElimination "models/externals/externals.mc" in
+utest testProgramExecResult.returncode with 0 in
+utest testProgramExecResult.stderr with 
+"blab
 
---use MExprPPL in
-utest compileTreePPL testInput testTpplProgram with testMCoreProgram using eqExpr in
+blab
+7
+3.14159265359
+True
+Trump was elected: False
+1
+2
+The length of the vector is 20
+TrueTrueTrueFalseTrueFalseFalseTrueTrueFalseFalseFalseTrueFalseTrueFalseFalseTrueFalseFalse
+5.
+6.
+0.666666666667
+-1.
+True
+True
+False
+False
+False
+True
+False
+False
+False
+True
+True
+True
+False
+True
+False
+.....
+6 is more than 5.
+" in
+sysDeleteFile testOptions.output;
 
--- If you want to print out the strings, use the following:
--- use MExprPPL in
---utest compileTreePPLToString testInput testTpplProgram with (mexprPPLToString testMCoreProgram) using eqString in
+-- test sweep number
+
+let testTpplProgram = "models/lang/coin.tppl" in
+let testJsonInput = "models/data/coin.json" in
+compileTpplToExecutable testTpplProgram testOptions;
+let testProgramExecResult = runCompiledTpplProgram testOptions testJsonInput 3 in
+
+utest testProgramExecResult.returncode with 0 in
+let numberLines = length (strSplit "\n" testProgramExecResult.stdout) in
+utest numberLines with 4 in -- NOTE(vsenderov, 2023-09-11): for some reason it needs to be one more
+sysDeleteFile testOptions.output;
+
+-- TODO(2023-09-08, vsenderov): need to test probailistic stuff as well such as coin.tppl
 
 ()

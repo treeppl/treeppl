@@ -86,6 +86,7 @@ prod AtomicReal: TypeTppl = "Real"
 prod AtomicBool: TypeTppl = "Bool"
 prod AtomicInt: TypeTppl = "Int"
 prod TpplStr: TypeTppl = "String"
+prod Nothing: TypeTppl = "(" ")"
 
 /-
 A function is declared with the keyword function, optionally preceeded by "model"

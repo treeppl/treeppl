@@ -28,7 +28,11 @@ function flip(datapoint: Bool, probability: Real) {
  * Posterior:
  *   p | coinflips
  */
-model function coinModel(coinflips: Bool[]) {
+model function coinModel(coinflips: Bool[]) : Real  {
+  // Uncomment if you want to test the input
+  //printLn("Input:");
+  //let coinStr = apply(bool2string, coinflips);
+  //printLn(join(coinStr));
   assume p ~ Beta(2.0, 2.0); // prior
   let n = length(coinflips);
   for i in 1 to n {
