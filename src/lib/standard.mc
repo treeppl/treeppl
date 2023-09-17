@@ -5,6 +5,7 @@ include "common.mc"
 include "string.mc"
 include "mexpr/ast.mc"
 include "matrix.mc"
+include "iterator.mc"
 
 -- Intrinsics have to be exposed as top level let bindings
 
@@ -59,4 +60,26 @@ let text = "blab\n"
 ---------------
 --- Tensors ---
 ---------------
+
+let matrixCreate = lam row. lam col. lam seq.
+  matrixCreate [row, col] seq
+
+let matrixCreateId = lam dim.
+  let isDiagonal = lam idx. eqi (modi idx dim) 0 in
+  let seq = map (lam idx. if isDiagonal idx then 1.0 else 0.0) (iteratorToSeq (iteratorRange 0 (subi (muli dim dim) 1))) in
+  printLn (join (map float2string seq));
+  matrixCreate dim dim seq
+
+-- indexing from 1, not from 0!
+let matrixGet = lam row. lam col. lam tensor.
+  tensorGetExn tensor [subi row 1, subi col 1]
+
+-- NOTE(vsenderov, 2023-09-15): Without setting tensorSetExn to a symbol in here,
+-- the CFA is not going to work for matrixSet.
+let ts = tensorSetExn
+
+-- NOTE(vsenderov, 2023-09-15): for some reason the types need to be declared,
+-- otherwise type error.
+let matrixSet = lam row:Int. lam col:Int. lam tensor:Tensor[Float]. lam val:Float.
+  ts tensor [subi row 1, subi col 1] val
 
