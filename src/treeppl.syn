@@ -81,7 +81,9 @@ Int[10]
 -/
 prod TypeUsage: TypeTppl = name:UName
 prod TypeSequence: TypeTppl = ty:TypeTppl "[" "]"
-prod Tensor: TypeTppl = ty:TypeTppl "<" ">" 
+
+-- NOTE(vsenderov, 2023-09-15) all other syntaxes are inadmissible by current parser
+prod Tensor: TypeTppl = "Tensor" "[" ty:TypeTppl "]" 
 
 prod AtomicReal: TypeTppl = "Real"
 prod AtomicBool: TypeTppl = "Bool"
@@ -156,6 +158,9 @@ postfix Subscript: ExprTppl = "[" idx:ExprTppl (":" lastIdx:ExprTppl)? "]"
 -- Conversions, not sure this is actually what we want in the end
 prod ConvIntToReal: ExprTppl = "Real" "(" val:ExprTppl ")"
 
+-- Tensor/matrix expressions
+-- matrix multiplication
+prod left MatrixMul: ExprTppl = left:ExprTppl "%*%" right:ExprTppl
 
 -- Function call as expression
 prod FunCall: ExprTppl = f:ExprTppl "(" (args:ExprTppl ("," args:ExprTppl)*)? ")"

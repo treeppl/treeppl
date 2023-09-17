@@ -26,6 +26,8 @@ include "coreppl::coreppl.mc"
 include "coreppl::parser.mc"
 include "coreppl::build.mc"
 
+include "matrix.mc"
+
 -- Version of parseMCoreFile needed to get input data into the program
 let parseMCoreFileNoDeadCodeElim = lam filename.
   use BootParser in
@@ -176,7 +178,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     serializeResult: Name,
     logName: Name, expName: Name,
     json2string: Name,
-    particles: Name, sweeps: Name, input: Name, some: Name
+    particles: Name, sweeps: Name, input: Name, some: Name,
+    matrixMul: Name
   }
 
   sem isemi_: Expr -> Expr -> Expr
@@ -206,8 +209,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     -- Extract names and use them to build the compile context
     match findNamesOfStringsExn [
       "serializeResult", "externalLog", "externalExp", "json2string",
-      "particles", "sweeps", "input", "Some"
-    ] libCompile with [sr, el, ee, j2s, p, sw, i, s] in
+      "particles", "sweeps", "input", "Some", "matrixMul"
+    ] libCompile with [sr, el, ee, j2s, p, sw, i, s, mm] in
     let cc: TpplCompileContext = {
       serializeResult = sr,
       logName = el, expName = ee,
@@ -215,7 +218,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       particles = p,
       sweeps = sw,
       input = i,
-      some = s
+      some = s,
+      matrixMul = mm
     } in
 
     -- Compile the model function
@@ -479,7 +483,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
 
   | ExprStmtTppl x ->
     -- TODO(vipa, 2022-12-22): Info field for the entire semi?
-    lam cont. isemi_ (compileExprTppl x.e) cont
+    lam cont. isemi_ (compileExprTppl context x.e) cont
 
   | AssumeStmtTppl a ->
     lam cont. TmLet {
@@ -487,7 +491,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       tyBody = tyunknown_,
       tyAnnot = tyunknown_,
       body = TmAssume {
-        dist = compileExprTppl a.dist,
+        dist = compileExprTppl context a.dist,
         ty = tyunknown_,
         info = a.info
       },
@@ -500,8 +504,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     lam cont.
       let obs = TmObserve {
         info = x.info,
-        value = compileExprTppl x.value,
-        dist = compileExprTppl x.dist,
+        value = compileExprTppl context x.value,
+        dist = compileExprTppl context x.dist,
         ty = tyunknown_
       } in
       -- TODO(vipa, 2022-12-22): Info for semi?
@@ -517,7 +521,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       ident = a.var.v,
       tyBody = tyunknown_,
       tyAnnot = tyunknown_,
-      body =  compileExprTppl a.val,
+      body =  compileExprTppl context a.val,
       inexpr = cont,
       ty = tyunknown_,
       info = a.info
@@ -526,7 +530,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
   | WeightStmtTppl a ->
     lam cont.
 
-    let cExpr: Expr = (compileExprTppl a.value) in
+    let cExpr: Expr = (compileExprTppl context a.value) in
     let logExpr: Expr = withInfo a.info (app_ (withInfo a.info (nvar_ context.logName)) cExpr) in
     let tmp = TmLet {
       ident = nameNoSym "foo",
@@ -553,7 +557,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       tyBody = tyunknown_,
       tyAnnot = tyunknown_,
       body =  TmWeight {
-        weight = compileExprTppl a.value,
+        weight = compileExprTppl context a.value,
         ty = tyunknown_,
         info = a.info
       },
@@ -588,7 +592,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       ty = tyunknown_,
       info = a.info,
       inexpr = TmMatch {
-        target = compileExprTppl a.condition,
+        target = compileExprTppl context a.condition,
         pat    = withInfoPat (get_ExprTppl_info a.condition) ptrue_,
         thn    = foldr (lam f. lam e. f e) cont (map (compileStmtTppl context) a.ifTrueStmts),
         els    = foldr (lam f. lam e. f e) cont (map (compileStmtTppl context) a.ifFalseStmts),
@@ -626,7 +630,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       } in
     let param = nameSym "l" in
     let rest = nameSym "l" in
-    loop_ (compileExprTppl x.range)
+    loop_ (compileExprTppl context x.range)
       (lam recur.
         lam_ param
           (match_ (var_ param) (consPat_ x.iterator rest)
@@ -634,36 +638,36 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
             cont))
 
   | ReturnStmtTppl r ->
-    lam cont. match r.return with Some x then compileExprTppl x else withInfo r.info unit_
+    lam cont. match r.return with Some x then compileExprTppl context x else withInfo r.info unit_
 
   | PrintStmtTppl x ->
     lam cont.
       foldr isemi_ cont
-        [ dprint_ (compileExprTppl x.printable)
+        [ dprint_ (compileExprTppl context x.printable)
         -- , print_ (str_ "\n") in
         , flushStdout_ unit_
         ]
 
-  sem compileExprTppl: ExprTppl -> Expr
+  sem compileExprTppl: TpplCompileContext -> ExprTppl -> Expr
 
-  sem compileExprTppl =
+  sem compileExprTppl (context: TpplCompileContext) =
 
   | ProjectionExprTppl x ->
     TmProjMatch {
       info = x.info,
-      target = compileExprTppl x.target,
+      target = compileExprTppl context x.target,
       field = stringToSid x.field.v,
       ty = tyunknown_,
       env = _tcEnvEmpty  -- TODO(vipa, 2022-12-21): This is technically supposed to be private
     }
 
   | FunCallExprTppl x ->
-    let f = compileExprTppl x.f in
+    let f = compileExprTppl context x.f in
     let app = lam f. lam arg.
       TmApp {
         info = x.info,
         lhs = f,
-        rhs = compileExprTppl arg,
+        rhs = compileExprTppl context arg,
         ty = tyunknown_
       } in
     -- (vsenderov, 2023-08-04): If we are calling a nullary function,
@@ -681,7 +685,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
   | BernoulliExprTppl d ->
     TmDist {
       dist = DBernoulli {
-        p = compileExprTppl d.prob
+        p = compileExprTppl context d.prob
       },
       ty = tyunknown_,
       info = d.info
@@ -690,8 +694,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
   | GaussianExprTppl d ->
     TmDist {
       dist = DGaussian {
-        mu = compileExprTppl d.mean,
-        sigma = compileExprTppl d.stdDev
+        mu = compileExprTppl context d.mean,
+        sigma = compileExprTppl context d.stdDev
       },
       ty = tyunknown_,
       info = d.info
@@ -700,7 +704,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
   | PoissonExprTppl d ->
     TmDist {
       dist = DPoisson {
-        lambda = compileExprTppl d.rate
+        lambda = compileExprTppl context d.rate
       },
       ty = tyunknown_, -- TODO? (vsenderov, 2023-07-21) perhaps change to tyint_
       info = d.info
@@ -709,7 +713,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
   | ExponentialExprTppl d ->
     TmDist {
       dist = DExponential {
-        rate = compileExprTppl d.rate
+        rate = compileExprTppl context d.rate
       },
       ty = tyunknown_, -- TODO? (vsenderov, 2023-07-21) perhaps change to tyfloat_
       info = d.info
@@ -718,8 +722,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
   | GammaExprTppl d ->
     TmDist {
       dist = DGamma {
-        k = compileExprTppl d.shape,
-        theta = compileExprTppl d.scale
+        k = compileExprTppl context d.shape,
+        theta = compileExprTppl context d.scale
       },
       ty = tyunknown_, -- TODO? (vsenderov, 2023-07-21) perhaps change to tyfloat_
       info = d.info
@@ -728,8 +732,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
   | BetaExprTppl d ->
     TmDist {
       dist = DBeta {
-        a = compileExprTppl d.a,
-        b = compileExprTppl d.b
+        a = compileExprTppl context d.a,
+        b = compileExprTppl context d.b
       },
       ty = tyfloat_,
       info = d.info
@@ -746,7 +750,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
   | IsExprTppl x ->
     TmMatch {
       info = x.info,
-      target = compileExprTppl x.thing, -- and constructor
+      target = compileExprTppl context x.thing, -- and constructor
       pat = PatCon {
         info = x.constructor.i,
         ty = tyunknown_,
@@ -778,15 +782,18 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     let s = nameSym "start" in
     let e = nameSym "end" in
     let idx = nameSym "idx" in
-    let_ s (compileExprTppl x.beginVal)
-      (let_ e (compileExprTppl x.endVal)
+    let_ s (compileExprTppl context x.beginVal)
+      (let_ e (compileExprTppl context x.endVal)
         (app_ (app_ (const_ (CCreate {})) (addi_ (subi_ (var_ e) (var_ s)) (int_ 1)))
           (lam_ idx (addi_ (var_ idx) (var_ s)))))
 
   | ConstructorExprTppl x ->
     let mkField : {key : {v:String, i:Info}, value : Option ExprTppl} -> (SID, Expr) = lam field.
       let sid = stringToSid field.key.v in
-      let val = optionMapOr (withInfo field.key.i (var_ field.key.v)) compileExprTppl field.value in
+      let ce = lam x.
+        compileExprTppl context x
+      in
+      let val = optionMapOr (withInfo field.key.i (var_ field.key.v)) ce field.value in
       (sid, val) in
     let fields = mapFromSeq cmpSID (map mkField x.fields) in
     let record = TmRecord { bindings = fields, ty = tyunknown_, info = x.info } in
@@ -808,10 +815,10 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
           info = x.info,
           val = CAddf ()
         },
-        rhs = compileExprTppl x.left,
+        rhs = compileExprTppl context x.left,
         ty = tyunknown_
       },
-      rhs = compileExprTppl x.right,
+      rhs = compileExprTppl context x.right,
       ty = tyunknown_
     }
 
@@ -825,10 +832,10 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
           info = x.info,
           val = CSubf ()
         },
-        rhs = compileExprTppl x.left,
+        rhs = compileExprTppl context x.left,
         ty = tyunknown_
       },
-      rhs = compileExprTppl x.right,
+      rhs = compileExprTppl context x.right,
       ty = tyunknown_
     }
 
@@ -842,12 +849,26 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
           info = x.info,
           val = CMulf ()
         },
-        rhs = compileExprTppl x.left,
+        rhs = compileExprTppl context x.left,
         ty = tyunknown_
       },
-      rhs = compileExprTppl x.right,
+      rhs = compileExprTppl context x.right,
       ty = tyunknown_
     }
+
+  | MatrixMulExprTppl x ->
+    TmApp {
+      info = x.info,
+      lhs = TmApp {
+        info = x.info,
+        lhs = nvar_ context.matrixMul,
+        rhs = compileExprTppl context x.left,
+        ty = tyunknown_
+      },
+      rhs = compileExprTppl context x.right,
+      ty = tyunknown_
+    }
+
 
   | DivExprTppl x ->
     TmApp {
@@ -859,15 +880,15 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
           info = x.info,
           val = CDivf ()
         },
-        rhs = compileExprTppl x.left,
+        rhs = compileExprTppl context x.left,
         ty = tyunknown_
       },
-      rhs = compileExprTppl x.right,
+      rhs = compileExprTppl context x.right,
       ty = tyunknown_
     }
 
   | ConvIntToRealExprTppl x ->
-    withInfo x.info (int2float_ (compileExprTppl x.val))
+    withInfo x.info (int2float_ (compileExprTppl context x.val))
 
   | LessEqExprTppl x ->
     TmApp {
@@ -879,10 +900,10 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
           info = x.info,
           val = CLeqf ()
         },
-        rhs = compileExprTppl x.left,
+        rhs = compileExprTppl context x.left,
         ty = tyunknown_
       },
-      rhs = compileExprTppl x.right,
+      rhs = compileExprTppl context x.right,
       ty = tyunknown_
     }
 
@@ -896,10 +917,10 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
           info = x.info,
           val = CLtf ()
         },
-        rhs = compileExprTppl x.left,
+        rhs = compileExprTppl context x.left,
         ty = tyunknown_
       },
-      rhs = compileExprTppl x.right,
+      rhs = compileExprTppl context x.right,
       ty = tyunknown_
     }
 
@@ -913,10 +934,10 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
           info = x.info,
           val = CGtf ()
         },
-        rhs = compileExprTppl x.left,
+        rhs = compileExprTppl context x.left,
         ty = tyunknown_
       },
-      rhs = compileExprTppl x.right,
+      rhs = compileExprTppl context x.right,
       ty = tyunknown_
     }
 
@@ -931,10 +952,10 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
           info = x.info,
           val = CGeqf ()
         },
-        rhs = compileExprTppl x.left,
+        rhs = compileExprTppl context x.left,
         ty = tyunknown_
       },
-      rhs = compileExprTppl x.right,
+      rhs = compileExprTppl context x.right,
       ty = tyunknown_
     }
 
@@ -948,10 +969,10 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
           info = x.info,
           val = CEqf ()
         },
-        rhs = compileExprTppl x.left,
+        rhs = compileExprTppl context x.left,
         ty = tyunknown_
       },
-      rhs = compileExprTppl x.right,
+      rhs = compileExprTppl context x.right,
       ty = tyunknown_
     }
 
@@ -965,19 +986,19 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
           info = x.info,
           val = CNeqf ()
         },
-        rhs = compileExprTppl x.left,
+        rhs = compileExprTppl context x.left,
         ty = tyunknown_
       },
-      rhs = compileExprTppl x.right,
+      rhs = compileExprTppl context x.right,
       ty = tyunknown_
     }
 
   | AndExprTppl x ->
     TmMatch {
       info = x.info,
-      target = compileExprTppl x.left,
+      target = compileExprTppl context x.left,
       pat = PatBool { val = true, info = get_ExprTppl_info x.left, ty = tyunknown_ },
-      thn = compileExprTppl x.right,
+      thn = compileExprTppl context x.right,
       els = TmConst { info = x.info, ty = tyunknown_, val = CBool { val = false } },
       ty = tyunknown_
     }
@@ -985,17 +1006,17 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
   | OrExprTppl x ->
     TmMatch {
       info = x.info,
-      target = compileExprTppl x.left,
+      target = compileExprTppl context x.left,
       pat = PatBool { val = true, info = get_ExprTppl_info x.left, ty = tyunknown_ },
       thn = TmConst { info = x.info, ty = tyunknown_, val = CBool { val = true } },
-      els = compileExprTppl x.right,
+      els = compileExprTppl context x.right,
       ty = tyunknown_
     }
 
   | NotExprTppl x ->
     TmMatch {
       info = x.info,
-      target = compileExprTppl x.right,
+      target = compileExprTppl context x.right,
       pat = PatBool { val = true, info = get_ExprTppl_info x.right, ty = tyunknown_ },
       thn = TmConst { info = x.info, ty = tyunknown_, val = CBool { val = false } },
       els = TmConst { info = x.info, ty = tyunknown_, val = CBool { val = true } },
@@ -1019,18 +1040,21 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       , info = x.info
       , ty = tyunknown_
       } in
-    let idx = compileExprTppl x.idx in
+    let idx = compileExprTppl context x.idx in
     match x.lastIdx with Some lastIdx then
       let n = nameSym "start" in
       let start = subi_ (var_ n) (int_ 1) in
-      let len = addi_ (subi_ (compileExprTppl lastIdx) (var_ n)) (int_ 1) in
-      let_ n idx (subseq_ (compileExprTppl x.left) start len)
+      let len = addi_ (subi_ (compileExprTppl context lastIdx) (var_ n)) (int_ 1) in
+      let_ n idx (subseq_ (compileExprTppl context x.left) start len)
     else
-      app_ (app_ (const_ (CGet ())) (compileExprTppl x.left)) (subi_ idx (int_ 1))
+      app_ (app_ (const_ (CGet ())) (compileExprTppl context x.left)) (subi_ idx (int_ 1))
 
   | SequenceExprTppl x ->
+    let ce = lam x.
+      compileExprTppl context x 
+    in
     TmSeq {
-      tms = map compileExprTppl x.values,
+      tms = map ce x.values,
       ty = tyunknown_,
       info = x.info
     }
