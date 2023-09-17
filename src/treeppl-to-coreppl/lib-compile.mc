@@ -5,6 +5,7 @@
 -- external functions
 include "ext/dist-ext.mc"
 include "ext/math-ext.mc"
+include "matrix.mc"
 
 -- 2. We parse this file to Expr
 -- let externals = parseMCoreFile "src/externals/ext.mc" in
