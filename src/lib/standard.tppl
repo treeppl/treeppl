@@ -1,0 +1,4 @@
+function sampleBernoulli(p: Real): Bool {
+  assume x ~ Bernoulli(p);
+  return x;
+}

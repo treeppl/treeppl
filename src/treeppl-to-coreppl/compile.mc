@@ -191,6 +191,56 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     withInfo mergedInfo (semi_ l r)
     
 
+  sem compileFunctionsOnly: TpplCompileContext -> FileTppl -> Expr
+  sem compileFunctionsOnly (cc: TpplCompileContext) =
+  | DeclSequenceFileTppl x ->
+  
+      -- Compile type definitions
+      let types = map (compileTpplTypeDecl cc) x.decl in
+  
+      let typeNames = mapOption (lam x. x.0) types in
+      let constructors = join (map (lam x. x.1) types) in
+      let bindType = lam inexpr. lam name.
+        TmType {
+          ident = name.v,
+          params = [],
+          tyIdent = tyWithInfo name.i (tyvariant_ []),
+          inexpr = inexpr,
+          ty = tyunknown_,
+          info = name.i  
+        }
+      in
+      let bindCon = lam inexpr. lam pair.
+        TmConDef {
+          ident = pair.0 .v,
+          tyIdent = pair.1,
+          inexpr = inexpr,
+          ty = tyunknown_,
+          info = pair.0 .i
+        }
+      in
+      let types = foldl bindCon unit_ constructors in
+      let types = foldl bindType types typeNames in
+  
+      -- Compile TreePPL functions
+      let functions = TmRecLets {
+        bindings = mapOption (compileTpplFunction cc) x.decl,
+        inexpr = unit_,  -- No specific logic to execute, just a placeholder
+        ty = tyunknown_,
+        info = x.info
+      } in
+  
+      -- Combine the compiled types and functions
+      let complete = bindall_ [ types, functions ] in
+  
+      -- Remove duplicate definitions
+      let complete = eliminateDuplicateCode complete in
+  
+      complete
+    
+
+
+
   sem compile: FileTppl -> Expr
   sem compile =
   | DeclSequenceFileTppl x ->
@@ -221,6 +271,11 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       some = s,
       matrixMul = mm
     } in
+
+    let tpplLibLoc = (concat tpplSrcLoc "/lib/standard.tppl") in
+    let tpplLibContent = readFile tpplLibLoc in
+    match parseTreePPLExn tpplLibLoc tpplLibContent with tpplLibFile in
+    let tpplLibAst: Expr = compileFunctionsOnly cc tpplLibFile in
 
     -- Compile the model function
     let invocation = match findMap mInvocation x.decl with Some x
@@ -301,6 +356,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     let complete = bindall_ (join
       [ [ stdlib
         , libCompile
+        , tpplLibAst
         , types
         , functions
         , inputR
