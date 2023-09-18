@@ -1,0 +1,9 @@
+model function f() : Tensor[Real] {
+
+  let myVec = rvecCreate(5, [0., 0., 0., 0., 0.]);
+  for i in 1 to 5 {
+    assume x ~ Gaussian(0.0, 1.0);
+    matrixSet(1, i, myVec, x);
+  }
+  return myVec;
+}

@@ -83,3 +83,4 @@ let ts = tensorSetExn
 let matrixSet = lam row:Int. lam col:Int. lam tensor:Tensor[Float]. lam val:Float.
   ts tensor [subi row 1, subi col 1] val
 
+

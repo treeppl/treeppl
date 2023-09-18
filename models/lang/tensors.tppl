@@ -1,4 +1,32 @@
-model function tensors(): () {
+type MyType = MyType {
+    a: Real,
+    b: Real
+}
+
+model function tensors(): Tensor[Real] {
     let x = [1.0, 2.0, 3.0, 4.0, 5.0];
-    let y = rvecCreate(5, x);
+    let mseq = make(20, 10.0);
+    printLn(join(apply(real2string, mseq)));
+    // rename apply to sapply -- sequence apply
+    // and change order of arguments
+
+    let y = rvecCreate(5, x); // Creates a row vector
+    let z = cvecCreate(5, x); // Creates a column vector
+
+    let m = matrixCreate(2, 2, [3.14, 3.14, 2.78, 2.78]);
+    let m1 = matrixCreate(2, 10, mseq);
+    let m2 = matrixCreateId(5);
+
+    // matrixMulScalar
+    // identity matix
+    // can I use a for loop to mutate a tensor?
+
+    /* Multiply row by column vector */
+    let r = matrixMul(y, z); // 1 x 1 tensor (scalar)
+    //let r = matrixMul(z, y); // 5 x 5 tensor
+    
+    matrixSet(1, 1, r, 6.8);
+    let myScalar = matrixGet(1, 1, r);
+    printLn(real2string(myScalar));
+    return m %*% m1;
 }
