@@ -1236,7 +1236,7 @@ compileTpplToExecutable testTpplProgram testOptions;
 let testProgramExecResult = runCompiledTpplProgram testOptions testJsonInput 1 in
 
 utest testProgramExecResult.returncode with 0 in
-utest testProgramExecResult.stdout with "{\"samples\":[0.69314718056],\"weights\":[0.],\"normConst\":0.}\n" in
+utest testProgramExecResult.stdout with "{\"samples\":[0.69314718056],\"weights\":[0.0],\"normConst\":0.0}\n" in
 sysDeleteFile testOptions.output;
 
 -- test multiple print statements

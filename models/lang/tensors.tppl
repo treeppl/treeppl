@@ -1,32 +1,98 @@
-type MyType = MyType {
-    a: Real,
-    b: Real
-}
+/*
+ * File: tensors.tppl
+ * Description: This program illustrates how to work with tensors.
+ * Compilation:
+ *   tpplc models/lang/tensors.tppl
+ * Execution: ./out models/data/tensors.json 1 1
+ */
 
-model function tensors(): Tensor[Real] {
-    let x = [1.0, 2.0, 3.0, 4.0, 5.0];
-    let mseq = make(20, 10.0);
-    printLn(join(apply(real2string, mseq)));
-    // rename apply to sapply -- sequence apply
-    // and change order of arguments
 
-    let y = rvecCreate(5, x); // Creates a row vector
-    let z = cvecCreate(5, x); // Creates a column vector
+/*
+ * Model function `tensors`
+ * Parameters: 
+ *  magic: the Int[] sequences of the Melancolia 4x4 magic square
+ * Returns: a tensor
+ * Side-effect: prints things
+ *
+ * This function illustrates how to create tensors and manipulate them.
+ * Tensors can be over elementary types: Tensor[Real], Tensor[Int], Tensor[Bool],
+ * but for linear algebra (matrix algebra) we use real tensors.
+ * 
+ */
+model function tensors(magic: Int[]): Tensor[Real] {
+  /* NOTE(vsenderov, 2023-09-27): for now, tensors cannot be read through the
+    interface.  To create a tensor, you need to convert it from a sequence. */
 
-    let m = matrixCreate(2, 2, [3.14, 3.14, 2.78, 2.78]);
-    let m1 = matrixCreate(2, 10, mseq);
-    let m2 = matrixCreateId(5);
+  let magicRealSequence = sapply(magic, int2real); // convert to a real sequence
+  let magicTensor = matrixCreate(4, 4, magicRealSequence); // create the matrix
+  printMtx(magicTensor); // you can print matrices like this
 
-    // matrixMulScalar
-    // identity matix
-    // can I use a for loop to mutate a tensor?
+  /***** Functions that help us contruct sequences and matrices *****/
+  let rangeTest = 1 to 9; // [1, 2, 3, 4, 5, 6, 7, 8, 9]
+  printLn(int2string(rangeTest[7])); // 7
+  let rangeReal = sint2real(rangeTest); // you can also convert with sint2real
 
-    /* Multiply row by column vector */
-    let r = matrixMul(y, z); // 1 x 1 tensor (scalar)
-    //let r = matrixMul(z, y); // 5 x 5 tensor
-    
-    matrixSet(1, 1, r, 6.8);
-    let myScalar = matrixGet(1, 1, r);
-    printLn(real2string(myScalar));
-    return m %*% m1;
+  let thrByThr = matrixCreate(3, 3, rangeReal);
+  printMtx(thrByThr);
+
+  // You can repeat stuff to make a sequence
+  let mseq = rep(5, 10.0); // [10.0, 10.0, ... 20 times]
+  printLn(paste(sreal2string(mseq)
+               , ", " 
+               )
+         ); // convert the real sequence to a string sequence, 
+            // and then join everything together
+  let m1 = matrixCreate(1, 5, mseq);
+  printMtx(m1);
+
+  // Finally you can create an identity matric
+  let m2 = matrixCreateId(5);
+  printMtx(m2);
+
+  /***** Vectors *****/
+  // Vectors are just matrices, one of whose dimensions is one.
+  // For example, m1 above is a vector (a row vector).
+  // Let's create another two more (a column and a row vector). */
+  
+  let x = [1.0, 2.0, 3.0, 4.0, 5.0];
+  let y = rvecCreate(5, x); // Creates a row vector 1 x 5
+  printMtx(y);
+
+  let z = cvecCreate(5, x); // Creates a column vector 5 x 1
+  printMtx(z);
+
+  /**** Linear algebra *****/
+  // matrix multiplication
+  let m1xZ = matrixMul(m1, z); // (1 x 5) x (5 x 1) --> 1x1
+  printMtx(m1xZ);
+
+  // you can use special syntax for matrix multiplication
+  let m2xY = y %*% m2  ; // (1 x 5) x (5 x 5) --> 1 x 5
+  printMtx(m2xY);
+
+  /* NOTE(vsenderov, 2023-09-23): Note that the special syntax will eventually
+     be changed to regular syntax, i.e. just `*`.
+     Also note that shape error will happen unfortunately at run time. */
+
+  // Matrix potentiation -- P^n
+
+  // doesn't work
+  // let yy = vecToSeqExn(y);
+
+  let m = matrixCreate(2, 2, [54342.14, 3.14, 2.78, 2.78]);
+  
+  
+
+  // matrixMulScalar
+  // identity matix
+  // can I use a for loop to mutate a tensor?
+
+  /* Multiply row by column vector */
+  let r = matrixMul(y, z); // 1 x 1 tensor (scalar)
+  //let r = matrixMul(z, y); // 5 x 5 tensor
+  
+  matrixSet(1, 1, r, 100.32);
+  let myScalar = matrixGet(1, 1, r);
+  printLn(real2string(myScalar));
+  return m %*% m1;
 }

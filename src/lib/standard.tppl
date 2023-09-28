@@ -1,4 +1,32 @@
+// these are obsolete with dist.mc
 function sampleBernoulli(p: Real): Bool {
   assume x ~ Bernoulli(p);
   return x;
+}
+
+
+/**
+ * 
+ * Pretty prints a two-dimensional tensor
+ * 
+ * @param m matrix
+ * @return void
+ */
+function printMtx(m: Tensor[Real]): () {
+  let dimensions = dim(m);
+  printLn( join( [ "[[ "
+                 , int2string( dimensions[1] )
+                 , " x "
+                 , int2string( dimensions[2] )
+                 , " matrix ]]:" 
+                 ]
+               )
+         );
+  for i in 1 to (dimensions[1]) {
+    for j in 1 to (dimensions[2]) {
+      print(concat(real2string(matrixGet(i, j, m)), "\t"));
+    }
+    printLn("");
+  }
+  printLn("");
 }

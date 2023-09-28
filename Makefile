@@ -35,8 +35,10 @@ uninstall:
 test: src/treeppl-to-coreppl/compile.mc
 	mi compile src/treeppl-to-coreppl/compile.mc --test
 	./compile
+	mi compile src/lib/standard.mc --test
+	./standard
 	@echo 
-	rm -f compile
+	rm -f compile standard
 
 clean:
 	rm -f src/treeppl-ast.mc

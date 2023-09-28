@@ -1,0 +1,8 @@
+type Tree =
+  | Leaf {age: Real}
+  | Node {left: Tree, right: Tree, age: Real}
+
+
+model function test(tree: Tree): Real {
+  return 0.;
+}
