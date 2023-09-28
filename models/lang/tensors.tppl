@@ -24,7 +24,7 @@ model function tensors(magic: Int[]): Tensor[Real] {
     interface.  To create a tensor, you need to convert it from a sequence. */
 
   let magicRealSequence = sapply(magic, int2real); // convert to a real sequence
-  let magicTensor = matrixCreate(4, 4, magicRealSequence); // create the matrix
+  let magicTensor = mtxCreate(4, 4, magicRealSequence); // create the matrix
   printMtx(magicTensor); // you can print matrices like this
 
   /***** Functions that help us contruct sequences and matrices *****/
@@ -32,7 +32,7 @@ model function tensors(magic: Int[]): Tensor[Real] {
   printLn(int2string(rangeTest[7])); // 7
   let rangeReal = sint2real(rangeTest); // you can also convert with sint2real
 
-  let thrByThr = matrixCreate(3, 3, rangeReal);
+  let thrByThr = mtxCreate(3, 3, rangeReal);
   printMtx(thrByThr);
 
   // You can repeat stuff to make a sequence
@@ -42,11 +42,11 @@ model function tensors(magic: Int[]): Tensor[Real] {
                )
          ); // convert the real sequence to a string sequence, 
             // and then join everything together
-  let m1 = matrixCreate(1, 5, mseq);
+  let m1 = mtxCreate(1, 5, mseq);
   printMtx(m1);
 
   // Finally you can create an identity matric
-  let m2 = matrixCreateId(5);
+  let m2 = mtxCreateId(5);
   printMtx(m2);
 
   /***** Vectors *****/
@@ -63,7 +63,7 @@ model function tensors(magic: Int[]): Tensor[Real] {
 
   /**** Linear algebra *****/
   // matrix multiplication
-  let m1xZ = matrixMul(m1, z); // (1 x 5) x (5 x 1) --> 1x1
+  let m1xZ = mtxMul(m1, z); // (1 x 5) x (5 x 1) --> 1x1
   printMtx(m1xZ);
 
   // you can use special syntax for matrix multiplication
@@ -74,25 +74,36 @@ model function tensors(magic: Int[]): Tensor[Real] {
      be changed to regular syntax, i.e. just `*`.
      Also note that shape error will happen unfortunately at run time. */
 
-  // Matrix potentiation -- P^n
+  // Raising a matrix to an integer power -- P^n
+  let m = mtxCreate(2, 2, [3.14, 3.14, 2.78, 2.78]);
+  let m4 = mtxPow(m, 4);
+  printMtx(m4);
+
+  // we can also use a syntax
+  printMtx( m %^% 4 );
+
+  // Matrix addition
+  printMtx( mtxAdd(y, y) );
+  // printMtx( mtxAdd(y, z) );
+  // will generate a runtime mismatch Matrices dimensions do not match!
+  // Also mtxAdd is not implemented in Miking but in Tppl itself,
+  // so perhaps it is not very performant
+  
+  // TODO matrix scalar multiplication
+
+  // TODO matrix transpose
+   
+  // TODO matrix exponentiation
 
   // doesn't work
   // let yy = vecToSeqExn(y);
 
-  let m = matrixCreate(2, 2, [54342.14, 3.14, 2.78, 2.78]);
-  
-  
+  // Setting stuff   -- use with caution
+  mtxSet(1, 1, m2xY, 100.32);
 
-  // matrixMulScalar
-  // identity matix
-  // can I use a for loop to mutate a tensor?
-
-  /* Multiply row by column vector */
-  let r = matrixMul(y, z); // 1 x 1 tensor (scalar)
-  //let r = matrixMul(z, y); // 5 x 5 tensor
-  
-  matrixSet(1, 1, r, 100.32);
-  let myScalar = matrixGet(1, 1, r);
+  // Gettinng stuff
+  let myScalar = mtxGet(1, 1, m2xY);
   printLn(real2string(myScalar));
-  return m %*% m1;
+
+  return magicTensor ;
 }

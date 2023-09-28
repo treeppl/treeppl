@@ -8,6 +8,9 @@ include "matrix.mc"
 include "ext/matrix-ext.mc"
 include "iterator.mc"
 
+let muli = muli
+let eqi = eqi
+
 ----------------------------
 --- Printing and strings ---
 ----------------------------
@@ -79,36 +82,62 @@ let int2real = int2float -- we can also use the compiler built-in Real(x)
 
 let dim = tensorShape
 
-let matrixCreate = lam row. lam col. lam seq.
+let mtxMul = matrixMul
+
+-- we cannot change the function parametrization and keep the same name
+-- will bring confusion
+let mtxCreate = lam row. lam col. lam seq.
   matrixCreate [row, col] seq
 
-let matrixCreateId = lam dim.
+let mtxCreateId = lam dim.
   let isDiagonal = lam idx. eqi (divi idx dim) (modi idx dim) in
   let seq = map (lam idx. if isDiagonal idx then 1.0 else 0.0) (iteratorToSeq (iteratorRange 0 (subi (muli dim dim) 1))) in
   printLn (join (map float2string seq));
-  matrixCreate dim dim seq
+  mtxCreate dim dim seq
 
-utest tensorToSeqExn (tensorSliceExn (matrixCreateId 2) [0]) with [1., 0.] using (eqSeq eqf)
-utest tensorToSeqExn (tensorSliceExn (matrixCreateId 2) [1]) with [0., 1.] using (eqSeq eqf)
+utest tensorToSeqExn (tensorSliceExn (mtxCreateId 2) [0]) with [1., 0.] using (eqSeq eqf)
+utest tensorToSeqExn (tensorSliceExn (mtxCreateId 2) [1]) with [0., 1.] using (eqSeq eqf)
 
 -- matrix exponentiation
--- recursive
---   let matrixPow = lam mtx: Tensor[Float]. lam pow: Int.
---     if eqi pow 0 then
---       matrixCreateId (tensorRank mtx) -- Assuming tensorRank gives the dimension of the matrix
---     else if eqi pow 1 then
---       mtx
---     else if eqi (modi pow 2) 0 then
---       let halfPow = matrixPow mtx (divi pow 2) in
---       matrixMul halfPow halfPow
---     else
---       matrixMul mtx (matrixPow mtx (subi pow 1))
--- end
+recursive
+  let mtxPow = lam mtx: Tensor[Float]. lam pow: Int.
+    if eqi pow 0 then
+      mtxCreateId (tensorRank mtx) -- Assuming tensorRank gives the dimension of the matrix
+    else if eqi pow 1 then
+      mtx
+    else if eqi (modi pow 2) 0 then
+      let halfPow = mtxPow mtx (divi pow 2) in
+      matrixMul halfPow halfPow
+    else
+      matrixMul mtx (mtxPow mtx (subi pow 1))
+end
 
--- utest tensorToSeqExn (tensorSliceExn (matrixPow (matrixCreateId 3) 3 ) [0]) with [1., 0.4343242, 0.] using (eqSeq eqf)
+utest tensorToSeqExn (tensorSliceExn (mtxPow (mtxCreateId 3) 3 ) [0]) with [1., 0., 0.] using (eqSeq eqf)
+
+-- Define the matrix
+let __test_43FS35GF: Tensor[Float] = mtxCreate 3 3 [
+  1., 2., 3.,
+  4., 5., 6.,
+  7., 8., 9.
+]
+
+-- Test for exponent 2
+utest tensorToSeqExn (tensorSliceExn (mtxPow __test_43FS35GF 2) [0]) with [30., 36., 42.] using (eqSeq eqf)
+utest tensorToSeqExn (tensorSliceExn (mtxPow __test_43FS35GF 2) [1]) with [66., 81., 96.] using (eqSeq eqf)
+utest tensorToSeqExn (tensorSliceExn (mtxPow __test_43FS35GF 2) [2]) with [102., 126., 150.] using (eqSeq eqf)
+
+-- Test for exponent 3
+utest tensorToSeqExn (tensorSliceExn (mtxPow __test_43FS35GF 3) [0]) with [468., 576., 684.] using (eqSeq eqf)
+utest tensorToSeqExn (tensorSliceExn (mtxPow __test_43FS35GF 3) [1]) with [1062., 1305., 1548.] using (eqSeq eqf)
+utest tensorToSeqExn (tensorSliceExn (mtxPow __test_43FS35GF 3) [2]) with [1656., 2034., 2412.] using (eqSeq eqf)
+
+-- Test for exponent 4
+utest tensorToSeqExn (tensorSliceExn (mtxPow __test_43FS35GF 4) [0]) with [7560., 9288., 11016.] using (eqSeq eqf)
+utest tensorToSeqExn (tensorSliceExn (mtxPow __test_43FS35GF 4) [1]) with [17118., 21033., 24948.] using (eqSeq eqf)
+utest tensorToSeqExn (tensorSliceExn (mtxPow __test_43FS35GF 4) [2]) with [26676., 32778., 38880.] using (eqSeq eqf)
 
 -- indexing from 1, not from 0!
-let matrixGet = lam row. lam col. lam tensor.
+let mtxGet = lam row. lam col. lam tensor.
   tensorGetExn tensor [subi row 1, subi col 1]
 
 -- NOTE(vsenderov, 2023-09-15): Without setting tensorSetExn to a symbol in here,
@@ -117,7 +146,7 @@ let ts = tensorSetExn
 
 -- NOTE(vsenderov, 2023-09-15): for some reason the types need to be declared,
 -- otherwise type error.
-let matrixSet = lam row:Int. lam col:Int. lam tensor:Tensor[Float]. lam val:Float.
+let mtxSet = lam row:Int. lam col:Int. lam tensor:Tensor[Float]. lam val:Float.
   ts tensor [subi row 1, subi col 1] val
 
 

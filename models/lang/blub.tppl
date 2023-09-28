@@ -31,7 +31,7 @@ model function blub(n: Int, pi: Real, trump: Bool, coinflips: Bool[], text: Stri
   printLn(int2string(testVec[1]));
   printLn(int2string(testVec[2]));
 
-  let coinFlipStr = apply(bool2string, coinflips);
+  let coinFlipStr = sapply(coinflips, bool2string);
   printLn(concat("The length of the vector is ", int2string(length(coinflips))));
   let y = join(coinFlipStr); //cannot use concat on more than two argumnets
   printLn(y);

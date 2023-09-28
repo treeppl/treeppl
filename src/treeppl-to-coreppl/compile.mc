@@ -179,7 +179,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     logName: Name, expName: Name,
     json2string: Name,
     particles: Name, sweeps: Name, input: Name, some: Name,
-    matrixMul: Name
+    matrixMul: Name,
+    matrixPow: Name
   }
 
   sem isemi_: Expr -> Expr -> Expr
@@ -259,8 +260,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     -- Extract names and use them to build the compile context
     match findNamesOfStringsExn [
       "serializeResult", "externalLog", "externalExp", "json2string",
-      "particles", "sweeps", "input", "Some", "matrixMul"
-    ] libCompile with [sr, el, ee, j2s, p, sw, i, s, mm] in
+      "particles", "sweeps", "input", "Some", "matrixMul", "mtxPow"
+    ] libCompile with [sr, el, ee, j2s, p, sw, i, s, mm, mp] in
     let cc: TpplCompileContext = {
       serializeResult = sr,
       logName = el, expName = ee,
@@ -269,7 +270,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       sweeps = sw,
       input = i,
       some = s,
-      matrixMul = mm
+      matrixMul = mm,
+      matrixPow = mp
     } in
 
     let tpplLibLoc = (concat tpplSrcLoc "/lib/standard.tppl") in
@@ -925,6 +927,19 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       ty = tyunknown_
     }
 
+  | MatrixPowerExprTppl x ->
+    TmApp {
+        info = x.info,
+        lhs = TmApp {
+          info = x.info,
+          lhs = nvar_ context.matrixPow,
+          rhs = compileExprTppl context x.left,
+          ty = tyunknown_
+        },
+        rhs = compileExprTppl context x.right,
+        ty = tyunknown_
+      }
+
 
   | DivExprTppl x ->
     TmApp {
@@ -1293,6 +1308,16 @@ utest testProgramExecResult.returncode with 0 in
 let numberLines = length (strSplit "\n" testProgramExecResult.stdout) in
 utest numberLines with 4 in -- NOTE(vsenderov, 2023-09-11): for some reason it needs to be one more
 sysDeleteFile testOptions.output;
+
+-- Test syntax for matrix multiplication
+let testTpplProgram = "models/lang/matrix-mul.tppl" in
+let testJsonInput = "models/data/empty.json" in
+compileTpplToExecutable testTpplProgram testOptions;
+let testProgramExecResult = runCompiledTpplProgram testOptions testJsonInput 1 in
+
+utest testProgramExecResult.returncode with 0 in
+utest testProgramExecResult.stdout with "{\"samples\":[{\"__tensor__\":[1.0,2.0,3.0,4.0,5.0],\"__tensorShape__\":[1,5]}],\"weights\":[0.0],\"normConst\":0.0}\n" in
+
 
 -- TODO(2023-09-08, vsenderov): need to test probailistic stuff as well such as coin.tppl
 

@@ -151,7 +151,7 @@ prod left Less: ExprTppl = left:ExprTppl "<" right:ExprTppl
 prod left Greater: ExprTppl = left:ExprTppl ">" right:ExprTppl
 prod left LessEq: ExprTppl = left:ExprTppl "<=" right:ExprTppl
 prod left GreaterEq: ExprTppl = left:ExprTppl ">=" right:ExprTppl
-prod left Equal: ExprTppl = left:ExprTppl "==" right:ExprTppl
+prod left Equal: ExprTppl = left:ExprTppl "==" right:ExprTppl -- currently implemented as floats which doesn't make much sense
 prod left Unequal: ExprTppl = left:ExprTppl "!=" right:ExprTppl
 -- Boolean operators
 infix left And: ExprTppl = "&&"
@@ -165,6 +165,7 @@ prod ConvIntToReal: ExprTppl = "Real" "(" val:ExprTppl ")"
 -- Tensor/matrix expressions
 -- matrix multiplication
 prod left MatrixMul: ExprTppl = left:ExprTppl "%*%" right:ExprTppl
+prod left MatrixPower: ExprTppl = left:ExprTppl "%^%" right:ExprTppl 
 
 -- Function call as expression
 prod FunCall: ExprTppl = f:ExprTppl "(" (args:ExprTppl ("," args:ExprTppl)*)? ")"
