@@ -167,6 +167,9 @@ prod ConvIntToReal: ExprTppl = "Real" "(" val:ExprTppl ")"
 -- Tensor/matrix expressions
 -- matrix multiplication
 prod left MatrixMul: ExprTppl = left:ExprTppl "%*%" right:ExprTppl
+-- NOTE(vsenderov, 2023-09-29): We cannot have good things yet as add needs
+-- to get implemented in Miking.
+-- prod left MatrixAdd: ExprTppl = left:ExprTppl "%+%" right:ExprTppl
 prod left MatrixPower: ExprTppl = left:ExprTppl ".^" right:ExprTppl 
   -- because the right has to be an integer not another matrix
 
