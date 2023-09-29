@@ -38,6 +38,10 @@ function printMtx(m: Tensor[Real]): () {
  * 
  * TODO(vsenderov, 2023-09-28): Is that the best way to implement the
  * addition function?
+ * NOTE(vsenderov, 2023-09-29): I've become even more convinced that this is 
+ * a hack.  Creating a syntax for this becomes a very hard proposition as
+ * the compiler needs to compile this function first, and to compile it, it
+ * needs to have it already as we need to be able to interpret all syntaxes...
  * 
  * @param mtx1 First matrix
  * @param mtx2 Second matrix
@@ -71,3 +75,6 @@ function mtxAdd(mtx1: Tensor[Real], mtx2: Tensor[Real]): Tensor[Real] {
 
   return result;
 }
+
+
+// NOTE(vsenderov, 23-09-29): Probably we can write tests as a model function
