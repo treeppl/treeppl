@@ -1322,13 +1322,21 @@ utest numberLines with 4 in -- NOTE(vsenderov, 2023-09-11): for some reason it n
 sysDeleteFile testOptions.output;
 
 -- Test syntax for matrix multiplication
-let testTpplProgram = "models/lang/matrix-mul.tppl" in
+let testTpplProgram = "models/lang/matrix-tests.tppl" in
 let testJsonInput = "models/data/empty.json" in
 compileTpplToExecutable testTpplProgram testOptions;
 let testProgramExecResult = runCompiledTpplProgram testOptions testJsonInput 1 in
 
 utest testProgramExecResult.returncode with 0 in
-utest testProgramExecResult.stdout with "{\"samples\":[{\"__tensor__\":[1.0,2.0,3.0,4.0,5.0],\"__tensorShape__\":[1,5]}],\"weights\":[0.0],\"normConst\":0.0}\n" in
+utest testProgramExecResult.stderr with
+"[[ 1 x 5 matrix ]]:
+1.\t2.\t3.\t4.\t5.\t
+
+[[ 2 x 2 matrix ]]:
+81.\t0.\t
+-580.\t2401.\t
+
+" in
 
 
 -- TODO(2023-09-08, vsenderov): need to test probailistic stuff as well such as coin.tppl

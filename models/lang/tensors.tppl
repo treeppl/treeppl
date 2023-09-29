@@ -46,6 +46,7 @@ model function tensors(magic: Int[]): Tensor[Real] {
   printMtx(m1);
 
   // Finally you can create an identity matric
+  printLn("ID MATRIX");
   let m2 = mtxCreateId(5);
   printMtx(m2);
 
@@ -80,7 +81,7 @@ model function tensors(magic: Int[]): Tensor[Real] {
   printMtx(m4);
 
   // we can also use a syntax
-  printMtx( m %^% 4 );
+  printMtx( m .^ 4 );
 
   // Matrix addition
   printMtx( mtxAdd(y, y) );

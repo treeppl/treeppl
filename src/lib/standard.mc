@@ -92,7 +92,6 @@ let mtxCreate = lam row. lam col. lam seq.
 let mtxCreateId = lam dim.
   let isDiagonal = lam idx. eqi (divi idx dim) (modi idx dim) in
   let seq = map (lam idx. if isDiagonal idx then 1.0 else 0.0) (iteratorToSeq (iteratorRange 0 (subi (muli dim dim) 1))) in
-  printLn (join (map float2string seq));
   mtxCreate dim dim seq
 
 utest tensorToSeqExn (tensorSliceExn (mtxCreateId 2) [0]) with [1., 0.] using (eqSeq eqf)
