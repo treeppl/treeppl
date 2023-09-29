@@ -897,6 +897,18 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       ty = tyunknown_
     }
 
+  | NegExprTppl x ->
+    TmApp {
+      info = x.info,
+      lhs = TmConst {
+        ty = tyunknown_,
+        info = x.info,
+        val = CNegf ()  -- assuming CNegf constant for negation 
+      },
+      rhs = compileExprTppl context x.right,
+      ty = tyunknown_
+    }
+
   | MulExprTppl x ->
     TmApp {
       info = x.info,

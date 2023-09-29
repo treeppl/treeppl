@@ -140,6 +140,8 @@ prod left Add: ExprTppl = left:ExprTppl "+" right:ExprTppl
 prod left Mul: ExprTppl = left:ExprTppl "*" right:ExprTppl
 -- inflix Subtraction: Expr = "-"
 prod left Sub: ExprTppl = left:ExprTppl "-" right:ExprTppl
+--prefix negative Numbers
+prod Neg: ExprTppl = "-" right:ExprTppl
 -- infix Division: Expr = "/"
 prod left Div: ExprTppl = left:ExprTppl "/" right:ExprTppl
 -- is
@@ -165,7 +167,8 @@ prod ConvIntToReal: ExprTppl = "Real" "(" val:ExprTppl ")"
 -- Tensor/matrix expressions
 -- matrix multiplication
 prod left MatrixMul: ExprTppl = left:ExprTppl "%*%" right:ExprTppl
-prod left MatrixPower: ExprTppl = left:ExprTppl "%^%" right:ExprTppl 
+prod left MatrixPower: ExprTppl = left:ExprTppl ".^" right:ExprTppl 
+  -- because the right has to be an integer not another matrix
 
 -- Function call as expression
 prod FunCall: ExprTppl = f:ExprTppl "(" (args:ExprTppl ("," args:ExprTppl)*)? ")"
