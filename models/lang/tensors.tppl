@@ -140,9 +140,9 @@ model function tensors(magic: Int[]): TensorRecord {
   return TensorRecord {
     magic = magicTensor,
     mul = m2xY,
-    pow = magicTensor,
-    sclrMul = magicTensor,
-    transpose = magicTensor,
-    exponential = magicTensor
+    pow = m4,
+    sclrMul = negMagicTensor,
+    transpose = transpMagicTensor,
+    exponential = expMagic
   };
 }
