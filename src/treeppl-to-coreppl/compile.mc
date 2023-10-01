@@ -92,7 +92,7 @@ lang PullNameFromConstructor = PullName + FunTypeAst + AllTypeAst
   | TyAll x -> pullName x.ty
 end
 
-lang LowerProjMatch = ProjMatchAst + MatchAst + DataPat + RecordPat + RecordTypeAst + FunTypeAst + Eq + Unify + Generalize
+lang LowerProjMatch = ProjMatchAst + MatchAst + DataPat + RecordPat + RecordTypeAst + FunTypeAst + Eq + Unify + Generalize + TypeCheck
   sem lowerProj : Expr -> Expr
   sem lowerProj =
   | t -> smap_Expr_Expr lowerProj t
