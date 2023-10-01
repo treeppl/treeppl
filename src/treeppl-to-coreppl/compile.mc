@@ -180,7 +180,9 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     json2string: Name,
     particles: Name, sweeps: Name, input: Name, some: Name,
     matrixMul: Name,
-    matrixPow: Name
+    matrixPow: Name,
+    matrixAdd: Name,
+    matrixMulFloat: Name
   }
 
   sem isemi_: Expr -> Expr -> Expr
@@ -260,8 +262,9 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     -- Extract names and use them to build the compile context
     match findNamesOfStringsExn [
       "serializeResult", "externalLog", "externalExp", "json2string",
-      "particles", "sweeps", "input", "Some", "matrixMul", "mtxPow"
-    ] libCompile with [sr, el, ee, j2s, p, sw, i, s, mm, mp] in
+      "particles", "sweeps", "input", "Some", "matrixMul", "mtxPow", "matrixElemAdd",
+      "matrixMulFloat"
+    ] libCompile with [sr, el, ee, j2s, p, sw, i, s, mm, mp, ma, mmf] in
     let cc: TpplCompileContext = {
       serializeResult = sr,
       logName = el, expName = ee,
@@ -271,7 +274,9 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       input = i,
       some = s,
       matrixMul = mm,
-      matrixPow = mp
+      matrixPow = mp,
+      matrixAdd = ma,
+      matrixMulFloat = mmf
     } in
 
     let tpplLibLoc = (concat tpplSrcLoc "/lib/standard.tppl") in
@@ -939,6 +944,19 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       ty = tyunknown_
     }
 
+  | MatrixAddExprTppl x ->
+    TmApp {
+      info = x.info,
+      lhs = TmApp {
+        info = x.info,
+        lhs = nvar_ context.matrixAdd,
+        rhs = compileExprTppl context x.left,
+        ty = tyunknown_
+      },
+      rhs = compileExprTppl context x.right,
+      ty = tyunknown_
+    }
+
   | MatrixPowerExprTppl x ->
     TmApp {
         info = x.info,
@@ -952,6 +970,31 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
         ty = tyunknown_
       }
 
+  | MatrixLeftScalarMulExprTppl x ->
+    TmApp {
+        info = x.info,
+        lhs = TmApp {
+          info = x.info,
+          lhs = nvar_ context.matrixMulFloat,
+          rhs = compileExprTppl context x.left,
+          ty = tyunknown_
+        },
+        rhs = compileExprTppl context x.right,
+        ty = tyunknown_
+      }
+
+  | MatrixRightScalarMulExprTppl x ->
+    TmApp {
+        info = x.info,
+        lhs = TmApp {
+          info = x.info,
+          lhs = nvar_ context.matrixMulFloat,
+          rhs = compileExprTppl context x.right, -- the scalar is on the right
+          ty = tyunknown_
+        },
+        rhs = compileExprTppl context x.left,
+        ty = tyunknown_
+      }
 
   | DivExprTppl x ->
     TmApp {

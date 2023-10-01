@@ -32,8 +32,12 @@ function printMtx(m: Tensor[Real]): () {
 }
 
 
+// NOTE(vsenderov, 23-09-29): Probably we can write tests as a model function
+
+
 /**
- * 
+ * NOTE(vsenderov, 23-10-01): Commented out because we can't use mtxSet 
+   as it leads to 0-CFA to fail
  * Adds two matrices element by element.
  * 
  * TODO(vsenderov, 2023-09-28): Is that the best way to implement the
@@ -47,34 +51,31 @@ function printMtx(m: Tensor[Real]): () {
  * @param mtx2 Second matrix
  * @return Resultant matrix after addition
  */
-function mtxAdd(mtx1: Tensor[Real], mtx2: Tensor[Real]): Tensor[Real] {
-  let dimensions1 = dim(mtx1);
-  let dimensions2 = dim(mtx2);
+// function mtxAdd(mtx1: Tensor[Real], mtx2: Tensor[Real]): Tensor[Real] {
+//   let dimensions1 = dim(mtx1);
+//   let dimensions2 = dim(mtx2);
   
-  // Check if dimensions of both matrices are the same
-  if !eqi(dimensions1[1], dimensions2[1]) && !eqi(dimensions1[2], dimensions2[2]) {
-    printLn("ERROR: Linear algebra problem -- matrix dimensions do not match!");
-    printMtx(mtx1); 
-    printMtx(mtx2);
-    weight(0.); /* TODO(vsenderov, 2023-09-28): investigate if we need to do more
-                   to stop the execution */
-    return mtxCreateId(1);
-  }
+//   // Check if dimensions of both matrices are the same
+//   if !eqi(dimensions1[1], dimensions2[1]) && !eqi(dimensions1[2], dimensions2[2]) {
+//     printLn("ERROR: Linear algebra problem -- matrix dimensions do not match!");
+//     printMtx(mtx1); 
+//     printMtx(mtx2);
+//     weight(0.); /* TODO(vsenderov, 2023-09-28): investigate if we need to do more
+//                    to stop the execution */
+//     return mtxCreateId(1);
+//   }
 
-  // Create a result matrix initialized with zeros
-  let result = mtxCreate(dimensions1[1], dimensions1[2], rep(muli(dimensions1[1], dimensions1[2]) , 0.0));
+//   // Create a result matrix initialized with zeros
+//   let result = mtxCreate(dimensions1[1], dimensions1[2], rep(muli(dimensions1[1], dimensions1[2]) , 0.0));
 
-  for i in 1 to (dimensions1[1]) {
-    for j in 1 to (dimensions1[2]) {
-      let val1 = mtxGet(i, j, mtx1);
-      let val2 = mtxGet(i, j, mtx2);
-      let sum = val1 + val2;
-      mtxSet(i, j, result, sum);
-    }
-  }
+//   for i in 1 to (dimensions1[1]) {
+//     for j in 1 to (dimensions1[2]) {
+//       let val1 = mtxGet(i, j, mtx1);
+//       let val2 = mtxGet(i, j, mtx2);
+//       let sum = val1 + val2;
+//       mtxSet(i, j, result, sum);
+//     }
+//   }
 
-  return result;
-}
-
-
-// NOTE(vsenderov, 23-09-29): Probably we can write tests as a model function
+//   return result;
+// }

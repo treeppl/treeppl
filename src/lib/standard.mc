@@ -84,6 +84,14 @@ let dim = tensorShape
 
 let mtxMul = matrixMul
 
+let mtxSclrMul = matrixMulFloat
+
+let mtxAdd = matrixElemAdd
+
+let mtxTrans = matrixTranspose
+
+let mtxExp = matrixExponential
+
 -- we cannot change the function parametrization and keep the same name
 -- will bring confusion
 let mtxCreate = lam row. lam col. lam seq.
@@ -139,13 +147,19 @@ utest tensorToSeqExn (tensorSliceExn (mtxPow __test_43FS35GF 4) [2]) with [26676
 let mtxGet = lam row. lam col. lam tensor.
   tensorGetExn tensor [subi row 1, subi col 1]
 
--- NOTE(vsenderov, 2023-09-15): Without setting tensorSetExn to a symbol in here,
--- the CFA is not going to work for matrixSet.
-let ts = tensorSetExn
+let mtxSclrMul = lam scalar. lam tensor.
+  externalMatrixMulFloat scalar tensor
 
--- NOTE(vsenderov, 2023-09-15): for some reason the types need to be declared,
--- otherwise type error.
-let mtxSet = lam row:Int. lam col:Int. lam tensor:Tensor[Float]. lam val:Float.
-  ts tensor [subi row 1, subi col 1] val
+
+-- NOTE(vsenderov, 23-10-01): Commenting two functions as they should not be
+-- used under 0-CFA
+-- NOTE(vsenderov, 2023-09-15): Without setting tensorSetExn to a symbol in here,
+-- -- the CFA is not going to work for matrixSet.
+-- let ts = tensorSetExn
+
+-- -- NOTE(vsenderov, 2023-09-15): for some reason the types need to be declared,
+-- -- otherwise type error.
+-- let mtxSet = lam row:Int. lam col:Int. lam tensor:Tensor[Float]. lam val:Float.
+--   ts tensor [subi row 1, subi col 1] val
 
 
