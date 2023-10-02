@@ -7,6 +7,7 @@ include "mexpr/ast.mc"
 include "matrix.mc"
 include "ext/matrix-ext.mc"
 include "iterator.mc"
+include "ext/dist-ext.mc"
 
 let muli = muli
 let eqi = eqi
@@ -149,6 +150,10 @@ let mtxGet = lam row. lam col. lam tensor.
 
 let mtxSclrMul = lam scalar. lam tensor.
   externalMatrixMulFloat scalar tensor
+
+let iid = lam f. lam p. lam n.
+  let params = make n p in
+  map f params
 
 
 -- NOTE(vsenderov, 23-10-01): Commenting two functions as they should not be

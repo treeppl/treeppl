@@ -1,7 +1,217 @@
-// these are obsolete with dist.mc
-function sampleBernoulli(p: Real): Bool {
-  assume x ~ Bernoulli(p);
+/* -----------------------------------------------------------
+   Types, samplers, and scorers for the built-in distributions
+   ----------------------------------------------------------- */
+
+// Uniform
+type UniformParam = UniformParam {
+  a: Real,
+  b: Real
+}
+
+// wrapper for iid
+function uniform(param: UniformParam): Real {
+  assume x ~ Uniform(param.a, param.b);
   return x;
+}
+
+// log-score
+function uniformLogScore(x:Real, param: UniformParam): Real {
+  return uniformContinuousLogPdf(param.a, param.b, x);
+}
+
+function uniformScore(x:Real, param: UniformParam): Real {
+  return uniformContinuousPdf(param.a, param.b, x);
+}
+
+
+// Bernoulli -- discrete Bool
+type BernoulliParam = BernoulliParam {
+  prob: Real
+}
+
+function bernoulli(param: BernoulliParam): Bool {
+  assume x ~ Bernoulli(param.prob);
+  return x;
+}
+
+function bernoulliLogScore(x: Bool, param: BernoulliParam): Real {
+  return bernoulliLogPmf(param.prob, x);
+}
+
+function bernoulliScore(x: Bool, param: BernoulliParam): Real {
+  return bernoulliPmf(param.prob, x);
+}
+
+
+// Exponential
+type ExponentialParam = ExponentialParam {
+  rate: Real
+}
+
+function exponential(param: ExponentialParam): Real {
+  assume x ~ Exponential(param.rate);
+  return x;
+}
+
+function exponentialLogScore(x: Real, param: ExponentialParam) {
+  return exponentialLogPdf(param.rate, x);
+}
+
+function exponentialScore(x: Real, param: ExponentialParam) {
+  return exponentialPdf(param.rate, x);
+}
+
+// Poisson
+type PoissonParam = PoissonParam {
+  rate: Real
+}
+
+function poisson(param: PoissonParam): Int {
+  assume x ~ Poisson(param.rate);
+  return x;
+}
+
+function poissonLogScore(x: Int, param: PoissonParam) {
+  return poissonLogPmf(param.rate, x);
+}
+
+function poissonScore(x: Int, param: PoissonParam) {
+  return poissonPmf(param.rate, x);
+}
+
+// Beta 
+type BetaParam = BetaParam {
+  a: Real,
+  b: Real
+}
+
+function beta(param: BetaParam): Real {
+  assume x ~ Beta(param.a, param.b);
+  return x;
+}
+
+function betaLogScore(x: Real, param: BetaParam) {
+  return betaLogPdf(x, param.a, param.b);
+}
+
+function betaScore(x: Real, param: BetaParam) {
+  return betaPdf(x, param.a, param.b);
+}
+
+// Gamma 
+type GammaParam = GammaParam {
+  shape: Real,
+  scale: Real
+}
+
+function gamma(param: GammaParam): Real {
+  assume x ~ Gamma(param.shape, param.scale);
+  return x;
+}
+
+function gammaLogScore(x: Real, param: GammaParam) {
+  return gammaLogPdf(param.shape, param.scale, x);
+}
+
+function gammaScore(x: Real, param: GammaParam) {
+  return gammaPdf(param.shape, param.scale, x);
+}
+
+// Categorical
+type CategoricalParam = CategoricalParam {
+  probs: Real[]
+}
+
+function categorical(param: CategoricalParam) {
+  assume x ~ Categorical(param.probs);
+  return x;
+}
+
+function categoricalLogScore(x: Int, param: CategoricalParam) {
+  return categoricalLogPmf(param.probs, x);
+}
+
+function categoricalScore(x: Int, param: CategoricalParam) {
+  return categoricalPmf(param.probs, x);
+}
+
+// Multinomial 
+type MultinomialParam = MultinomialParam {
+  n: Int,
+  probs: Real[]
+}
+
+function multinomial(param: MultinomialParam) {
+  assume x ~ Multinomial(param.n, param.probs);
+  return x;
+}
+
+function multinomialLogScore(x: Int[], param: MultinomialParam) {
+  return multinomialLogPmf(param.probs, x);
+}
+
+function multinomialScore(x: Int[], param: MultinomialParam) {
+  return multinomialPmf(param.probs, x);
+}
+
+// Dirichlet
+type DirichletParam = DirichletParam {
+  alphas: Real[]
+}
+
+function dirichlet(param: DirichletParam) {
+  assume x ~ Dirichlet(param.alphas);
+  return x;
+}
+
+function dirichletLogScore(x: Real[], param: DirichletParam) {
+  return dirichletLogPdf(param.alphas, x);
+}
+
+function dirichletScore(x: Real[], param: DirichletParam) {
+  return dirichletPdf(param.alphas, x);
+}
+
+// Empiricial
+// TODO(vsenderov, 23-10-02): Not sure how to do empricial, it seems that
+// empirical needs tuples support to work
+
+// Guassian
+type GaussianParam = GaussianParam {
+  mean: Real,
+  dev: Real
+}
+
+function gaussian(param: GaussianParam) {
+  assume x ~ Gaussian(param.mean, param.dev);
+  return x;
+}
+
+function gaussianLogScore(x: Real, param: GaussianParam) {
+  return gaussianLogPdf(param.mean, param.dev, x);
+}
+
+function gaussianScore(x: Real, param: GaussianParam) {
+  return gaussianPdf(param.mean, param.dev, x);
+}
+
+// Binomial
+type BinomialParam = BinomialParam {
+  n: Int,
+  prob: Real
+}
+
+function binomial(param: BinomialParam) {
+  assume x ~ Binomial(param.n, param.prob);
+  return x;
+}
+
+function binomialLogScore(x: Int, param: BinomialParam) {
+  return binomialLogPmf(param.prob, param.n, x);
+}
+
+function binomialScore(x: Int, param: BinomialParam) {
+  return binomialPmf(param.prob, param.n, x);
 }
 
 

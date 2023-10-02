@@ -758,7 +758,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     TmDist {
       dist = DGaussian {
         mu = compileExprTppl context d.mean,
-        sigma = compileExprTppl context d.stdDev
+        sigma = compileExprTppl context d.dev
       },
       ty = tyunknown_,
       info = d.info
@@ -769,7 +769,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       dist = DPoisson {
         lambda = compileExprTppl context d.rate
       },
-      ty = tyunknown_, -- TODO? (vsenderov, 2023-07-21) perhaps change to tyint_
+      ty = tyunknown_, 
       info = d.info
     }
 
@@ -778,7 +778,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       dist = DExponential {
         rate = compileExprTppl context d.rate
       },
-      ty = tyunknown_, -- TODO? (vsenderov, 2023-07-21) perhaps change to tyfloat_
+      ty = tyunknown_, 
       info = d.info
     }
 
@@ -788,9 +788,18 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
         k = compileExprTppl context d.shape,
         theta = compileExprTppl context d.scale
       },
-      ty = tyunknown_, -- TODO? (vsenderov, 2023-07-21) perhaps change to tyfloat_
+      ty = tyunknown_, 
       info = d.info
     }
+
+  | CategoricalExprTppl d ->
+    TmDist {
+      dist = DCategorical {
+        p = compileExprTppl context d.probs
+      },
+      ty = tyunknown_,
+      info = d.info
+  }
 
   | BetaExprTppl d ->
     TmDist {
@@ -798,9 +807,57 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
         a = compileExprTppl context d.a,
         b = compileExprTppl context d.b
       },
-      ty = tyfloat_,
+      ty = tyunknown_,
       info = d.info
     }
+
+  | UniformExprTppl d ->
+    TmDist {
+      dist = DUniform {
+        a = compileExprTppl context d.a,
+        b = compileExprTppl context d.b
+      },
+      ty = tyunknown_, 
+      info = d.info
+  }
+
+  | MultinomialExprTppl d ->
+    TmDist {
+      dist = DMultinomial {
+        n = compileExprTppl context d.n,
+        p = compileExprTppl context d.probs
+      },
+      ty = tyunknown_,
+      info = d.info
+  }
+
+  | EmpiricalExprTppl d ->
+    TmDist {
+      dist = DEmpirical {
+        samples = compileExprTppl context d.samples
+      },
+      ty = tyunknown_,
+      info = d.info
+  }
+
+  | DirichletExprTppl d ->
+    TmDist {
+      dist = DDirichlet {
+        a = compileExprTppl context d.alphas
+      },
+      ty = tyunknown_,
+      info = d.info
+  }
+
+  | BinomialExprTppl d ->
+    TmDist {
+      dist = DBinomial {
+        n = compileExprTppl context d.n,
+        p = compileExprTppl context d.prob
+      },
+      ty = tyunknown_, 
+      info = d.info
+  }
 
   | VariableExprTppl v ->
     TmVar {
