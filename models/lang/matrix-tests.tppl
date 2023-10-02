@@ -10,13 +10,13 @@ model function tensors(): () {
   let m2 = mtxCreateId(5);
   let x = [1.0, 2.0, 3.0, 4.0, 5.0];
   let y = rvecCreate(5, x); // Creates a row vector 1 x 5
-  let m2xY = y %*% m2; // (1 x 5) x (5 x 5) --> 1 x 5
+  let m2xY = y *@ m2; // (1 x 5) x (5 x 5) --> 1 x 5
   printMtx(m2xY); /* we cannot return more than one tensor, so need to test by
                                                                     //printing */
 
   // Raising a matrix to an integer power -- P^n
   let m = mtxCreate(2, 2, [3.0, 0.0, -1.0, 7.0]);
-  let m4 = m .^ 4;
+  let m4 = m ^$ 4;
   printMtx(m4);
 
   // Adding two matrices

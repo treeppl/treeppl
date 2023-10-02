@@ -1,3 +1,9 @@
+
+type Tree =
+  | Leaf {age: Real}
+  | Node {left: Tree, right: Tree, age: Real}
+
+
 /* -----------------------------------------------------------
    Types, samplers, and scorers for the built-in distributions
    ----------------------------------------------------------- */
