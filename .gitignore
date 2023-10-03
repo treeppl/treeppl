@@ -5,3 +5,5 @@ tool
 build/
 out
 out.mc
+my_tests/
+
