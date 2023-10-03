@@ -13,24 +13,21 @@ type Tree =
 
 /*---------------- Model-specific types -----------------------------*/
 
-// TODO: type definition in CorePPL
-//type ModelParams = 
-//  ModelParams{q: Tensor[Real], d_matrix: Tensor[Real], d_average: Real, beta: Real}
+type ModelParams = 
+  ModelParams{q: Tensor[Real], d_matrix: Tensor[Real], d_average: Real, beta: Real}
 
 // Tree decorated with postorder messages from belief propagation.
 // Postorder = backwards in time
 type MsgTree =
- | MsgLeaf{age: Real, label: String, out_msg: Real[][3]}
+ | MsgLeaf{age: Real, label: String, out_msg: Tensor[Real]}
  | MsgNode{age: Real, label: String, left: MsgTree, right: MsgTree,
-           left_in_msg: Real[][3], right_in_msg: Real[][3], out_msg: Real[][3]}
-
-// TODO?: Real[][3] - generalise to any number of states? 
+           left_in_msg: Tensor[Real], right_in_msg: Tensor[Real], out_msg: Tensor[Real]}
 
 // Tree decorated with final probabilities from belief propagation,
 // tuned so that they are useful for proposals.
 type ProbsTree =
- | ProbsLeaf{age: Real, label: String, probs: Real[][3]}
- | ProbsNode{age: Real, label: String, probs: Real[][3],
+ | ProbsLeaf{age: Real, label: String, probs: Tensor[Real]}
+ | ProbsNode{age: Real, label: String, probs: Tensor[Real],
              left: ProbsTree, right: ProbsTree}
 
 // Event type used to store information about one host-repertoire change
@@ -72,22 +69,20 @@ type HistoryTree =
  */
 
 
-model function mymodel(parasite_tree: Tree, ntips: Int, nhosts: Int, interactions: String[],
+model function mymodel(parasite_tree: Tree, ntips: Int, nhosts: Int, interactions: Int[],
   host_distances: Real[], d_average: Real, tune: Real): HistoryTree {
 
   // Set priors for model parameters
-  assume lambda ~ Dirichlet(1.,1.,1.,1.); //TODO: Implement Dirichlet
-  assume mu ~ Exponential(10.);
-  assume beta ~ Exponential(1.);
+  assume lambda ~ Dirichlet(1.0,1.0,1.0,1.0); 
+  assume mu ~ Exponential(10.0);
+  assume beta ~ Exponential(1.0);
 
   //printLn(real2string(lambda[1]));
 
-  // Set transition rate matrix for three-state independence model. We assume
-  // that we can multiply a matrix by a scalar.
-  // DONE: Check that we can name variables with capital letters: we can't
+  // Set transition rate matrix for three-state independence model. 
   // If we extend to any number of states, [3,3] -> [nstates,nstates] and 
   // matrix constructions has to be automated
-  let r = matrixCreate([3,3],
+  let r = mtxCreate(3,3,
     [0.-lambda[1],                lambda[1],          0.0,
         lambda[2], 0.-(lambda[2]+lambda[3]),    lambda[3],
               0.0,                lambda[4], 0.-lambda[4]]
@@ -95,34 +90,42 @@ model function mymodel(parasite_tree: Tree, ntips: Int, nhosts: Int, interaction
   let q = matrixMulFloat(mu,r);
 
   //printLn(real2string(0.-lambda[1]));
+  
+  let d_matrix = mtxCreate(nhosts, nhosts, host_distances);
 
   // Package model parameters into an object for convenient calling
   // Note that during preprocessing we need to calculate d_average and
   // make sure that host order in interactions and host distances
   // match, regardless of whether the input order is the same.
+  let mp = ModelParams(q=q, d_matrix=d_matrix, d_average=d_average, beta=beta);
 
-  let d = matrixCreate([nhosts,nhosts], host_distances);
-  let mp = ModelParams(q=q, d_matrix=d, d_average=d_average, beta=beta); //TODO: Check if ModelParams exists
+  // Calculate stationary probabilities from lambda values
+  let pi_1 = 1.0 / (1.0 + (lambda[2]/lambda[1]) + (lambda[3]/lambda[4]));
+  let pi_0 = pi_1 * (lambda[2]/lambda[1]);
+  let pi_2 = 1.0 - pi_0 - pi_1;
+  let stationary_probs = [pi_0, pi_1, pi_2];
   
   // Derive params for ancestral repertoire proposals from independence model
-  let i = matrixCreate([ntips,nhosts], interactions); // TODO: extend matrixCreate to take Char as well
-  // TODO: add labels to rows and columns in i
-  let probs_tree = get_proposal_params(parasite_tree, i, q, tune); // TODO: get_proposal_params returns the tree, pis, q and tune
+  let interactions_reals = sint2real(interactions)
+  let i = mtxCreate(ntips, nhosts, interactions_reals);
+  let probs_tree = get_proposal_params(parasite_tree, i, q, tune);
 
   // Propose a repertoire for the root of the parasite tree
   // based on the state probabilities from the belief propagation
-
-  //rep: Int[]
-  //log_rep_debt = 0.0
+  let root_rep = ;
+  let log_root_rep_debt = ;
+ 
+  // Fredrik's sudo code:
+  //root_rep: Int[]
+  //log_root_rep_debt = 0.0
   //for i in 1 to n_hosts {
-  //    assume rep[i] ~ Categorical (probs_tree.probs[i], [0,1,2]) //TODO: syntax check. Does Categorical exist?
-  //    log_rep_debt += Categorical(probs_tree.probs[i], [0,1,2]).score(rep[i]) //QUESTION: I don't understand .score(rep[i])
+  //    assume root_rep[i] ~ Categorical (probs_tree.probs[i], [0,1,2])
+  //    log_root_rep_debt += Categorical(probs_tree.probs[i], [0,1,2]).score(root_rep[i])
   //}
   //
-  // Make sure we have a possible root repertoire, kill immediately otherwise
-  //observe (2 %in% rep)  // R syntax
-
-  let repertoire = apply(); // map/apply funtion?
+  //Make sure we have a possible root repertoire (i.e. there is at least one host in state 2)
+  //kill immediately otherwise
+  //observe (2 %in% root_rep)  // R syntax
 
   // From Daniel: logObserve(distribution,observed value) instead of log_rep_debt +=
   
