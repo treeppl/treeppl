@@ -80,7 +80,14 @@ Real[]
 Int[10]
 -/
 prod TypeUsage: TypeTppl = name:UName
-prod TypeSequence: TypeTppl = ty:TypeTppl "[" size:Integer? "]"
+prod TypeSequence: TypeTppl = ty:TypeTppl "[" "]"
+
+-- NOTE(vsenderov, 2023-09-15) all other syntaxes are inadmissible by current parser
+prod Tensor: TypeTppl = "Tensor" "[" ty:TypeTppl "]" 
+
+--- Real[] -- sequence
+--- Real[ _ ] -- one dim tensor
+--prod Tensor: TypeTppl = ty:TypeTppl "("  ")" 
 
 prod AtomicReal: TypeTppl = "Real"
 prod AtomicBool: TypeTppl = "Bool"
@@ -133,6 +140,8 @@ prod left Add: ExprTppl = left:ExprTppl "+" right:ExprTppl
 prod left Mul: ExprTppl = left:ExprTppl "*" right:ExprTppl
 -- inflix Subtraction: Expr = "-"
 prod left Sub: ExprTppl = left:ExprTppl "-" right:ExprTppl
+--prefix negative Numbers
+prod Neg: ExprTppl = "-" right:ExprTppl
 -- infix Division: Expr = "/"
 prod left Div: ExprTppl = left:ExprTppl "/" right:ExprTppl
 -- is
@@ -144,7 +153,7 @@ prod left Less: ExprTppl = left:ExprTppl "<" right:ExprTppl
 prod left Greater: ExprTppl = left:ExprTppl ">" right:ExprTppl
 prod left LessEq: ExprTppl = left:ExprTppl "<=" right:ExprTppl
 prod left GreaterEq: ExprTppl = left:ExprTppl ">=" right:ExprTppl
-prod left Equal: ExprTppl = left:ExprTppl "==" right:ExprTppl
+prod left Equal: ExprTppl = left:ExprTppl "==" right:ExprTppl -- currently implemented as floats which doesn't make much sense
 prod left Unequal: ExprTppl = left:ExprTppl "!=" right:ExprTppl
 -- Boolean operators
 infix left And: ExprTppl = "&&"
@@ -155,6 +164,21 @@ postfix Subscript: ExprTppl = "[" idx:ExprTppl (":" lastIdx:ExprTppl)? "]"
 -- Conversions, not sure this is actually what we want in the end
 prod ConvIntToReal: ExprTppl = "Real" "(" val:ExprTppl ")"
 
+-- Tensor/matrix expressions
+
+-- matrix multiplication (dot product)
+prod left MatrixMul: ExprTppl = left:ExprTppl "*@" right:ExprTppl -- owl standard
+
+-- addition should be just + in the owl standard
+prod left MatrixAdd: ExprTppl = left:ExprTppl "+@" right:ExprTppl 
+
+prod left MatrixLeftScalarMul: ExprTppl = left:ExprTppl "$*" right:ExprTppl  -- owl standard (I think)
+prod left MatrixRightScalarMul: ExprTppl = left:ExprTppl "*$" right:ExprTppl  -- 
+
+prod left MatrixPower: ExprTppl = left:ExprTppl "^$" right:ExprTppl -- imagined but analogous to *$
+
+
+  -- because the right has to be an integer not another matrix
 
 -- Function call as expression
 prod FunCall: ExprTppl = f:ExprTppl "(" (args:ExprTppl ("," args:ExprTppl)*)? ")"
@@ -171,12 +195,18 @@ precedence {
 }
 
 -- Built-in distro keywords
+prod Uniform: ExprTppl = "Uniform" "(" a:ExprTppl "," b:ExprTppl ")"
 prod Bernoulli: ExprTppl = "Bernoulli" "(" prob:ExprTppl ")"
 prod Exponential: ExprTppl = "Exponential" "(" rate:ExprTppl ")"
 prod Gamma: ExprTppl = "Gamma" "(" shape:ExprTppl "," scale:ExprTppl ")"
-prod Gaussian: ExprTppl = "Gaussian" "(" mean:ExprTppl "," stdDev:ExprTppl ")"
+prod Gaussian: ExprTppl = "Gaussian" "(" mean:ExprTppl "," dev:ExprTppl ")"
 prod Poisson: ExprTppl = "Poisson" "(" rate:ExprTppl ")"
 prod Beta: ExprTppl = "Beta" "(" a:ExprTppl "," b:ExprTppl ")"
+prod Categorical: ExprTppl = "Categorical" "(" probs:ExprTppl ")"
+prod Multinomial: ExprTppl = "Multinomial" "(" n:ExprTppl "," probs:ExprTppl ")"
+prod Empirical: ExprTppl = "Empirical" "(" samples:ExprTppl ")"
+prod Dirichlet: ExprTppl = "Dirichlet" "(" alphas:ExprTppl ")"
+prod Binomial: ExprTppl = "Binomial" "(" n:ExprTppl "," prob:ExprTppl ")"
 
 
 prod Record: ExprTppl = "{" ((key:LName ("=" value:ExprTppl)?) ("," key:LName ("=" value:ExprTppl)?)*)? "}"

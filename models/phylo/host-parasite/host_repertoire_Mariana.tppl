@@ -1,0 +1,249 @@
+/**
+ *  Host repertoire model
+ */
+
+/*---------------- Built-in types -----------------------------*/
+// We are assuming that the built-in tree type is structured as follows.  We do
+// not think this should be part of the script. Note that this tree is a binary
+// time tree, which is perhaps the most useful type of tree, but we will need
+// to support other tree types as well.
+type Tree =
+    | Leaf{age: Real, label: String}
+    | Node{age: Real, left: Tree, right: Tree, label: String}
+
+/*---------------- Model-specific types -----------------------------*/
+
+// TODO: type definition in CorePPL
+//type ModelParams = 
+//  ModelParams{q: Tensor[Real], d_matrix: Tensor[Real], d_average: Real, beta: Real}
+
+// Tree decorated with postorder messages from belief propagation.
+// Postorder = backwards in time
+type MsgTree =
+ | MsgLeaf{age: Real, label: String, out_msg: Real[][3]}
+ | MsgNode{age: Real, label: String, left: MsgTree, right: MsgTree,
+           left_in_msg: Real[][3], right_in_msg: Real[][3], out_msg: Real[][3]}
+
+// TODO?: Real[][3] - generalise to any number of states? 
+
+// Tree decorated with final probabilities from belief propagation,
+// tuned so that they are useful for proposals.
+type ProbsTree =
+ | ProbsLeaf{age: Real, label: String, probs: Real[][3]}
+ | ProbsNode{age: Real, label: String, probs: Real[][3],
+             left: ProbsTree, right: ProbsTree}
+
+// Event type used to store information about one host-repertoire change
+// We keep the from_state here just in case we want to use it for debugging
+type Event = Event{age: Real, host: Int, from_state: Int, to_state: Int}
+
+// Type used to hold a proposed history of state changes for a branch
+type ProposedHistory = ProposedHistory{log_debt: Real, events: Event[]}
+
+// History point type used to store repertoire snapshots at the repertoire
+// start ages repertoire start age = time of the event that led to that
+// combination
+type HistoryPoint = HistoryPoint{age: Real, repertoire: Int[]}
+
+// HistoryScore type used to store a vector of history points and a log
+// score associated with this history.
+type HistoryScore = HistoryScore{log_score: Real, history: HistoryPoint[]}
+
+// Tree decorated with ancestral host repertoires and branch repertoire histories
+type HistoryTree =
+  | HistoryLeaf{age: Real, label: String, repertoire: Int[], history: HistoryPoint[], log_rep_debt: Real}
+  | HistoryNode{age: Real, label: String, repertoire: Int[], history: HistoryPoint[], log_rep_debt: Real,
+                left: HistoryTree, right: HistoryTree}
+
+
+/*
+ *  Model
+ *
+ *  @param lambda: vector of transition rates. lambda[1]: switch_rate_0_to_1,
+ *  lambda[2]: switch_rate_1_to_0 lambda[3]: switch_rate_1_to_2, lambda[4]:
+ *  switch_rate_2_to_1. Transition rates are given as proportions of the total
+ *  off-diagonal rate, that is, the sum of lambdas is 1.0.
+ *  @param mu: rescale all rates in lambda with mu. Referred to as the maximum
+ *  rate (or rate, for short) of host repertoire evolution, since
+ *  0≤mu*lambda_i≤mu for all i (all lambdas <= 1.0).
+ *  @param beta: phylogenetic distance parameter, determining strength of the
+ *  host distance effect on host repertoire evolution.
+ * 
+ */
+
+
+model function mymodel(parasite_tree: Tree, ntips: Int, nhosts: Int, interactions: String[],
+  host_distances: Real[], d_average: Real, tune: Real): HistoryTree {
+
+  // Set priors for model parameters
+  assume lambda ~ Dirichlet(1.,1.,1.,1.); //TODO: Implement Dirichlet
+  assume mu ~ Exponential(10.);
+  assume beta ~ Exponential(1.);
+
+  //printLn(real2string(lambda[1]));
+
+  // Set transition rate matrix for three-state independence model. We assume
+  // that we can multiply a matrix by a scalar.
+  // DONE: Check that we can name variables with capital letters: we can't
+  // If we extend to any number of states, [3,3] -> [nstates,nstates] and 
+  // matrix constructions has to be automated
+  let r = matrixCreate([3,3],
+    [0.-lambda[1],                lambda[1],          0.0,
+        lambda[2], 0.-(lambda[2]+lambda[3]),    lambda[3],
+              0.0,                lambda[4], 0.-lambda[4]]
+  );
+  let q = matrixMulFloat(mu,r);
+
+  //printLn(real2string(0.-lambda[1]));
+
+  // Package model parameters into an object for convenient calling
+  // Note that during preprocessing we need to calculate d_average and
+  // make sure that host order in interactions and host distances
+  // match, regardless of whether the input order is the same.
+
+  let d = matrixCreate([nhosts,nhosts], host_distances);
+  let mp = ModelParams(q=q, d_matrix=d, d_average=d_average, beta=beta); //TODO: Check if ModelParams exists
+  
+  // Derive params for ancestral repertoire proposals from independence model
+  let i = matrixCreate([ntips,nhosts], interactions); // TODO: extend matrixCreate to take Char as well
+  // TODO: add labels to rows and columns in i
+  let probs_tree = get_proposal_params(parasite_tree, i, q, tune); // TODO: get_proposal_params returns the tree, pis, q and tune
+
+  // Propose a repertoire for the root of the parasite tree
+  // based on the state probabilities from the belief propagation
+
+  //rep: Int[]
+  //log_rep_debt = 0.0
+  //for i in 1 to n_hosts {
+  //    assume rep[i] ~ Categorical (probs_tree.probs[i], [0,1,2]) //TODO: syntax check. Does Categorical exist?
+  //    log_rep_debt += Categorical(probs_tree.probs[i], [0,1,2]).score(rep[i]) //QUESTION: I don't understand .score(rep[i])
+  //}
+  //
+  // Make sure we have a possible root repertoire, kill immediately otherwise
+  //observe (2 %in% rep)  // R syntax
+
+  let repertoire = apply(); // map/apply funtion?
+
+  // From Daniel: logObserve(distribution,observed value) instead of log_rep_debt +=
+  
+  
+  // We want the net debt so we also factor in the log score of the
+  // root repertoire, assuming equal prior probability on all possible
+  // repertoires, that is, all repertoires with at least one host in state
+  // 2; the others can be in any of the states {0,1,2}. There are 3^(n_host)
+  // repertoires in total. There are 2^(n_host) repertoires that only have
+  // ones and zeros, that is, forbidden repertoires. The total number of
+  // allowed repertoires is then 3^(n_host)-2^(n_host), and the probability
+  // each is the inverse of that.
+  let log_score_root = -log(3^(n_host) - 2^(n_host)); // TODO change to pow function in miking
+
+  // Simulate repertoire history on the parasite tree
+  let left  = simulate(probs_tree.left, repertoire, mp);
+  let right = simulate(probs_tree.right, repertoire, mp);
+  let historyTree = HistoryNode(age= probs_tree.age, label= probs_tree.label,
+    repertoire= repertoire, history=[], log_rep_debt= log_rep_debt-log_score_root,
+    left= left, right= right);
+
+  // Factor in the net debt of the proposed ancestral repertoires at nodes
+  // and leaves in the historyTree.
+  factor(-get_rep_debt(historyTree)); //TODO: check syntax
+
+  return {historyTree = historyTree, lambda = lambda, mu = mu, beta = beta}
+
+}
+
+
+
+/*---------------- Proposal distribution parameters --------------------------*/
+
+/*
+ * get_proposal_params
+ *
+ * This functions uses belief propagation under the independence
+ * model, and an anneling parameter 'tune', to obtain parameters
+ * for the proposals of ancestral repertoires.
+ *
+ * Parameters:
+ *   @param parasite_tree: parasite tree
+ *   @param interactions: interaction matrix
+ *   @param q: rate matrix for the independence model
+ *   @param tune: parameter in (0,1) determining how much
+ *                we should trust the independence model
+ *
+ * Return value:
+ *   A ProbsTree containing the final repertoire state proposal
+ *   probabilities for all nodes in the parasite tree.
+ */
+function get_proposal_params(parasite_tree: Tree, i: ?,
+  q: ?, tune: Real): ProbsTree { // TODO: is there a type RateMatrix?
+// Compute postorder messages on the observed tree
+let msgTree = postorder_msgs(parasite_tree, i, q);
+// Calculate stationary probabilities for the rate matrix q
+let stationary_probs = stationary_probs(q); // TODO: implement stationary_probs function
+
+let pis = rep(stationary_probs, length(msgTree.out_msg));  // TODO: rep = repeat. pis is not used anywhere else? 
+// Also, msgTree.out_msg is a matrix, so that is the length?
+
+return final_probs(msgTree, pis, q, tune); // TODO: return only msgTree? -> let probs_tree = get_proposal_params();
+}
+
+
+/*
+* postorder_msgs
+*
+* Compute postorder messages on the observed parasite tree
+*
+*/
+
+function postorder_msgs(tree: Tree, i: ?, q: ?) : MsgTree { // TODO: matrix types
+
+  if tree is Leaf {
+    return MsgLeaf(age= 0.0, label= tree.label, out_msg= observation_message(i[tree.label]); // TODO: interaction matrix i needs rownames (i["tree.label",])
+  }
+
+  let left  = postorder_msgs(tree.left , i, q);
+  let right = postorder_msgs(tree.right, i, q);
+
+  // This assumes that we can do matrix exponentiation and that
+  // multiplication of two vectors means element-wise multiplication. 't' is
+  // the transpose function; we need the transposed transition matrix as we
+  // are going backward in time. For multiplication of a vector and a matrix,
+  // we assume that the vector is a row vector.  tree.age-left.age gives the
+  // branch length for the left daughter
+
+  let tleft = matrixTranspose(matrixExponential(matrixMulFloat(tree.age-left.age, q)));
+  let tright = matrixTranspose(matrixExponential(matrixMulFloat(tree.age-right.age, q)));
+
+  let left_in_msg  = message(left.out_msg, tleft);
+  let right_in_msg = message(right.out_msg, tright);
+
+  // Daniel: Missing normalization here?
+  let out_msg = left_in_msg * right_in_msg;
+
+  return MsgNode(age= tree.age, label= tree.label, left= left, right= right, 
+    left_in_msg= left_in_msg, right_in_msg= right_in_msg, out_msg= out_msg);
+
+}
+
+
+// Compute final probabilities from belief propagation on the observed parasite
+// tree
+function final_probs(tree: MsgTree, root_msg: Real[][3], q: ?, tune: Real) : ProbsTree {
+    
+  let probs = messageElementPower(mulMessage(tree.out_msg, root_msg), tune); // TODO: there is a normalization step in CorePPL
+  // TODO: both functions were written in CorePPL by Daniel
+  if tree is Leaf {
+    return ProbsLeaf(age= 0.0, label= tree.label, probs= probs);
+  } 
+
+  let tleft = matrixExponential(matrixMulFloat(tree.age-tree.left.age, q));
+  let tright = matrixExponential(matrixMulFloat(tree.age-tree.righ.age, q));
+
+  left_root_msg  = message(root_msg*tree.right_in_msg, Tleft)
+  right_root_msg = message(root_msg*tree.left_in_msg , Tright)
+
+  left  =  final_probs(tree.left,  left_root_msg, Q, tune)
+  right =  final_probs(tree.left, right_root_msg, Q, tune)
+
+  return ProbsNode(age=tree.age, label=tree.label, left=left, right=right, probs=probs)
+}

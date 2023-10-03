@@ -1,0 +1,215 @@
+/**
+ * Testing various distributions
+ */
+
+type TestDistributions = TestDistributions {
+  aUniform: Real,
+  someUniforms: Real[],
+  scoreUniform: Real,
+  logScoreUniform: Real,
+
+  aBernoulli: Bool,
+  someBernoulli: Bool[],
+  scoreBernoulli: Real,
+  logScoreBernoulli: Real,
+
+  anExponential: Real,
+  someExponential: Real[],
+  scoreExponential: Real,
+  logScoreExponential: Real,
+
+  aPoisson: Int,
+  somePoisson: Int[],
+  scorePoisson: Real,
+  logScorePoisson: Real,
+
+  aBeta: Real,
+  someBeta: Real[],
+  scoreBeta: Real,
+  logScoreBeta: Real,
+
+  aGamma: Real,
+  someGamma: Real[],
+  scoreGamma: Real,
+  logScoreGamma: Real,
+
+  aCategorical: Int,
+  someCategorical: Int[],
+  scoreCategorical: Real,
+  logScoreCategorical: Real,
+
+  aMultinomial: Int[],
+  someMultinomial: Int[][], // works! wow :)
+  scoreMultinomial: Real,
+  logScoreMultinomial: Real,
+
+  aDirichlet: Real[],
+  someDirichlet: Real[][],
+  scoreDirichlet: Real,
+  logScoreDirichlet: Real,
+
+  aGaussian: Real,
+  someGaussian: Real[],
+  scoreGaussian: Real,
+  logScoreGaussian: Real,
+
+  aBinomial: Int,
+  someBinomial: Int[],
+  scoreBinomial: Real,
+  logScoreBinomial: Real
+}
+
+
+model function distributions() : TestDistributions {
+
+  // Uniform
+  assume aU ~ Uniform(0., 1.0);
+
+  let myUniP = UniformParam {a = 0., b = 1.};
+  let someU = iid(uniform, myUniP, 10);
+  let scoreU = uniformScore(-5., myUniP);
+  let logScoreU = uniformLogScore(-5., myUniP);
+
+  // Bernoulli
+  assume aB ~ Bernoulli(0.99);
+
+  let myBernP = BernoulliParam{prob = 0.99};
+  let someB = iid(bernoulli, myBernP, 10);
+  let scoreB = bernoulliScore(true, myBernP);
+  let logScoreB = bernoulliLogScore(true, myBernP);
+
+  // Exponential
+  assume anE ~ Exponential(2.0);
+
+  let myExpoP = ExponentialParam {rate = 2.0};
+  let someE = iid(exponential, myExpoP, 10);
+  let scoreE = exponentialScore(1.0, myExpoP);
+  let logScoreE = exponentialLogScore(1.0, myExpoP);
+
+  // Poisson
+  assume aP ~ Poisson(5.);
+
+  let myPoisP = PoissonParam {rate = 5.0};
+  let someP = iid(poisson, myPoisP, 10);
+  let scoreP = poissonScore(3, myPoisP);
+  let logScoreP = poissonLogScore(3, myPoisP);
+
+  // Beta 
+  assume aBt ~ Beta(2.0, 5.0);
+
+  let myBetaP = BetaParam {a = 2.0, b = 5.0};
+  let someBt = iid(beta, myBetaP, 10);
+  let scoreBt = betaScore(0.4, myBetaP);
+  let logScoreBt = betaLogScore(0.4, myBetaP);
+
+  // Gamma
+  assume aG ~ Gamma(2.0, 3.0);
+
+  let myGammaP = GammaParam {shape = 2.0, scale = 3.0};
+  let someG = iid(gamma, myGammaP, 10);
+  let scoreG = gammaScore(1.5, myGammaP);
+  let logScoreG = gammaLogScore(1.5, myGammaP);
+
+  // Categorical
+  let catProbs = [0.2, 0.3, 0.5];
+  assume aCat ~ Categorical(catProbs);
+  
+  let myCatP = CategoricalParam {probs = catProbs};
+  let someCat = iid(categorical, myCatP, 10);
+  let scoreCat = categoricalScore(1, myCatP);
+  let logScoreCat = categoricalLogScore(1, myCatP);
+ 
+  // Multinomial
+  let multiProbs = [0.2, 0.3, 0.5];
+  assume aMulti ~ Multinomial(10, multiProbs);
+
+  let myMultiP = MultinomialParam {n = 10, probs = multiProbs};
+  let someMulti = iid(multinomial, myMultiP, 10);
+  let scoreMulti = multinomialScore([3, 4, 3], myMultiP);
+  let logScoreMulti = multinomialLogScore([3, 4, 3], myMultiP);
+
+   // Dirichlet
+  let dirAlphas = [2.0, 3.0, 5.0];
+  assume aDir ~ Dirichlet(dirAlphas);
+
+  let myDirP = DirichletParam {alphas = dirAlphas};
+  let someDir = iid(dirichlet, myDirP, 10);
+  let scoreDir = dirichletScore([0.2, 0.3, 0.5], myDirP);
+  let logScoreDir = dirichletLogScore([0.2, 0.3, 0.5], myDirP);
+
+  // Gaussian
+  assume aG ~ Gaussian(0.0, 1.0);
+
+  let myGaussP = GaussianParam {mean = 0.0, dev = 1.0};
+  let someG = iid(gaussian, myGaussP, 10);
+  let scoreG = gaussianScore(-1.5, myGaussP);
+  let logScoreG = gaussianLogScore(-1.5, myGaussP);
+
+  // Binomial
+  assume aBn ~ Binomial(10, 0.5);
+
+  let myBinP = BinomialParam {n = 10, prob = 0.5};
+  let someBn = iid(binomial, myBinP, 10);
+  let scoreBn = binomialScore(5, myBinP);
+  let logScoreBn = binomialLogScore(5, myBinP);
+
+
+  return TestDistributions {
+    aUniform = aU,
+    someUniforms = someU,
+    scoreUniform = scoreU,
+    logScoreUniform = logScoreU,
+
+    aBernoulli = aB,
+    someBernoulli = someB,
+    scoreBernoulli = scoreB,
+    logScoreBernoulli = logScoreB,
+
+    anExponential = anE,
+    someExponential = someE,
+    scoreExponential = scoreE,
+    logScoreExponential = logScoreE,
+
+    aPoisson = aP,
+    somePoisson = someP,
+    scorePoisson = scoreP,
+    logScorePoisson = logScoreP,
+
+    aBeta = aBt,
+    someBeta = someBt,
+    scoreBeta = scoreBt,
+    logScoreBeta = logScoreBt,
+
+    aGamma = aG,
+    someGamma = someG,
+    scoreGamma = scoreG,
+    logScoreGamma = logScoreG,
+
+    aCategorical = aCat,
+    someCategorical = someCat,
+    scoreCategorical = scoreCat,
+    logScoreCategorical = logScoreCat,
+
+    aMultinomial = aMulti,
+    someMultinomial = someMulti,
+    scoreMultinomial = scoreMulti,
+    logScoreMultinomial = logScoreMulti,
+
+    aDirichlet = aDir,
+    someDirichlet = someDir,
+    scoreDirichlet = scoreDir,
+    logScoreDirichlet = logScoreDir,
+
+    aGaussian = aG,
+    someGaussian = someG,
+    scoreGaussian = scoreG,
+    logScoreGaussian = logScoreG,
+
+    aBinomial = aBn,
+    someBinomial = someBn,
+    scoreBinomial = scoreBn,
+    logScoreBinomial = logScoreBn
+  };
+}
+
+

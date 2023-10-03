@@ -32,11 +32,15 @@ uninstall:
 	rm ${bin_path}/${tppl_name}
 	rm -rf $(src_path)
 
+# Filtering successful tests
 test: src/treeppl-to-coreppl/compile.mc
 	mi compile src/treeppl-to-coreppl/compile.mc --test
-	./compile
+	./compile | sed 's/\.\{10,\}//g'
+	mi compile src/lib/standard.mc --test
+	./standard | sed 's/\.\{10,\}//g'
 	@echo 
-	rm -f compile
+	rm -f compile standard
+
 
 clean:
 	rm -f src/treeppl-ast.mc

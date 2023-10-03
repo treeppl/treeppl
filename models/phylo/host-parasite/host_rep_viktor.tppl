@@ -17,8 +17,8 @@ type HistoryTree =
   | HistoryNode{age: Real, label: String, repertoire: Int[], history: HistoryPoint[],
                 left: HistoryTree, right: HistoryTree}
 
-model function mymodel(parasite_tree: Tree, ntips: Int, nhosts: Int, interactions: Int[],
-  host_distances: Real[], tune: Real): HistoryTree {
-    let myHistoryTree = HistoryLeaf {age = 10.0, label = "bbb", repertoire = [1,2], history = [HistoryPoint{age = 12.0, repertoire = [1,2]}]};
-    return myHistoryTree;
+model function mymodel(parasite_tree: Tree, ntips: Int, nhosts: Int, interactions: String[],
+  host_distances: Real[], d_average: Real, tune: Real): Tree {
+    //let myHistoryTree = HistoryLeaf {age = 10.0, label = "bbb", repertoire = [1,2], history = [HistoryPoint{age = 12.0, repertoire = [1,2]}]};
+    return parasite_tree;
 }

@@ -30,7 +30,7 @@ include "coreppl::parser.mc"
 
 -- Command line menu for TreePPL
 let tpplMenu = lam. join [
-  "Usage: tpplc program.tppl out.mc [<options>]\n\n",
+  "Usage: tpplc program.tppl [<options>]\n\n",
   "Options:\n",
   argHelpOptions config,
   "\n"

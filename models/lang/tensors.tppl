@@ -1,0 +1,148 @@
+/*
+ * File: tensors.tppl
+ * Description: This program illustrates how to work with tensors.
+ * Compilation:
+ *   tpplc models/lang/tensors.tppl
+ * Execution: ./out models/data/tensors.json 1 1
+ */
+
+type TensorRecord = TensorRecord {
+    magic: Tensor[Real],
+    mul: Tensor[Real],
+    pow: Tensor[Real],
+    sclrMul: Tensor[Real],
+    transpose: Tensor[Real],
+    exponential: Tensor[Real]
+}
+
+
+
+/*
+ * Model function `tensors`
+ * Parameters: 
+ *  magic: the Int[] sequences of the Melancolia 4x4 magic square
+ * Returns: a tensor
+ * Side-effect: prints things
+ *
+ * This function illustrates how to create tensors and manipulate them.
+ * Tensors can be over elementary types: Tensor[Real], Tensor[Int], Tensor[Bool],
+ * but for linear algebra (matrix algebra) we use real tensors.
+ * 
+ */
+model function tensors(magic: Int[]): TensorRecord {
+  // Convert a sequence of integers to a sequence of reals
+  let magicRealSequence = sapply(magic, int2real); 
+
+  // A matrix is created from a sequence of reals
+  let magicTensor = mtxCreate(4, 4, magicRealSequence); 
+  printMtx(magicTensor); // outputs to standard error
+
+  /*-------------------------------------*
+   * Constructing sequences and matrices * 
+   *-------------------------------------*/
+
+  // Use `to` to create a range
+  let rangeTest = 1 to 9; // [1, 2, 3, 4, 5, 6, 7, 8, 9]
+  printLn(int2string(rangeTest[7])); // 7
+
+  // Use sint2real to convert an integer sequence to a real sequence
+  let rangeReal = sint2real(rangeTest);
+
+  let thrByThr = mtxCreate(3, 3, rangeReal);
+  printMtx(thrByThr);
+
+  // Use `rep` to repeat a number
+  let mseq = rep(5, 10.0); // [10.0, 10.0, 10.0, 10.0, 10.0]
+
+  // Use `sreal2string` to convert a real-sequence to a string
+  // Use `paste` to concat the str sequence into a single string with a sep
+  printLn(paste(sreal2string(mseq), ", ")); 
+
+  let m1 = mtxCreate(1, 5, mseq);
+  printMtx(m1);
+
+  // Use `mtxCreateId` to create an identity matrix
+    let m2 = mtxCreateId(5);
+  printMtx(m2);
+
+
+  /*---------*
+   * Vectors *
+   *---------*/
+
+  // Vectors are just matrices, one of whose dimensions is one.
+  // For example, m1 above is a vector (a row vector).
+  // Let's create another two more (a column and a row vector).
+  let x = [1.0, 2.0, 3.0, 4.0, 5.0];
+  let y = rvecCreate(5, x); // Creates a row vector 1 x 5
+  printMtx(y);
+
+  let z = cvecCreate(5, x); // Creates a column vector 5 x 1
+  printMtx(z);
+
+  /*----------------*
+   * Linear algebra *
+   *----------------*/
+
+  // matrix multiplication (dot product)
+  let m1xZ = mtxMul(m1, z); // (1 x 5) x (5 x 1) --> 1x1
+  printMtx(m1xZ);
+
+  // you can use special syntax for matrix multiplication    *@ dot product
+  let m2xY = y *@ m2  ; // (1 x 5) x (5 x 5) --> 1 x 5
+  printMtx(m2xY);
+
+  /* NOTE(vsenderov, 2023-09-23): Note that the special syntax will eventually
+     be changed to regular syntax, i.e. just `*`.
+     Also note that shape error will happen unfortunately at run time. */
+
+  // Raising a matrix to an integer power -- P^n
+  let m = mtxCreate(2, 2, [3.14, 3.14, 2.78, 2.78]);
+  let m4 = mtxPow(m, 4);
+  printMtx(m4);
+
+  // we can also use a syntax     ^$ -- matrix to integer ppower
+  printMtx( m ^$ 4 );
+
+  // Matrix addition
+  // we have no matrix addition right now
+  let magicPMagic = mtxAdd(magicTensor, magicTensor);
+  printMtx(magicPMagic);
+  printMtx(magicPMagic +@ magicPMagic);
+
+  // matrix scalar multiplication
+  let negMagicTensor = mtxSclrMul(-1.0, magicTensor);
+  printMtx(negMagicTensor);
+  printMtx( (-1.0) $* magicTensor); // $* syntax
+  printMtx( magicTensor *$ 0.0 ); // the scalar can be on the right as well
+
+  // TODO matrix transpose
+  let transpMagicTensor = mtxTrans(magicTensor);
+  printMtx(transpMagicTensor);
+   
+  // TODO matrix exponential
+  let expMagic = mtxExp(magicTensor); 
+  printMtx(expMagic);
+
+  /*-----------------------------*
+  * Getting stuff out of tensors *
+  *------------------------------*/
+
+  // let yy = vecToSeqExn(y); // Flattening doesn't work
+  /* NOTE(vsenderov, 23-10-01): To get flattening to work we must be able
+     to emit proper cppl instead of using buildMExpr */
+
+  // We can grab an element with mtxGet
+  let myScalar = mtxGet(1, 1, m2xY);
+  printLn(real2string(myScalar));
+
+  // You can also return the tensors
+  return TensorRecord {
+    magic = magicTensor,
+    mul = m2xY,
+    pow = m4,
+    sclrMul = negMagicTensor,
+    transpose = transpMagicTensor,
+    exponential = expMagic
+  };
+}
