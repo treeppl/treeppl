@@ -8,6 +8,7 @@ include "matrix.mc"
 include "ext/matrix-ext.mc"
 include "iterator.mc"
 include "ext/dist-ext.mc"
+include "seq.mc"
 
 let muli = muli
 let eqi = eqi
@@ -49,6 +50,10 @@ let bool2string: Bool -> String  = lam b.
 -----------------
 
 let length = length
+
+let zipWith = zipWith
+
+let any = any
 
 -- switching the order of map to make it more R-like
 -- the "etymology" should be understood as 
