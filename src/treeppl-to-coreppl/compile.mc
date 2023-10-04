@@ -182,7 +182,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     matrixMul: Name,
     matrixPow: Name,
     matrixAdd: Name,
-    matrixMulFloat: Name
+    matrixMulFloat: Name,
+    pow: Name
   }
 
   sem isemi_: Expr -> Expr -> Expr
@@ -263,8 +264,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     match findNamesOfStringsExn [
       "serializeResult", "externalLog", "externalExp", "json2string",
       "particles", "sweeps", "input", "Some", "matrixMul", "mtxPow", "matrixElemAdd",
-      "matrixMulFloat"
-    ] libCompile with [sr, el, ee, j2s, p, sw, i, s, mm, mp, ma, mmf] in
+      "matrixMulFloat", "pow"
+    ] libCompile with [sr, el, ee, j2s, p, sw, i, s, mm, mp, ma, mmf, po] in
     let cc: TpplCompileContext = {
       serializeResult = sr,
       logName = el, expName = ee,
@@ -276,7 +277,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       matrixMul = mm,
       matrixPow = mp,
       matrixAdd = ma,
-      matrixMulFloat = mmf
+      matrixMulFloat = mmf,
+      pow = po
     } in
 
     let tpplLibLoc = (concat tpplSrcLoc "/lib/standard.tppl") in
@@ -1027,6 +1029,19 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
         ty = tyunknown_
       }
 
+  | PowerExprTppl x ->
+   TmApp {
+        info = x.info,
+        lhs = TmApp {
+          info = x.info,
+          lhs = nvar_ context.pow,
+          rhs = compileExprTppl context x.left,
+          ty = tyunknown_
+        },
+        rhs = compileExprTppl context x.right,
+        ty = tyunknown_
+      }
+        
   | MatrixLeftScalarMulExprTppl x ->
     TmApp {
         info = x.info,
