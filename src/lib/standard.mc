@@ -12,6 +12,9 @@ include "ext/dist-ext.mc"
 let muli = muli
 let eqi = eqi
 
+let subs = lam seq. lam beg. lam end. 
+  subsequence seq (subi beg 1) (subi end 1)
+
 ----------------------------
 --- Printing and strings ---
 ----------------------------
