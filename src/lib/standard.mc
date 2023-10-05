@@ -58,8 +58,16 @@ let any = any
 -- switching the order of map to make it more R-like
 -- the "etymology" should be understood as 
 -- "sequence" apply, even though in R it is something slightly different
+-- sapply == for sequences, tapply == for tensors
 let sapply = lam x. lam f.
   map f x
+
+let tapply = lam x. lam f.
+  reverse (tensorFold (lam acc. lam c. cons (f c) acc) [] x)
+
+-- sapply2 for passing an argument a to function f
+let sapply2 = lam x. lam f. lam a.
+  map (lam v. f v a) x
 
 -- convert an integer sequences to a real sequence
 let sint2real = lam seq.
@@ -153,6 +161,10 @@ utest tensorToSeqExn (tensorSliceExn (mtxPow __test_43FS35GF 4) [2]) with [26676
 let mtxGet = lam row. lam col. lam tensor.
   tensorGetExn tensor [subi row 1, subi col 1]
 
+let mtxGetRow = lam row. lam tensor.
+  let r = subi row 1 in
+  tensorSubExn tensor r 1
+
 let mtxSclrMul = lam scalar. lam tensor.
   externalMatrixMulFloat scalar tensor
 
@@ -173,3 +185,38 @@ let iid = lam f. lam p. lam n.
 --   ts tensor [subi row 1, subi col 1] val
 
 
+----------------
+--- Messages ---
+----------------
+
+-- NOTE(mariana, 2020-10-05): attempt to use functions Daniel wrote 
+-- to handle Messages, which are Tensor[Real][]
+
+-- Vector normalization
+let normalizeVector = lam v.
+  let sum = tensorFold addf 0. v in
+  tensorCreateCArrayFloat (tensorShape v) (lam i. divf (tensorGetExn v i) sum)
+
+-- Message normalization 
+let normalizeMessage = lam m. 
+  map normalizeVector m
+
+-- Elementwise multiplication of state likelihoods/probabilities
+let mulMessage = zipWith matrixElemMul
+
+-- Raises each element to the power of the float argument
+let messageElementPower = lam m. lam f. 
+    map (lam v.
+      tensorCreateCArrayFloat (tensorShape v) (lam i. pow (tensorGetExn v i) f)
+  ) m
+
+
+
+-- Mean of a tensor (e.g., vectors and matrices)
+--let tensorMean : Tensor[Float] -> Float = lam t.
+--  divf (tensorFold addf 0. t) (int2float (tensorSize t))
+
+-- Sequence normalization
+--let normalize: [Float] -> [Float] = lam seq.
+--  let sum = foldl addf 0. seq in
+--  map (lam f. divf f sum) seq
