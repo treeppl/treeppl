@@ -88,8 +88,6 @@ model function mymodel(parasite_tree: Tree, ntips: Int, nhosts: Int, interaction
               0.0,                lambda[4], 0.-lambda[4]]
   );
   let q = matrixMulFloat(mu,r);
-
-  //printLn(real2string(0.-lambda[1]));
   
   let d_matrix = mtxCreate(nhosts, nhosts, host_distances);
 
@@ -105,30 +103,28 @@ model function mymodel(parasite_tree: Tree, ntips: Int, nhosts: Int, interaction
   let pi_2 = 1.0 - pi_0 - pi_1;
   let stationary_probs = [pi_0, pi_1, pi_2];
   
-  // Derive params for ancestral repertoire proposals from independence model
   let interactions_reals = sint2real(interactions)
   let i = mtxCreate(ntips, nhosts, interactions_reals);
-  let probs_tree = get_proposal_params(parasite_tree, i, q, tune);
+  
+  // Derive params for ancestral repertoire proposals from independence model
+  //let probs_tree = get_proposal_params(parasite_tree, i, q, tune);
 
   // Propose a repertoire for the root of the parasite tree
   // based on the state probabilities from the belief propagation
-  let root_rep = ;
-  let log_root_rep_debt = ;
- 
-  // Fredrik's sudo code:
-  //root_rep: Int[]
-  //log_root_rep_debt = 0.0
-  //for i in 1 to n_hosts {
-  //    assume root_rep[i] ~ Categorical (probs_tree.probs[i], [0,1,2])
-  //    log_root_rep_debt += Categorical(probs_tree.probs[i], [0,1,2]).score(root_rep[i])
-  //}
-  //
-  //Make sure we have a possible root repertoire (i.e. there is at least one host in state 2)
-  //kill immediately otherwise
-  //observe (2 %in% root_rep)  // R syntax
+  let probRecordSequence = sapply(probs, createProbRecord);
+  let root_rep = sapply(probRecordSequence, categorical);
+  printLn(paste(sint2string(root_rep), ", "));
 
-  // From Daniel: logObserve(distribution,observed value) instead of log_rep_debt +=
+  //let log_root_rep_debt = zipWith(categoricalLogScore, root_rep, probRecordSequence);  //TODO: fix bug in Miking (Viktor P)
+  printLn(paste(sreal2string(log_root_rep_debt), ", "));
   
+  let valid_root = any(is2, root_rep);
+  printLn(bool2string(valid_root));
+
+  if !valid_root { 
+    weight 0.0; 
+    //resample;  //TODO: ask Jan about what's more efficient
+  } 
   
   // We want the net debt so we also factor in the log score of the
   // root repertoire, assuming equal prior probability on all possible
