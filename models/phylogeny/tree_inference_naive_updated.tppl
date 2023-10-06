@@ -28,8 +28,8 @@ type SeqTree =
 // Randomly sample two indices in the trees vector, to be combined
 function pickpair(n: Int): Int[]
 { 
-    assume i ~ Categorical(rep(n,1./Real(n))); // 
-    assume j ~ Categorical(rep(n,1./Real(n))); // 
+    assume i ~ Categorical(rep(n,1./Real(n)));  
+    assume j ~ Categorical(rep(n,1./Real(n)));  
     if (eqi(j,i)) {
         return pickpair(n); 
     }
@@ -103,9 +103,9 @@ model function myModel(data: Int[][]) : SeqTree[]
         (1.0/3.0), (1.0/3.0), (1.0/3.0),      -1.0]
         );        
 
-    // Define the initial trees vector (containing the leaves)
-    // NOTE need to add the function observe_model that replaces A,C,G,T with integers and handles uncertain positions. 
-    // Currently input data are integers, and hard coded starting point below.
+    // Define the initial trees vector (containing of the leaves)
+    // NOTE need to add a function that replaces A,C,G,T with integers and handles uncertain positions. 
+    // Currently input data are integers, and tree vector is hard coded below.
     let trees = [
         Leaf{age=0.0, seq=data[1]},
         Leaf{age=0.0, seq=data[2]},
@@ -113,7 +113,7 @@ model function myModel(data: Int[][]) : SeqTree[]
         Leaf{age=0.0, seq=data[4]}
     ];
 
-    let seq_len = 15; //This should be automatic but currently not is because length() has a bug, to be fixed. 
+    let seq_len = 15; //NOTE This should be automatic but currently not is because length() has a bug, to be fixed. 
 
     // Build the tree by random clustering and return 
     return cluster(q, trees, 0.0, seq_len);
