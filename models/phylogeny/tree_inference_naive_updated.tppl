@@ -5,10 +5,10 @@
 
 // Run this by compiling: 
 // tpplc models/phylogeny/tree_inference_naive_updated.tppl -m 'smc-bpf' --resample align --output testphylo
-// And then execution 1000 particles 1 sweep, using test dataset phylo.json:
+// And then execution 1000 particles 1 sweep, using toy dataset phylo.json:
 // ./testphylo models/data/phylo.json 1000 1 > testphylo_output.json
 
-// DATA as json file phylo.json, NOTE this should be nucleotides in later version, currently integers
+// Toy dataset as json file phylo.json. NOTE this should be nucleotides in later version, currently integers
 // Data is a matrix of type int, with each row
 // consisting of the aligned DNA sequence for a single
 // taxon. The nucleotide is specified as
@@ -88,7 +88,7 @@ function cluster(q: Tensor[Real], trees: SeqTree[], maxAge: Real, seq_len: Int):
     let new_trees = join([slice(trees,1,min),slice(trees,addi(min,1),max),slice(trees,addi(max,1),addi(n, 1)),[parent]]);
 
     // Recursive call to cluster for new_trees
-    return cluster(q, new_trees, age, subi(seq_len,1));
+    return cluster(q, new_trees, age, seq_len);
 }
 
 // MODEL
