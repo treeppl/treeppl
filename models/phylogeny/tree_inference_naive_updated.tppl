@@ -1,22 +1,21 @@
-// Hypothetical TreePPL script for tree inference under the
+// Naive TreePPL script for tree inference under the
 // Jukes Cantor model with a strict clock prior. This is
 // the naive version; for effective inference, belief
 // propagation needs to be implemented in the back end.
 
-// The initial aim is to convert this type of script in
-// the back end to the belief propagation version
+// Run this by compiling: 
+// tpplc models/phylogeny/tree_inference_naive_updated.tppl -m 'smc-bpf' --resample align --output testphylo
+// And then execution 1000 particles 1 sweep, using test dataset phylo.json:
+// ./testphylo models/data/phylo.json 1000 1 > testphylo_output.json
 
-// DATA as json file phylo.json
-// Data is a matrix of type character, with each row
+// DATA as json file phylo.json, NOTE this should be nucleotides in later version, currently integers
+// Data is a matrix of type int, with each row
 // consisting of the aligned DNA sequence for a single
 // taxon. The nucleotide is specified as
-//   "A" for adenine 1
-//   "C" for cytosine 2
-//   "G" for guanine 3
-//   "T" for thymine 4
-
-// NOTE have removed the function observe_model that replaces A,C,G,T with integers and handles uncertain positions. 
-// To be fixed later.
+//   "A" for adenine 0
+//   "C" for cytosine 1
+//   "G" for guanine 2
+//   "T" for thymine 3
 
 // TYPES
 
@@ -29,87 +28,104 @@ type SeqTree =
 // Randomly sample two indices in the trees vector, to be combined
 function pickpair(n: Int): Int[]
 { 
-    assume i ~ Categorical(rep(n,1./n));
-    assume j ~ Categorical(rep(n,1./n));
+    assume i ~ Categorical(rep(n,1./Real(n))); // Adjusted to Real(n) 
+    assume j ~ Categorical(rep(n,1./Real(n))); // Adjusted to Real(n) 
     if (eqi(j,i)) {
-        return f(n); 
+        return pickpair(n); 
     }
-    return [i,j];
+    return [addi(i,1),addi(j,1)]; //changed to addi 1 to avoid index 0
 }
 
 function ctmc(initialstate: Int, q: Tensor[Real], t: Real): Real[]
 { 
-    let choices = [[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];
-    let state = rvecCreate(choices[initialstate]);
-    let p = state*@mtxExp(q*$t);
+    let choices = [[1.0,0.0,0.0,0.0],[0.0,1.0,0.0,0.0],[0.0,0.0,1.0,0.0],[0.0,0.0,0.0,1.0]]; //added decimal for Reals not Ints
+    let state = rvecCreate(4,choices[addi(initialstate,1)]); //adjusted rvecCreate to include size of vector, addi to avoid index 0
+    let p = state*@(mtxExp(q*$t)); //Adjusted () ambiguity
     return[mtxGet(1,1,p),mtxGet(1,2,p),mtxGet(1,3,p),mtxGet(1,4,p)];
 }
 
 function cluster(q: Tensor[Real], trees: SeqTree[], maxAge: Real): SeqTree[]
 {
     let n = length(trees);
+    printLn("n at start of cluster");
+    printLn(int2string(n));
+
     // Check that we have not yet reached the root of the tree
     if (eqi(n, 1)) {
+        printLn("n is 1");
         return trees;
     }
-    
-    // Randomly sample two indices in the trees vector with function f
-    // We will combine these, names left and right
+    // Randomly sample two indices in the trees vector with function pickpair
+    // We will combine these, named left and right child
     let pairs = pickpair(n);
     let left_child = trees[pairs[1]];
     let right_child = trees[pairs[2]];
-    
+    //dump(left_child);
+    let m = length(left_child.age);
+    printLn(int2string(m));
+    //let test = apply(real2string,left_child.seq);
+    //printLn(join(test));
+
     // Get the age of the new internal node
     assume t ~ Exponential(10.0);
     let age = maxAge + t;
-
+    
     // Propose ancestral state(s) from stationary distribution, to be corrected later
-    let seq_len = length(left_child.seq); //Find out the length of the aligned sequences
+    let seq_len = 15; //Find out the length of the aligned sequences. DOES NOT WORK. 15 testcase.
     let seq = iid(categorical,CategoricalParam{probs=[0.25,0.25,0.25,0.25]},seq_len);
-
+    
     // Observe the child states given the proposed state of parent node
-    for (i in 1 to seq_len) {
+    for i in 1 to seq_len {
+        let m = age-left_child.age;
         let p1 = ctmc(seq[i], q, age-left_child.age);
         observe left_child.seq[i] ~ Categorical(p1);
         if (left_child is Node) {
-            logWeight -categoricalLogScore(left_child.seq[i],CategoricalParam{probs=[0.25,0.25,0.25,0.25]});
+            logWeight -(categoricalLogScore(left_child.seq[i],CategoricalParam{probs=[0.25,0.25,0.25,0.25]})); //Adjusted () ambiguity
         }  
         let p2 = ctmc(seq[i], q, age-right_child.age);
         observe right_child.seq[i] ~ Categorical(p2);
         if (right_child is Node) {
-            logWeight -categoricalLogScore(right_child.seq[i],CategoricalParam{probs=[0.25,0.25,0.25,0.25]});
+            logWeight -(categoricalLogScore(right_child.seq[i],CategoricalParam{probs=[0.25,0.25,0.25,0.25]}));//Adjusted () ambiguity
         }  
     }
-    
     // Combine picked pair of trees into a new node
     let parent = Node{age=age, seq=seq, left=left_child, right=right_child};  
 
     // Compute new_trees list
-    let min = mini(i,j);
-    let max = maxi(i,j);
-    let new_trees = join([subs(trees,1,min),subs(trees,min+1,max),subs(trees,max+1,n+1),[parent]]);
-
+    let min = mini(pairs[1],pairs[2]);  
+    let max = maxi(pairs[1],pairs[2]); 
+    //let test =  subs([1.0, 2.0, 3.0], 1, 2);
+    //printLn(real2string(test[1]));
+    let new_trees = join([subs(trees,1,subi(min,1)),subs(trees,addi(min,1),subi(max,1)),subs(trees,addi(max,1),n),[parent]]); // old version without addi: let new_trees = join([subs(trees,1,min),subs(trees,min+1,max),subs(trees,(max+1),(n+1)),[parent]]);
+    let new_n = length(new_trees);
+    printLn("new n:");
+    printLn(int2string(new_n));
     // Recursive call to cluster for new_trees
     return cluster(q, new_trees, age);
 }
 
 // MODEL
-function model(data: Int[][]) : SeqTree
+
+model function myModel(data: Int[][]) : SeqTree[]
 {
     // Define the scaled rate matrix for Jukes-Cantor
-    q = [[     -1.0, (1.0/3.0), (1.0/3.0), (1.0/3.0)],
-         [(1.0/3.0),      -1.0, (1.0/3.0), (1.0/3.0)],
-         [(1.0/3.0), (1.0,3.0),      -1.0, (1.0/3.0)],
-         [(1.0/3.0), (1.0/3.0), (1.0/3.0),      -1.0]];
+    let q = mtxCreate(4,4,
+        [     -1.0, (1.0/3.0), (1.0/3.0), (1.0/3.0),
+        (1.0/3.0),      -1.0, (1.0/3.0), (1.0/3.0),
+        (1.0/3.0), (1.0/3.0),      -1.0, (1.0/3.0),
+        (1.0/3.0), (1.0/3.0), (1.0/3.0),      -1.0]
+        );        
 
     // Define the initial trees vector (containing the leaves)
-    trees = SeqTree[nrow(data)];
-    for (i in 1 in nrow(data)) {
-        trees[i] = Leaf(age=0.0, seq=data[i]);
-    }
-    
-    // Build the tree by random clustering and return it (first element in return value)
-    return cluster(q, trees, 0.0)[1]
+    // NOTE need to add the function observe_model that replaces A,C,G,T with integers and handles uncertain positions. 
+    // Currently input data are integers, and hard coded starting point below.
+    let trees = [
+        Leaf{age=0.0, seq=data[1]},
+        Leaf{age=0.0, seq=data[2]},
+        Leaf{age=0.0, seq=data[3]},
+        Leaf{age=0.0, seq=data[4]}
+    ];
+
+    // Build the tree by random clustering and return it (second element in return value)
+    return cluster(q, trees, 0.0);
 }
-
-
