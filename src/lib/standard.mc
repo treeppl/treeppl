@@ -15,9 +15,10 @@ let neqi = neqi
 let addi = addi
 let subi = subi
 
-let subs = lam seq. lam beg. lam mend. 
-    subsequence seq (subi beg 1) (subi mend 1)
+let slice = lam seq. lam beg. lam mend.
+    subsequence seq (subi beg 1) (subi mend beg)
     
+
 ----------------------------
 --- Printing and strings ---
 ----------------------------
