@@ -61,17 +61,13 @@ function cluster(q: Tensor[Real], trees: SeqTree[], maxAge: Real): SeqTree[]
     let left_child = trees[pairs[1]];
     let right_child = trees[pairs[2]];
     //dump(left_child);
-    let m = length(left_child.age);
-    printLn(int2string(m));
-    //let test = apply(real2string,left_child.seq);
-    //printLn(join(test));
 
     // Get the age of the new internal node
     assume t ~ Exponential(10.0);
     let age = maxAge + t;
     
     // Propose ancestral state(s) from stationary distribution, to be corrected later
-    let seq_len = 15; //Find out the length of the aligned sequences. DOES NOT WORK. 15 testcase.
+    let seq_len = 15; //Find out the length of the aligned sequences. Should be length(left_child.seq)
     let seq = iid(categorical,CategoricalParam{probs=[0.25,0.25,0.25,0.25]},seq_len);
     
     // Observe the child states given the proposed state of parent node
@@ -94,8 +90,17 @@ function cluster(q: Tensor[Real], trees: SeqTree[], maxAge: Real): SeqTree[]
     // Compute new_trees list
     let min = mini(pairs[1],pairs[2]);  
     let max = maxi(pairs[1],pairs[2]); 
-    //let test =  subs([1.0, 2.0, 3.0], 1, 2);
-    //printLn(real2string(test[1]));
+    let test =  subs([1.0, 2.0, 3.0], 1, 2);
+    //printLn("subs test length");
+    //printLn(int2string(length(test)));
+    printLn("subs test 1");
+    printLn(real2string(test[1]));
+    printLn("subs test 2");
+    printLn(real2string(test[2]));
+    printLn("subs test 3");
+    printLn(real2string(test[3]));
+    printLn("subs test 4");
+    printLn(real2string(test[4]));
     let new_trees = join([subs(trees,1,subi(min,1)),subs(trees,addi(min,1),subi(max,1)),subs(trees,addi(max,1),n),[parent]]); // old version without addi: let new_trees = join([subs(trees,1,min),subs(trees,min+1,max),subs(trees,(max+1),(n+1)),[parent]]);
     let new_n = length(new_trees);
     printLn("new n:");
