@@ -21,7 +21,7 @@
 
 type SeqTree =
   | Leaf {age: Real, seq: Int[]}
-  | Node {left: SeqTree, right: SeqTree, age: Real, seq: Int[]}
+  | Node {age: Real, seq: Int[], left: SeqTree, right: SeqTree}
 
 // FUNCTIONS
 
@@ -114,6 +114,9 @@ model function myModel(data: Int[][]) : SeqTree[]
     ];
 
     let seq_len = 15; //NOTE This should be automatic but currently not is because length() has a bug, to be fixed. 
+    let seq_len = length(data[1][1]);
+    printLn("Testing length:");
+    printLn(int2string(seq_len));
 
     // Build the tree by random clustering and return 
     return cluster(q, trees, 0.0, seq_len);
