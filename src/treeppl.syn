@@ -190,7 +190,7 @@ prod Projection: ExprTppl = target:ExprTppl "." field:LIdent
 
 precedence {
   Projection FunCall Subscript;
-  Not;
+  Not Neg;
   Mul Div;
   Add Sub;
   ~Less Greater LessEq GreaterEq Equal Unequal;

@@ -12,6 +12,8 @@ include "seq.mc"
 
 let muli = muli
 let eqi = eqi
+let addi = addi
+let subi = subi
 
 ----------------------------
 --- Printing and strings ---
@@ -53,6 +55,8 @@ let length = length
 
 let zipWith = zipWith
 
+let foldl = foldl
+
 let any = any
 
 -- switching the order of map to make it more R-like
@@ -64,6 +68,10 @@ let sapply = lam x. lam f.
 
 let tapply = lam x. lam f.
   reverse (tensorFold (lam acc. lam c. cons (f c) acc) [] x)
+
+-- sapplyi is a mapping that additionally passes the current index
+let sapplyi = lam x. lam f.
+  mapi f x
 
 -- sapply2 for passing an argument a to function f
 let sapply2 = lam x. lam f. lam a.
@@ -87,6 +95,25 @@ let sbool2string = lam seq.
 
 -- remap make to rep to make it more R-like
 let rep = make
+
+-- Sequence normalization
+let normalizeSeq = lam seq.
+  let sum = foldl addf 0. seq in
+  map (lam f. divf f sum) seq
+
+-- Find elements of a sequence that are true
+let whichTrue = lam elems. 
+  foldli (lam acc. lam i. lam x. if x then snoc acc (addi i 1) else acc) [] elems
+
+-- Test cases
+utest whichTrue [true, false, true, true, false] with [1, 3, 4]
+utest whichTrue [false, false, false] with []
+utest whichTrue [] with []
+
+-- Sum all elements of a sequence
+let sumReal = lam seq.
+  foldl (lam acc. lam x. addf acc x) 0.0 seq
+
 
 ---------------
 --- Tensors ---
@@ -172,6 +199,17 @@ let iid = lam f. lam p. lam n.
   let params = make n p in
   map f params
 
+-- Retrieve a row vector with the columns in cols
+-- OPT(mariana/vipa, 2023-10-09): the idea is to have mtxRowCols, mtxRowsCol, and mtxRowsCols
+-- if we get the appropriate form of overloading we could make indexing (a[idxs]) 
+-- call the correct one of those later on
+let mtxRowCols = lam matrix. lam row. lam cols.
+  tensorSubSeqExn tensorCreateCArrayFloat matrix [[subi row 1], map (lam v. subi v 1) cols]
+
+-- Mean of a tensor (e.g., vectors and matrices)
+-- Was commented out by Viktor, used now by Mariana
+let tensorMean = lam t.
+  divf (tensorFold addf 0. t) (int2float (tensorSize t))
 
 -- NOTE(vsenderov, 23-10-01): Commenting two functions as they should not be
 -- used under 0-CFA
@@ -212,9 +250,6 @@ let messageElementPower = lam m. lam f.
 
 
 
--- Mean of a tensor (e.g., vectors and matrices)
---let tensorMean : Tensor[Float] -> Float = lam t.
---  divf (tensorFold addf 0. t) (int2float (tensorSize t))
 
 -- Sequence normalization
 --let normalize: [Float] -> [Float] = lam seq.

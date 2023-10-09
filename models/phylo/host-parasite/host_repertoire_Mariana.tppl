@@ -2,32 +2,29 @@
  *  Host repertoire model
  */
 
-/*---------------- Built-in types -----------------------------*/
-// We are assuming that the built-in tree type is structured as follows.  We do
-// not think this should be part of the script. Note that this tree is a binary
-// time tree, which is perhaps the most useful type of tree, but we will need
-// to support other tree types as well.
-type Tree =
-    | Leaf{age: Real, label: String}
-    | Node{age: Real, left: Tree, right: Tree, label: String}
+// Tree is a built in type, but without leaf and node labels
+// Convert labels to Ints during pre-processing
+type TreeLabeled =
+    | Leaf{age: Real, label: Int}
+    | Node{age: Real, left: TreeLabeled, right: TreeLabeled, label: Int}
 
 /*---------------- Model-specific types -----------------------------*/
 
 type ModelParams = 
-  ModelParams{q: Tensor[Real], d_matrix: Tensor[Real], d_average: Real, beta: Real}
+  ModelParams{qMatrix: Tensor[Real], dMatrix: Tensor[Real], dMean: Real, beta: Real}
 
 // Tree decorated with postorder messages from belief propagation.
 // Postorder = backwards in time
 type MsgTree =
- | MsgLeaf{age: Real, label: String, out_msg: Tensor[Real]}
- | MsgNode{age: Real, label: String, left: MsgTree, right: MsgTree,
-           left_in_msg: Tensor[Real], right_in_msg: Tensor[Real], out_msg: Tensor[Real]}
+ | MsgLeaf{age: Real, label: Int, out_msg: Tensor[Real][]}
+ | MsgNode{age: Real, label: Int, left: MsgTree, right: MsgTree,
+           left_in_msg: Tensor[Real][], right_in_msg: Tensor[Real][], out_msg: Tensor[Real][]}
 
 // Tree decorated with final probabilities from belief propagation,
 // tuned so that they are useful for proposals.
 type ProbsTree =
- | ProbsLeaf{age: Real, label: String, probs: Tensor[Real]}
- | ProbsNode{age: Real, label: String, probs: Tensor[Real],
+ | ProbsLeaf{age: Real, label: Int, probs: Tensor[Real][]}
+ | ProbsNode{age: Real, label: Int, probs: Tensor[Real][],
              left: ProbsTree, right: ProbsTree}
 
 // Event type used to store information about one host-repertoire change
@@ -38,8 +35,7 @@ type Event = Event{age: Real, host: Int, from_state: Int, to_state: Int}
 type ProposedHistory = ProposedHistory{log_debt: Real, events: Event[]}
 
 // History point type used to store repertoire snapshots at the repertoire
-// start ages repertoire start age = time of the event that led to that
-// combination
+// start ages, which is the time of the event that led to that combination
 type HistoryPoint = HistoryPoint{age: Real, repertoire: Int[]}
 
 // HistoryScore type used to store a vector of history points and a log
@@ -48,36 +44,34 @@ type HistoryScore = HistoryScore{log_score: Real, history: HistoryPoint[]}
 
 // Tree decorated with ancestral host repertoires and branch repertoire histories
 type HistoryTree =
-  | HistoryLeaf{age: Real, label: String, repertoire: Int[], history: HistoryPoint[], log_rep_debt: Real}
-  | HistoryNode{age: Real, label: String, repertoire: Int[], history: HistoryPoint[], log_rep_debt: Real,
+  | HistoryLeaf{age: Real, label: Int, repertoire: Int[], history: HistoryPoint[], log_rep_debt: Real}
+  | HistoryNode{age: Real, label: Int, repertoire: Int[], history: HistoryPoint[], log_rep_debt: Real,
                 left: HistoryTree, right: HistoryTree}
 
 
 /*
  *  Model
  *
- *  @param lambda: vector of transition rates. lambda[1]: switch_rate_0_to_1,
- *  lambda[2]: switch_rate_1_to_0 lambda[3]: switch_rate_1_to_2, lambda[4]:
- *  switch_rate_2_to_1. Transition rates are given as proportions of the total
+ *  @param lambda: vector of transition rates. lambda[1]: rate_0_to_1,
+ *  lambda[2]: rate_1_to_0 lambda[3]: rate_1_to_2, lambda[4]:
+ *  rate_2_to_1. Transition rates are given as proportions of the total
  *  off-diagonal rate, that is, the sum of lambdas is 1.0.
+ * *
  *  @param mu: rescale all rates in lambda with mu. Referred to as the maximum
  *  rate (or rate, for short) of host repertoire evolution, since
  *  0≤mu*lambda_i≤mu for all i (all lambdas <= 1.0).
+ * 
  *  @param beta: phylogenetic distance parameter, determining strength of the
  *  host distance effect on host repertoire evolution.
- * 
  */
 
-
-model function mymodel(parasite_tree: Tree, ntips: Int, nhosts: Int, interactions: Int[],
-  host_distances: Real[], d_average: Real, tune: Real): HistoryTree {
+model function mymodel(parasite_tree: TreeLabeled, ntips: Int, nhosts: Int, interactions: Int[],
+  host_distances: Real[], dMean: Real, tune: Real): HistoryTree {
 
   // Set priors for model parameters
   assume lambda ~ Dirichlet(1.0,1.0,1.0,1.0); 
   assume mu ~ Exponential(10.0);
   assume beta ~ Exponential(1.0);
-
-  //printLn(real2string(lambda[1]));
 
   // Set transition rate matrix for three-state independence model. 
   // If we extend to any number of states, [3,3] -> [nstates,nstates] and 
@@ -87,69 +81,65 @@ model function mymodel(parasite_tree: Tree, ntips: Int, nhosts: Int, interaction
         lambda[2], 0.-(lambda[2]+lambda[3]),    lambda[3],
               0.0,                lambda[4], 0.-lambda[4]]
   );
-  let q = matrixMulFloat(mu,r);
+  let qMatrix = mtxSclrMul(mu, r);
   
-  let d_matrix = mtxCreate(nhosts, nhosts, host_distances);
+  //printMtx(r);
+  //printLn(real2string(mu));
+  //printMtx(qMatrix);
+
+  // Calculate stationary probabilities for the rate matrix q
+  let stationary_probs = stationaryProbs(lambda);
+
+  let dMatrix = mtxCreate(nhosts, nhosts, host_distances);
 
   // Package model parameters into an object for convenient calling
-  // Note that during preprocessing we need to calculate d_average and
+  // Note that during preprocessing we need to calculate dMean and
   // make sure that host order in interactions and host distances
   // match, regardless of whether the input order is the same.
-  let mp = ModelParams(q=q, d_matrix=d_matrix, d_average=d_average, beta=beta);
-
-  // Calculate stationary probabilities from lambda values
-  let pi_1 = 1.0 / (1.0 + (lambda[2]/lambda[1]) + (lambda[3]/lambda[4]));
-  let pi_0 = pi_1 * (lambda[2]/lambda[1]);
-  let pi_2 = 1.0 - pi_0 - pi_1;
-  let stationary_probs = [pi_0, pi_1, pi_2];
+  let mp = ModelParams{qMatrix = qMatrix, dMatrix = dMatrix, dMean = dMean, beta = beta};
   
-  let interactions_reals = sint2real(interactions)
-  let i = mtxCreate(ntips, nhosts, interactions_reals);
+  let interactions_reals = sint2real(interactions);
+  let iMatrix = mtxCreate(ntips, nhosts, interactions_reals);
   
   // Derive params for ancestral repertoire proposals from independence model
-  //let probs_tree = get_proposal_params(parasite_tree, i, q, tune);
+  let probs_tree = get_proposal_params(parasite_tree, iMatrix, qMatrix, stationary_probs, tune);
 
   // Propose a repertoire for the root of the parasite tree
   // based on the state probabilities from the belief propagation
-  let probRecordSequence = sapply(probs, createProbRecord);
+  let probRecordSequence = sapply(probs_tree.probs, createProbRecord);
   let root_rep = sapply(probRecordSequence, categorical);
-  printLn(paste(sint2string(root_rep), ", "));
+  //printLn(paste(sint2string(root_rep), ", "));
 
-  //let log_root_rep_debt = zipWith(categoricalLogScore, root_rep, probRecordSequence);  //TODO: fix bug in Miking (Viktor P)
-  printLn(paste(sreal2string(log_root_rep_debt), ", "));
+  let log_root_rep_debt = sumReal(zipWith(categoricalLogScore, root_rep, probRecordSequence));  //TODO: fix bug in Miking (Viktor P)
+	// Note: categorical works here because root_rep id 0-based
+  //printLn(paste(sreal2string(log_root_rep_debt), ", "));
   
   let valid_root = any(is2, root_rep);
-  printLn(bool2string(valid_root));
+  //printLn(bool2string(valid_root));
 
   if !valid_root { 
     weight 0.0; 
     //resample;  //TODO: ask Jan about what's more efficient
   } 
-  
-  // We want the net debt so we also factor in the log score of the
-  // root repertoire, assuming equal prior probability on all possible
-  // repertoires, that is, all repertoires with at least one host in state
-  // 2; the others can be in any of the states {0,1,2}. There are 3^(n_host)
-  // repertoires in total. There are 2^(n_host) repertoires that only have
-  // ones and zeros, that is, forbidden repertoires. The total number of
-  // allowed repertoires is then 3^(n_host)-2^(n_host), and the probability
-  // each is the inverse of that.
-  let log_score_root = -log(3^(n_host) - 2^(n_host)); // TODO change to pow function in miking
+ 
+  let log_score_root = - ( log( (3.0 ^ Real(nhosts)) - (2.0 ^ Real(nhosts)) ) );
+  //printLn(real2string(log_score_root));
 
   // Simulate repertoire history on the parasite tree
-  let left  = simulate(probs_tree.left, repertoire, mp);
-  let right = simulate(probs_tree.right, repertoire, mp);
-  let historyTree = HistoryNode(age= probs_tree.age, label= probs_tree.label,
-    repertoire= repertoire, history=[], log_rep_debt= log_rep_debt-log_score_root,
-    left= left, right= right);
+  // Mariana: Daniel added the following if line in his coreppl code
+	//if probs_tree is ProbsNode {
+	let left = simulate(probs_tree.left, HistoryPoint{age = probs_tree.age, repertoire = root_rep}, mp, iMatrix);
+	let right = simulate(probs_tree.right, HistoryPoint{age = probs_tree.age, repertoire = root_rep}, mp, iMatrix);
+  let historyTree = HistoryNode{age = probs_tree.age, label = probs_tree.label,
+    repertoire = root_rep, history = [], log_rep_debt = log_root_rep_debt-log_score_root,
+    left = left, right = right};
 
   // Factor in the net debt of the proposed ancestral repertoires at nodes
   // and leaves in the historyTree.
-  factor(-get_rep_debt(historyTree)); //TODO: check syntax
-
+  logWeight( -get_rep_debt(historyTree) ); //TODO: check syntax
   return {historyTree = historyTree, lambda = lambda, mu = mu, beta = beta}
-
-}
+  //} else { error "Root is not a node!" } // Also from Daniel's code
+} 
 
 
 
@@ -165,7 +155,8 @@ model function mymodel(parasite_tree: Tree, ntips: Int, nhosts: Int, interaction
  * Parameters:
  *   @param parasite_tree: parasite tree
  *   @param interactions: interaction matrix
- *   @param q: rate matrix for the independence model
+ *   @param qMatrix: rate matrix for the independence model
+ *   @param stationary_probs: stationary probabilities for the independence model
  *   @param tune: parameter in (0,1) determining how much
  *                we should trust the independence model
  *
@@ -173,35 +164,24 @@ model function mymodel(parasite_tree: Tree, ntips: Int, nhosts: Int, interaction
  *   A ProbsTree containing the final repertoire state proposal
  *   probabilities for all nodes in the parasite tree.
  */
-function get_proposal_params(parasite_tree: Tree, i: ?,
-  q: ?, tune: Real): ProbsTree { // TODO: is there a type RateMatrix?
-// Compute postorder messages on the observed tree
-let msgTree = postorder_msgs(parasite_tree, i, q);
-// Calculate stationary probabilities for the rate matrix q
-let stationary_probs = stationary_probs(q); // TODO: implement stationary_probs function
+function get_proposal_params(parasite_tree: TreeLabeled, iMatrix: Tensor[Real], qMatrix: Tensor[Real], stationary_probs: Tensor[Real], tune: Real): ProbsTree {
 
-let pis = rep(stationary_probs, length(msgTree.out_msg));  // TODO: rep = repeat. pis is not used anywhere else? 
-// Also, msgTree.out_msg is a matrix, so that is the length?
+  let msgTree = postorder_msgs(parasite_tree, iMatrix, qMatrix);  
+	let n = length(getMsgTreeMsg(msgTree));
+	let pis = rep(n, stationary_probs);
+  return final_probs(msgTree, pis, qMatrix, tune); // TODO: return only msgTree? -> let probs_tree = get_proposal_params();
 
-return final_probs(msgTree, pis, q, tune); // TODO: return only msgTree? -> let probs_tree = get_proposal_params();
 }
 
-
-/*
-* postorder_msgs
-*
-* Compute postorder messages on the observed parasite tree
-*
-*/
-
-function postorder_msgs(tree: Tree, i: ?, q: ?) : MsgTree { // TODO: matrix types
+// Compute postorder messages on the observed tree
+function postorder_msgs(tree: TreeLabeled, iMatrix: Tensor[Real], qMatrix: Tensor[Real]) : MsgTree {
 
   if tree is Leaf {
-    return MsgLeaf(age= 0.0, label= tree.label, out_msg= observation_message(i[tree.label]); // TODO: interaction matrix i needs rownames (i["tree.label",])
+    return MsgLeaf{age = 0.0, label = tree.label, out_msg = observationMessage(mtxGetRow(tree.label, iMatrix))};
   }
 
-  let left  = postorder_msgs(tree.left , i, q);
-  let right = postorder_msgs(tree.right, i, q);
+  let left  = postorder_msgs(tree.left ,iMatrix, qMatrix);
+  let right = postorder_msgs(tree.right,iMatrix, qMatrix);
 
   // This assumes that we can do matrix exponentiation and that
   // multiplication of two vectors means element-wise multiplication. 't' is
@@ -210,39 +190,416 @@ function postorder_msgs(tree: Tree, i: ?, q: ?) : MsgTree { // TODO: matrix type
   // we assume that the vector is a row vector.  tree.age-left.age gives the
   // branch length for the left daughter
 
-  let tleft = matrixTranspose(matrixExponential(matrixMulFloat(tree.age-left.age, q)));
-  let tright = matrixTranspose(matrixExponential(matrixMulFloat(tree.age-right.age, q)));
+  let tMatrixLeft = mtxTrans(mtxExp(mtxSclrMul(tree.age-left.age, qMatrix)));      // TODO: Check left.age: must be wrong (see final_probs)
+  let tMatrixRight = mtxTrans(mtxExp(mtxSclrMul(tree.age-right.age, qMatrix)));
 
-  let left_in_msg  = message(left.out_msg, tleft);
-  let right_in_msg = message(right.out_msg, tright);
+  let left_in_msg  = sapply2(left.out_msg, mtxMul, tMatrixLeft);
+  let right_in_msg = sapply2(right.out_msg, mtxMul, tMatrixRight);
 
-  // Daniel: Missing normalization here?
-  let out_msg = left_in_msg * right_in_msg;
+  let out_msg = normalizeMessage(mulMessage(left_in_msg, right_in_msg));
 
-  return MsgNode(age= tree.age, label= tree.label, left= left, right= right, 
-    left_in_msg= left_in_msg, right_in_msg= right_in_msg, out_msg= out_msg);
+  return MsgNode{age= tree.age, label= tree.label, left= left, right= right, 
+    left_in_msg = left_in_msg, right_in_msg = right_in_msg, out_msg = out_msg};
+
+}
+
+// Compute leaf message from observed interactions
+function observationMessage(obs_repertoire: Tensor[Real]) : Tensor[Real][] {
+  return tapply(obs_repertoire, makeStateMessage);                         
+}
+
+
+// Takes a single interaction and creates the message
+// Interactions are real because of limitations in boolean comparisons
+// TODO change to Int or String in future
+function makeStateMessage(interaction: Real): Tensor[Real] {
+  // Viktor: we do not have a switch statement (TODO: perhaps we need in the future?)
+  if (interaction == 0.0) {
+    return rvecCreate(3, [1., 0., 0.]);
+  } else {
+    	if (interaction == 1.0) {
+    		return rvecCreate(3, [0., 1., 0.]);
+    	} else {
+      		if (interaction == 2.0) {
+    				return rvecCreate(3, [0., 0., 1.]);
+					} else {
+    				return rvecCreate(3, [1., 1., 1.]);
+						}
+				}
+		}
+}
+
+
+// Compute final probabilities from belief propagation on the observed parasite tree
+function final_probs(tree: MsgTree, root_msg: Tensor[Real][], qMatrix: Tensor[Real], tune: Real) : ProbsTree {
+    
+  let probs = normalizeMessage(
+		messageElementPower(mulMessage(tree.out_msg, root_msg), tune)
+	);
+
+	if tree is MsgLeaf {
+    return ProbsLeaf{age= 0.0, label= tree.label, probs = probs};
+  } 
+
+	let left_branch = tree.age - getMsgTreeAge(tree.left);
+	let right_branch = tree.age - getMsgTreeAge(tree.right);
+
+	let tMatrixLeft = mtxExp(mtxSclrMul(left_branch, qMatrix));
+	let tMatrixRight = mtxExp(mtxSclrMul(right_branch, qMatrix));
+
+  let left_root_msg  = sapply2(mulMessage(root_msg,tree.left_in_msg), mtxMul, tMatrixLeft);
+  let right_root_msg = sapply2(mulMessage(root_msg,tree.right_in_msg), mtxMul, tMatrixRight);
+
+  let left  =  final_probs(tree.left,  left_root_msg, qMatrix, tune);
+  let right =  final_probs(tree.left, right_root_msg, qMatrix, tune);
+
+  return ProbsNode{age = tree.age, label = tree.label, left = left, right = right, probs = probs};
+}
+
+/*---------------- Model functions -------------------------*/
+
+// Simulate an evolutionary history for the host repertoires
+function simulate (tree: ProbsTree, start: HistoryPoint, mp: ModelParams, iMatrix: Tensor[Real]) : HistoryTree {
+    
+	// Propose a repertoire. The propose mechanism means that the simulation
+  // should be "penalized" for the probability associated with the draw. This
+  // can be done at any point in the inference but it makes sense to do this
+  // at the end, when the history over the entire tree has been considered.
+  // For leaves, there is also a score from the observations. We factor that
+  // in here so that 
+
+	let probs = getProbs(tree);
+  let probRecordSequence = sapply(tree.probs, createProbRecord);
+  let repertoire = sapply(probRecordSequence, categorical);           // NOTE: assume is within function categorical
+  let log_rep_debt = sumReal(zipWith(categoricalLogScore, repertoire, probRecordSequence));  //TODO: fix bug in Miking (Viktor P)
+	// Note: categorical works here because repertoire id 0-based
+  
+	let valid_rep = any(is2, repertoire);
+
+  if !valid_rep { 
+    weight 0.0; 
+    //resample;  //TODO: ask Jan about what's more efficient
+  } 
+
+	let stop = HistoryPoint{age = getProbsTreeAge(tree), repertoire = repertoire};
+	let history = simulate_history(start, stop, mp);
+
+	if tree is ProbsLeaf {
+		let obs_msg = observationMessage(mtxGetRow(tree.label, iMatrix)); // TODO: either pass interaction matrix as 
+		// an argument or retrieve the message from the Probstree (inherited from the MsgTree) ?
+
+		let obsRecordSequence = sapply(obs_msg, createProbRecord);
+		let log_score = zipWith(categoricalLogScore, repertoire, obsRecordSequence);  //TODO: fix bug in Miking (Viktor P)
+		// Note: categorical works here because repertoire id 0-based
+		
+		return HistoryLeaf{age = tree.age, label = tree.label, repertoire = repertoire,       // TODO: do tree.age and tree.label work here?
+		                   history = history, log_rep_debt = log_rep_debt - log_score};
+	}
+
+	let left = simulate(tree.left, stop, mp);
+	let right = simulate (tree.right, stop, mp);
+
+	return HistoryNode{age = tree.age, label = tree.label, repertoire = repertoire,       // TODO: do tree.age and tree.label work here?
+										 history = history, log_rep_debt = log_rep_debt,
+										 left = left, right = right};
 
 }
 
 
-// Compute final probabilities from belief propagation on the observed parasite
-// tree
-function final_probs(tree: MsgTree, root_msg: Real[][3], q: ?, tune: Real) : ProbsTree {
-    
-  let probs = messageElementPower(mulMessage(tree.out_msg, root_msg), tune); // TODO: there is a normalization step in CorePPL
-  // TODO: both functions were written in CorePPL by Daniel
-  if tree is Leaf {
-    return ProbsLeaf(age= 0.0, label= tree.label, probs= probs);
-  } 
+// Simulate history conditional on initial repertoire, start time, and end
+// time. We first propose events from the independence model and then
+// condition the simulation on those events.
+function simulate_history (from_rep: HistoryPoint, to_rep: HistoryPoint, mp: ModelParams) : HistoryPoint[] {
 
-  let tleft = matrixExponential(matrixMulFloat(tree.age-tree.left.age, q));
-  let tright = matrixExponential(matrixMulFloat(tree.age-tree.righ.age, q));
+  let proposed_unordered_events = propose_events(1, from_rep, to_rep, mp.qMatrix);
 
-  left_root_msg  = message(root_msg*tree.right_in_msg, Tleft)
-  right_root_msg = message(root_msg*tree.left_in_msg , Tright)
+	let events = quickSort(proposed_unordered_events.events, subAge);  // TODO: not working
 
-  left  =  final_probs(tree.left,  left_root_msg, Q, tune)
-  right =  final_probs(tree.left, right_root_msg, Q, tune)
+  let history_score = simulate_by_event(from_rep.repertoire, events, 1, from_rep.age, to_rep.age, mp, proposed_unsorted_events.log_debt);
 
-  return ProbsNode(age=tree.age, label=tree.label, left=left, right=right, probs=probs)
+  // Now we have both debt and score at an alignment point 
+  factor(history_score.log_score - proposed_unordered_events.log_debt);  // TODO Check that factor works
+
+  return history_score.history;
+
+}
+
+// Propose events from independence model
+function propose_events (host_index: Int, from_rep: HistoryPoint, to_rep: HistoryPoint, qMatrix: Tensor[Real]) : ProposedHistory {
+
+  if (host_index > length(from_rep.repertoire)) {             // NOTE: Isn't it more intuitive to write 
+		return ProposedHistory{log_debt = 0.0, events = []};  // if(host_index <= length(from_rep.repertoire)) continue?
+	}
+  let res1 = propose_events_for_host(host_index, from_rep.age, to_rep.age, 
+		from_rep.repertoire[host_index], to_rep.repertoire[host_index], qMatrix);
+  let res2 = propose_events(addi(host_index, 1), from_rep, to_rep, qMatrix);
+
+  return ProposedHistory{log_debt = res1.log_debt + res2.log_debt,       // TODO: Check join
+												 events = join([rest1.events, rest2.events])};  // is events a sequence of Events?
+
+	}
+
+// Propose events for one host
+function propose_events_for_host (host_index: Int, from_age: Real, end_age: Real,
+	from_state: Int, end_state: Int, qMatrix: Tensor[Real][]) : ProposedHistory {
+		
+	let rate = -(mtxGet(addi(from_state,1), addi(from_state,1), qMatrix));
+
+	if (Real(from_state) != Real(end_state)) {
+		let t = sample_exponential_max_t(rate, from_age - end_age);
+	} else {
+		assume t ~ Exponential(rate);
+	}
+
+	let new_age = from_age - t;
+
+	// Calculate debt. Note the special case for the last time segment
+	// with no events. We use the average weight of all particles with
+	// this outcome, which should be advantageous for inference
+	// efficiency. It also saves us from storing the actual draw.
+	if (new_age < end_age) {
+		let log_wait_debt = poissonLogScore(0, PoissonParam{rate = rate*(from_age - end_age)});
+		return ProposedHistory{log_debt = log_wait_debt, events = []};
+	} else {
+		let log_wait_debt = exponentialLogScore(t, ExponentialParam{rate = rate});
+	}
+
+	if (Real(from_state) != Real(end_state)) {
+		let log_wait_debt = log_pdf_exponential_max_t(0.0, rate, from_age - end_age);
+	} else {
+		let log_wait_debt = exponentialLogScore(t, ExponentialParam{rate = rate});   
+	}
+
+	let to_states = getToStates(from_state); 
+	let state_probs = normalizeSeq([mtxGet(addi(from_state,1), addi(to_states[1],1), qMatrix),
+																	mtxGet(addi(from_state1), addi(to_states[2],1), qMatrix)]);
+	
+	assume new_state_pos ~ Categorical(state_probs);
+	let new_state = to_states[addi(new_state_pos, 1)]; // Note: Categorical is 0-based, so we need to add 1 do get the correct position
+	let log_event_debt = categoricalLogScore(new_state_pos, state_probs); // Note: Use position instead of value
+
+	let event = Event{age = new_age, host = host_index, from_state = from_state, to_state = new_state};
+	let res = propose_events_for_host(host_index, new_age, end_age, new_state, end_state, qMatrix);
+
+	return ProposedHistory{log_debt = log_wait_debt+log_event_debt+res.log_debt, events = join([event,res.events])}; // TODO: Check join
+
+}
+
+function getToStates(state: Int): Int[] {    // TODO: Shouldn't it exclude 0->2 and 2->0 ?
+	if (Real(state) == 0.0) {
+		return [1,2];
+	} else {
+		if (Real(state) == 1.0) {
+			return [0,2];
+		} else {
+			if (Real(state) == 2.0) {
+				return [0,1];
+			}
+		}
+	}
+}
+
+// Sample from truncated exponential distribution with rate 'rate'
+// but with support only on (0, max_t).
+function sample_exponential_max_t(rate: Real, max_t: Real) : Real {
+  let u_min = exp (-(rate * max_t));
+  assume u ~ Uniform (u_min, 1.0);
+  return ((-(log(u))) / rate);
+}
+
+// Compute log PDF for a value from the truncated exponential
+// The truncation multiplies the pdf with 1/(1-u_min).
+function log_pdf_exponential_max_t(value : Real, rate: Real, max_t: Real) : Real {
+	let u_min = exp(-(rate * max_t));
+  return ( (-(rate * value * log(rate))) - log(1.0-u_min)); 
+}
+
+
+// Simulate repertoire evolution from full model, one event
+// at a time. We return the sequence of repertoires. We
+// accumulate scores here rather than introducing observe
+// statements, as those observes would not be aligned.
+function simulate_by_event (repertoire: Int[], events: Event[], event_index: Int,
+	from_age: Real, end_age: Real, mp: ModelParams, log_debt: Real) : HistoryScore {
+
+	// End case, deal with last time segment
+	if event_index > length(events) {
+		let change_rate = total_rate(repertoire, mp);
+		return HistoryScore{log_score = poissonLogScore(0, PoissonParam{rate = change_rate*(from_age-end_age)}), history_points = []};
+	}
+
+	// Typical case
+	let the_event = events[event_index];
+	let rate = rate(repertoire, the_event.host, the_event.to_state, mp);
+	let change_rate = total_rate(repertoire, mp);
+
+	// Note that the first statement will capture the cases where the proposed
+	// history is impossible because the repertoire we are supposed to go to is
+	// empty (the rate is zero).
+	observe true ~ Bernoulli(rate/change_rate); // we want to die immediately here
+	let log_score = exponentialLogScore(from_age - the_event.age, ExponentialParam{rate=change_rate});
+
+	// new_rep: Int[]                               // TODO: Have asked Viktor S about syntax
+	// for i in 1 to length(repertoire) {
+	// 	if (i==the_event.host)
+	// 	new_rep[i] = the_event.to_state
+	// 	else
+	// 	new_rep[i] = repertoire[i]
+	// }
+
+	let hp = HistoryPoint{age = the_event.age, repertoire = new_rep};
+
+	let res = simulate_by_event(new_rep, events, addi(event_index,1), the_event.age, end_age, mp, log_debt);
+
+	return HistoryScore{log_score = res.log_score+log_score, history_points = join([hp, res.history_points])};
+}
+
+// Compute rate for a proposed event
+function rate (repertoire: Int[], host_index: Int, to_state: Int, mp: ModelParams): Real {
+
+  let from_state = repertoire[host_index];
+  let base_rate = mtxGet(addi(from_state,1), addi(to_state,1), mp.qMatrix);
+
+  // Losses are easy, no cross-repertoire modification used here
+  if (from_state > to_state) {
+		
+		let n2s = foldl(count2s, 0, repertoire);
+		if (from_state == 2 && Real(n2s) == 1.0) { 
+			return 0;
+		} else {
+			return base_rate;
+		}
+	}
+
+	// We have a gain rate, so we need to factor in beta-dependent
+  // cross-repertoire effect
+  if (from_state == 0) {
+    let current_hosts = whichTrue(sapply(repertoire, is1or2)); 
+	} else {
+    let current_hosts = whichTrue(sapply(repertoire, is2));   
+	}
+  
+	let dist = tensorMean(mtxRowCols(mp.dMatrix, host_index, current_hosts));
+  return base_rate * (exp(-(mp.beta*(dist/mp.dMean))));
+
+}
+
+// Compute total rate of change from a repertoire
+function total_rate (repertoire: Int[], mp: ModelParams): Real {
+
+	let n1s = foldl(count1s, 0, repertoire);
+	let totalLoss1 = n1s * mtxGet(2, 1, mp.qMatrix);
+	let n2s = foldl(count2s, 0, repertoire);
+	
+	if Real(n2s) == 1.0 {
+		let totalLoss2 = 0.0;
+	} else {
+		let totalLoss2 = n2s * mtxGet(3, 2, mp.qMatrix);
+	}
+
+	let totalGains = sumReal(sapplyi(repertoire, gainsIf0or1));
+
+  return totalLoss1 + totalLoss2 + totalGains;
+}
+
+function gainsIf0or1 (repertoire: Int[], host_index: Int, mp: ModelParams): Real {
+	
+	let from_state = repertoire[host_index];
+	if (eqi(from_state, 0) || eqi(from_state, 1)) {
+		return rate(repertoire, host_index, addi(from_state,1), mp);
+	} else {
+		return 0.0;
+	}
+}
+
+// Accumulate the total log debt of proposing the
+// ancestral repertoires in the tree.
+function get_rep_debt (tree: HistoryTree): Real {
+
+  if tree is HistoryLeaf {
+		return historyTree.log_rep_debt;
+	} else{
+			return  get_rep_debt(historyTree.left) + get_rep_debt(historyTree.right);
+	}
+}
+
+
+/*---------------- Help functions --------------------------*/
+
+
+function createProbRecord(p: Tensor[Real]): CategoricalParam {
+	//let ncol = dim(p)[2];
+	//let p_seq = zipWith(getRowVecElem, p, 1 to ncol);  // TODO: update when zipWith bug is solved
+
+	// hardcoded solution while zipWith doesn't work
+	let p1 = getRowVecElem(p, 1);                
+	let p2 = getRowVecElem(p, 2);
+	let p3 = getRowVecElem(p, 3);
+	let p_seq = [p1,p2,p3];
+  return CategoricalParam {probs = p_seq};
+}
+
+function getRowVecElem(t: Tensor[Real], i: Int): Real {
+  return mtxGet(1, i, t);
+}
+
+function stationaryProbs(lambda: Real[]): Tensor[Real] {
+  // Calculate stationary probabilities from lambda values
+  let pi_1 = 1.0 / (1.0 + (lambda[2]/lambda[1]) + (lambda[3]/lambda[4]));
+  let pi_0 = pi_1 * (lambda[2]/lambda[1]);
+  let pi_2 = 1.0 - pi_0 - pi_1;
+
+  return rvecCreate(3, [pi_0, pi_1, pi_2]);
+}
+  
+function getMsgTreeAge(tree: MsgTree) : Real {
+	return tree.age;
+}
+
+function getMsgTreeMsg(tree: MsgTree) : Tensor[Real][] {
+	return tree.out_msg;
+}
+
+function getProbsTreeAge(tree: ProbsTree) : Real {
+	return tree.age;
+}
+
+function getProbs(tree: ProbsTree): Tensor[Real][]{
+	return tree.probs;
+}
+
+function subAge(left: Event, right: Event) {
+  return subi(right.age, left.age);
+}
+
+function count2s(count: Int, host: Int): Int {
+	if (eqi(host, 2)) {
+		return addi(count, 1);
+	} else {
+			return count;
+	}
+}
+
+function count1s(count: Int, host: Int): Int {
+	if (eqi(host, 1)) {
+		return addi(count, 1);
+	} else {
+			return count;
+	}
+}
+
+function is2(x: Int): Bool {
+  if (eqi(x, 2)) {
+    return true;
+  } else {
+      return false;
+  }
+}
+
+function is1or2(x: Int): Bool {
+  if (eqi(x,1) || eqi(x,2)) { 
+    return true;
+  } else {
+			return false;
+	}
 }
