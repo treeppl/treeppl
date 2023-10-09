@@ -69,7 +69,7 @@ model function mymodel(symbiont_tree: TreeLabeled, ntips: Int, nhosts: Int, inte
   host_distances: Real[], dMean: Real, tune: Real): HistoryTree {
 
   // Set priors for model parameters
-  assume lambda ~ Dirichlet(1.0,1.0,1.0,1.0); 
+  assume lambda ~ Dirichlet([1.0,1.0,1.0,1.0]); 
   assume mu ~ Exponential(10.0);
   assume beta ~ Exponential(1.0);
 
@@ -137,7 +137,7 @@ model function mymodel(symbiont_tree: TreeLabeled, ntips: Int, nhosts: Int, inte
   // Factor in the net debt of the proposed ancestral repertoires at nodes
   // and leaves in the historyTree.
   logWeight( -get_rep_debt(historyTree) ); //TODO: check syntax
-  return {historyTree = historyTree, lambda = lambda, mu = mu, beta = beta}
+  return {historyTree = historyTree, lambda = lambda, mu = mu, beta = beta};
   //} else { error "Root is not a node!" } // Also from Daniel's code
 } 
 
@@ -439,19 +439,23 @@ function simulate_by_event (repertoire: Int[], events: Event[], event_index: Int
 	observe true ~ Bernoulli(rate/change_rate); // we want to die immediately here
 	let log_score = exponentialLogScore(from_age - the_event.age, ExponentialParam{rate=change_rate});
 
-	// new_rep: Int[]                               // TODO: Have asked Viktor S about syntax
-	// for i in 1 to length(repertoire) {
-	// 	if (i==the_event.host)
-	// 	new_rep[i] = the_event.to_state
-	// 	else
-	// 	new_rep[i] = repertoire[i]
-	// }
+	let newState = getNewState(repertoire, the_event); 
+	let nhosts = length(repertoire);	
+  let new_repertoire = sapply(1 to nhosts, newState);
 
-	let hp = HistoryPoint{age = the_event.age, repertoire = new_rep};
+	let hp = HistoryPoint{age = the_event.age, repertoire = new_repertoire};
 
-	let res = simulate_by_event(new_rep, events, addi(event_index,1), the_event.age, end_age, mp, log_debt);
+	let res = simulate_by_event(new_repertoire, events, addi(event_index,1), the_event.age, end_age, mp, log_debt);
 
 	return HistoryScore{log_score = res.log_score+log_score, history_points = join([hp, res.history_points])};
+}
+
+function getNewState(oldRepertoire: Int[], event: Event, index: Int) {
+	if (eqi(index, event.host)) {
+	  return event.to_state;
+	} else {
+	  return oldRepertoire[index];
+	}
 }
 
 // Compute rate for a proposed event
