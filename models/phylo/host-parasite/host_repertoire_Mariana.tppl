@@ -65,7 +65,7 @@ type HistoryTree =
  *  host distance effect on host repertoire evolution.
  */
 
-model function mymodel(parasite_tree: TreeLabeled, ntips: Int, nhosts: Int, interactions: Int[],
+model function mymodel(symbiont_tree: TreeLabeled, ntips: Int, nhosts: Int, interactions: Int[],
   host_distances: Real[], dMean: Real, tune: Real): HistoryTree {
 
   // Set priors for model parameters
@@ -102,9 +102,9 @@ model function mymodel(parasite_tree: TreeLabeled, ntips: Int, nhosts: Int, inte
   let iMatrix = mtxCreate(ntips, nhosts, interactions_reals);
   
   // Derive params for ancestral repertoire proposals from independence model
-  let probs_tree = get_proposal_params(parasite_tree, iMatrix, qMatrix, stationary_probs, tune);
+  let probs_tree = get_proposal_params(symbiont_tree, iMatrix, qMatrix, stationary_probs, tune);
 
-  // Propose a repertoire for the root of the parasite tree
+  // Propose a repertoire for the root of the symbiont tree
   // based on the state probabilities from the belief propagation
   let probRecordSequence = sapply(probs_tree.probs, createProbRecord);
   let root_rep = sapply(probRecordSequence, categorical);
@@ -125,7 +125,7 @@ model function mymodel(parasite_tree: TreeLabeled, ntips: Int, nhosts: Int, inte
   let log_score_root = - ( log( (3.0 ^ Real(nhosts)) - (2.0 ^ Real(nhosts)) ) );
   //printLn(real2string(log_score_root));
 
-  // Simulate repertoire history on the parasite tree
+  // Simulate repertoire history on the symbiont tree
   // Mariana: Daniel added the following if line in his coreppl code
 	//if probs_tree is ProbsNode {
 	let left = simulate(probs_tree.left, HistoryPoint{age = probs_tree.age, repertoire = root_rep}, mp, iMatrix);
@@ -153,7 +153,7 @@ model function mymodel(parasite_tree: TreeLabeled, ntips: Int, nhosts: Int, inte
  * for the proposals of ancestral repertoires.
  *
  * Parameters:
- *   @param parasite_tree: parasite tree
+ *   @param symbiont_tree: symbiont tree
  *   @param interactions: interaction matrix
  *   @param qMatrix: rate matrix for the independence model
  *   @param stationary_probs: stationary probabilities for the independence model
@@ -162,11 +162,11 @@ model function mymodel(parasite_tree: TreeLabeled, ntips: Int, nhosts: Int, inte
  *
  * Return value:
  *   A ProbsTree containing the final repertoire state proposal
- *   probabilities for all nodes in the parasite tree.
+ *   probabilities for all nodes in the symbiont tree.
  */
-function get_proposal_params(parasite_tree: TreeLabeled, iMatrix: Tensor[Real], qMatrix: Tensor[Real], stationary_probs: Tensor[Real], tune: Real): ProbsTree {
+function get_proposal_params(symbiont_tree: TreeLabeled, iMatrix: Tensor[Real], qMatrix: Tensor[Real], stationary_probs: Tensor[Real], tune: Real): ProbsTree {
 
-  let msgTree = postorder_msgs(parasite_tree, iMatrix, qMatrix);  
+  let msgTree = postorder_msgs(symbiont_tree, iMatrix, qMatrix);  
 	let n = length(getMsgTreeMsg(msgTree));
 	let pis = rep(n, stationary_probs);
   return final_probs(msgTree, pis, qMatrix, tune); // TODO: return only msgTree? -> let probs_tree = get_proposal_params();
@@ -230,7 +230,7 @@ function makeStateMessage(interaction: Real): Tensor[Real] {
 }
 
 
-// Compute final probabilities from belief propagation on the observed parasite tree
+// Compute final probabilities from belief propagation on the observed symbiont tree
 function final_probs(tree: MsgTree, root_msg: Tensor[Real][], qMatrix: Tensor[Real], tune: Real) : ProbsTree {
     
   let probs = normalizeMessage(
