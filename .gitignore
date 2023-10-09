@@ -3,7 +3,4 @@ out.mc
 .DS_Store
 tool
 build/
-out
-out.mc
-my_tests/
 
