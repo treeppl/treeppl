@@ -48,6 +48,7 @@ type HistoryTree =
   | HistoryNode{age: Real, label: Int, repertoire: Int[], history: HistoryPoint[], log_rep_debt: Real,
                 left: HistoryTree, right: HistoryTree}
 
+type ReturnType = ReturnType{tree: HistoryTree, lambda: Real[], mu: Real, beta: Real}
 
 /*
  *  Model
@@ -66,7 +67,7 @@ type HistoryTree =
  */
 
 model function mymodel(symbiont_tree: TreeLabeled, ntips: Int, nhosts: Int, interactions: Int[],
-  host_distances: Real[], dMean: Real, tune: Real): HistoryTree {
+  host_distances: Real[], dMean: Real, tune: Real): ReturnType {
 
   // Set priors for model parameters
   assume lambda ~ Dirichlet([1.0,1.0,1.0,1.0]); 
@@ -127,9 +128,9 @@ model function mymodel(symbiont_tree: TreeLabeled, ntips: Int, nhosts: Int, inte
 
   // Simulate repertoire history on the symbiont tree
   // Mariana: Daniel added the following if line in his coreppl code
-	//if probs_tree is ProbsNode {
-	let left = simulate(probs_tree.left, HistoryPoint{age = probs_tree.age, repertoire = root_rep}, mp, iMatrix);
-	let right = simulate(probs_tree.right, HistoryPoint{age = probs_tree.age, repertoire = root_rep}, mp, iMatrix);
+  //if probs_tree is ProbsNode {
+  let left = simulate(probs_tree.left, HistoryPoint{age = probs_tree.age, repertoire = root_rep}, mp, iMatrix);
+  let right = simulate(probs_tree.right, HistoryPoint{age = probs_tree.age, repertoire = root_rep}, mp, iMatrix);
   let historyTree = HistoryNode{age = probs_tree.age, label = probs_tree.label,
     repertoire = root_rep, history = [], log_rep_debt = log_root_rep_debt-log_score_root,
     left = left, right = right};
@@ -137,7 +138,7 @@ model function mymodel(symbiont_tree: TreeLabeled, ntips: Int, nhosts: Int, inte
   // Factor in the net debt of the proposed ancestral repertoires at nodes
   // and leaves in the historyTree.
   logWeight( -get_rep_debt(historyTree) ); //TODO: check syntax
-  return {historyTree = historyTree, lambda = lambda, mu = mu, beta = beta};
+  return ReturnType{tree = historyTree, lambda = lambda, mu = mu, beta = beta};
   //} else { error "Root is not a node!" } // Also from Daniel's code
 } 
 
@@ -167,8 +168,8 @@ model function mymodel(symbiont_tree: TreeLabeled, ntips: Int, nhosts: Int, inte
 function get_proposal_params(symbiont_tree: TreeLabeled, iMatrix: Tensor[Real], qMatrix: Tensor[Real], stationary_probs: Tensor[Real], tune: Real): ProbsTree {
 
   let msgTree = postorder_msgs(symbiont_tree, iMatrix, qMatrix);  
-	let n = length(getMsgTreeMsg(msgTree));
-	let pis = rep(n, stationary_probs);
+  let n = length(getMsgTreeMsg(msgTree));
+  let pis = rep(n, stationary_probs);
   return final_probs(msgTree, pis, qMatrix, tune); // TODO: return only msgTree? -> let probs_tree = get_proposal_params();
 
 }
@@ -235,17 +236,17 @@ function final_probs(tree: MsgTree, root_msg: Tensor[Real][], qMatrix: Tensor[Re
     
   let probs = normalizeMessage(
 		messageElementPower(mulMessage(tree.out_msg, root_msg), tune)
-	);
+  );
 
-	if tree is MsgLeaf {
+  if tree is MsgLeaf {
     return ProbsLeaf{age= 0.0, label= tree.label, probs = probs};
   } 
 
-	let left_branch = tree.age - getMsgTreeAge(tree.left);
-	let right_branch = tree.age - getMsgTreeAge(tree.right);
+  let left_branch = tree.age - getMsgTreeAge(tree.left);
+  let right_branch = tree.age - getMsgTreeAge(tree.right);
 
-	let tMatrixLeft = mtxExp(mtxSclrMul(left_branch, qMatrix));
-	let tMatrixRight = mtxExp(mtxSclrMul(right_branch, qMatrix));
+  let tMatrixLeft = mtxExp(mtxSclrMul(left_branch, qMatrix));
+  let tMatrixRight = mtxExp(mtxSclrMul(right_branch, qMatrix));
 
   let left_root_msg  = sapply2(mulMessage(root_msg,tree.left_in_msg), mtxMul, tMatrixLeft);
   let right_root_msg = sapply2(mulMessage(root_msg,tree.right_in_msg), mtxMul, tMatrixRight);
@@ -261,14 +262,14 @@ function final_probs(tree: MsgTree, root_msg: Tensor[Real][], qMatrix: Tensor[Re
 // Simulate an evolutionary history for the host repertoires
 function simulate (tree: ProbsTree, start: HistoryPoint, mp: ModelParams, iMatrix: Tensor[Real]) : HistoryTree {
     
-	// Propose a repertoire. The propose mechanism means that the simulation
+  // Propose a repertoire. The propose mechanism means that the simulation
   // should be "penalized" for the probability associated with the draw. This
   // can be done at any point in the inference but it makes sense to do this
   // at the end, when the history over the entire tree has been considered.
   // For leaves, there is also a score from the observations. We factor that
   // in here so that 
 
-	let probs = getProbs(tree);
+  let probs = getProbs(tree);
   let probRecordSequence = sapply(tree.probs, createProbRecord);
   let repertoire = sapply(probRecordSequence, categorical);           // NOTE: assume is within function categorical
   let log_rep_debt = sumReal(zipWith(categoricalLogScore, repertoire, probRecordSequence));  //TODO: fix bug in Miking (Viktor P)
@@ -297,11 +298,11 @@ function simulate (tree: ProbsTree, start: HistoryPoint, mp: ModelParams, iMatri
 	}
 
 	let left = simulate(tree.left, stop, mp);
-	let right = simulate (tree.right, stop, mp);
+	let right = simulate(tree.right, stop, mp);
 
 	return HistoryNode{age = tree.age, label = tree.label, repertoire = repertoire,       // TODO: do tree.age and tree.label work here?
-										 history = history, log_rep_debt = log_rep_debt,
-										 left = left, right = right};
+					   history = history, log_rep_debt = log_rep_debt,
+					   left = left, right = right};
 
 }
 
