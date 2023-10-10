@@ -1,16 +1,16 @@
 /*
  * File: optmodel.tppl
- * Description: Probabilistic model taken from optimal metabarcoding, draft 2023-09-13
+ * Description: Probabilistic model from optimal metabarcoding - Iwaszkiewicz-Eggebrecht et al 2023 
  * Compilation:
- *  tpplc models/optmetabar/optmodel.tppl -m 'smc-bpf' --resample align --output optmodel
- * Execution with 100000 particles and 100 sweeps (homogenate data H.json or lysate data L.json): 
- * ./optmodel models/data/H_real.json 100000 100 > output/H.json
+ *  tpplc models/metabarcoding/optmodel.tppl -m 'smc-bpf' --resample align --output optmodel
+ * Execution with 10000 particles and 1 sweep (homogenate data H_real.json): 
+ * ./optmodel models/data/H_real.json 10000 1 > output/H.json
  */
 
 /*
  * Model function
  * Data:
- *   Homogenate data in H.json or lysate data in L.json: 
+ *   Homogenate data 
  * Priors: 
  *   From optimal metabarcoding paper, Iwaszkiewicz-Eggebrecht et al., 2023
  * Posterior:
