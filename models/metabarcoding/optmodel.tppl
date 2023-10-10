@@ -1,0 +1,39 @@
+/*
+ * File: optmodel.tppl
+ * Description: Probabilistic model taken from optimal metabarcoding, draft 2023-09-13
+ * Compilation:
+ *  tpplc models/optmetabar/optmodel.tppl -m 'smc-bpf' --resample align --output optmodel
+ * Execution with 100000 particles and 100 sweeps (homogenate data H.json or lysate data L.json): 
+ * ./optmodel models/data/H_real.json 100000 100 > output/H.json
+ */
+
+/*
+ * Model function
+ * Data:
+ *   Homogenate data in H.json or lysate data in L.json: 
+ * Priors: 
+ *   From optimal metabarcoding paper, Iwaszkiewicz-Eggebrecht et al., 2023
+ * Posterior:
+ *   returning k at the moment
+ */
+model function myModel(dataset: Real[][]) : Real  {
+  assume k ~ Gamma(1.0, 10.0);
+  assume logTheta ~ Gaussian(0.0, 2.0); 
+  let theta = exp(logTheta);
+  
+  assume tau ~ Gamma(3.0, (1.0/27.0));
+  let sigma = sqrt(1.0 / tau); //sigma2 sampled from InverseGamma
+  assume mu ~ Gaussian(6.5, sigma); 
+
+  let nsamples = length(dataset); // nsamples is total number of samples, with index j
+  for j in 1 to nsamples { 
+    assume logC ~ Gaussian(mu, sigma); 
+    let c = exp(logC);
+    for i in 1 to 4 { //i is index of spike-in species, in this example 1 to 4
+      if dataset[j][i] > 0.0 {
+        observe dataset[j][i] ~ Gamma(k, c*theta);
+      }
+    }
+  }
+  return(k); 
+}
