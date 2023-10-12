@@ -12,6 +12,7 @@ include "seq.mc"
 
 let muli = muli
 let eqi = eqi
+let geqi = geqi
 let addi = addi
 let subi = subi
 

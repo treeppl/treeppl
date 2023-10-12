@@ -290,15 +290,15 @@ function simulate (tree: ProbsTree, start: HistoryPoint, mp: ModelParams, iMatri
 		// an argument or retrieve the message from the Probstree (inherited from the MsgTree) ?
 
 		let obsRecordSequence = sapply(obs_msg, createProbRecord);
-		let log_score = zipWith(categoricalLogScore, repertoire, obsRecordSequence);  //TODO: fix bug in Miking (Viktor P)
+		let log_score = sumReal(zipWith(categoricalLogScore, repertoire, obsRecordSequence));  //TODO: fix bug in Miking (Viktor P)
 		// Note: categorical works here because repertoire id 0-based
 		
 		return HistoryLeaf{age = tree.age, label = tree.label, repertoire = repertoire,       // TODO: do tree.age and tree.label work here?
 		                   history = history, log_rep_debt = log_rep_debt - log_score};
 	}
 
-	let left = simulate(tree.left, stop, mp);
-	let right = simulate(tree.right, stop, mp);
+	let left = simulate(tree.left, stop, mp, iMatrix);
+	let right = simulate(tree.right, stop, mp, iMatrix);
 
 	return HistoryNode{age = tree.age, label = tree.label, repertoire = repertoire,       // TODO: do tree.age and tree.label work here?
 					   history = history, log_rep_debt = log_rep_debt,
@@ -314,12 +314,13 @@ function simulate_history (from_rep: HistoryPoint, to_rep: HistoryPoint, mp: Mod
 
   let proposed_unordered_events = propose_events(1, from_rep, to_rep, mp.qMatrix);
 
-	let events = quickSort(proposed_unordered_events.events, subAge);  // TODO: not working
+	let events = quickSort(proposed_unordered_events.events, subAge);  // TODO: ViktorP
+	//let events = proposed_unordered_events.events;  // just to avoid error
 
-  let history_score = simulate_by_event(from_rep.repertoire, events, 1, from_rep.age, to_rep.age, mp, proposed_unsorted_events.log_debt);
+  let history_score = simulate_by_event(from_rep.repertoire, events, 1, from_rep.age, to_rep.age, mp, proposed_unordered_events.log_debt);
 
   // Now we have both debt and score at an alignment point 
-  factor(history_score.log_score - proposed_unordered_events.log_debt);  // TODO Check that factor works
+  factor(history_score.log_score - proposed_unordered_events.log_debt);  // TODO: ViktorP
 
   return history_score.history;
 
@@ -328,7 +329,7 @@ function simulate_history (from_rep: HistoryPoint, to_rep: HistoryPoint, mp: Mod
 // Propose events from independence model
 function propose_events (host_index: Int, from_rep: HistoryPoint, to_rep: HistoryPoint, qMatrix: Tensor[Real]) : ProposedHistory {
 
-  if (host_index > length(from_rep.repertoire)) {             // NOTE: Isn't it more intuitive to write 
+  if (geqi(host_index, length(from_rep.repertoire))) {             // NOTE: Isn't it more intuitive to write 
 		return ProposedHistory{log_debt = 0.0, events = []};  // if(host_index <= length(from_rep.repertoire)) continue?
 	}
   let res1 = propose_events_for_host(host_index, from_rep.age, to_rep.age, 
@@ -336,13 +337,13 @@ function propose_events (host_index: Int, from_rep: HistoryPoint, to_rep: Histor
   let res2 = propose_events(addi(host_index, 1), from_rep, to_rep, qMatrix);
 
   return ProposedHistory{log_debt = res1.log_debt + res2.log_debt,       // TODO: Check join
-												 events = join([rest1.events, rest2.events])};  // is events a sequence of Events?
+												 events = join([res1.events, res2.events])};  // is events a sequence of Events?
 
 	}
 
 // Propose events for one host
 function propose_events_for_host (host_index: Int, from_age: Real, end_age: Real,
-	from_state: Int, end_state: Int, qMatrix: Tensor[Real][]) : ProposedHistory {
+	from_state: Int, end_state: Int, qMatrix: Tensor[Real]) : ProposedHistory {
 		
 	let rate = -(mtxGet(addi(from_state,1), addi(from_state,1), qMatrix));
 
