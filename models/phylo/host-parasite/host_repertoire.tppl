@@ -314,13 +314,13 @@ function simulate_history (from_rep: HistoryPoint, to_rep: HistoryPoint, mp: Mod
 
   let proposed_unordered_events = propose_events(1, from_rep, to_rep, mp.qMatrix);
 
-	let events = quickSort(proposed_unordered_events.events, subAge);  // TODO: ViktorP
+	let events = quickSort(subAge, proposed_unordered_events.events);
 	//let events = proposed_unordered_events.events;  // just to avoid error
 
   let history_score = simulate_by_event(from_rep.repertoire, events, 1, from_rep.age, to_rep.age, mp, proposed_unordered_events.log_debt);
 
   // Now we have both debt and score at an alignment point 
-  factor(history_score.log_score - proposed_unordered_events.log_debt);  // TODO: ViktorP
+  logWeight(history_score.log_score - proposed_unordered_events.log_debt);
 
   return history_score.history;
 
@@ -346,13 +346,7 @@ function propose_events_for_host (host_index: Int, from_age: Real, end_age: Real
 	from_state: Int, end_state: Int, qMatrix: Tensor[Real]) : ProposedHistory {
 		
 	let rate = -(mtxGet(addi(from_state,1), addi(from_state,1), qMatrix));
-
-	if (Real(from_state) != Real(end_state)) {
-		let t = sample_exponential_max_t(rate, from_age - end_age);
-	} else {
-		assume t ~ Exponential(rate);
-	}
-
+  let t = getWaitingTime(from_state, end_state, rate, from_age, end_age);
 	let new_age = from_age - t;
 
 	// Calculate debt. Note the special case for the last time segment
@@ -366,25 +360,40 @@ function propose_events_for_host (host_index: Int, from_age: Real, end_age: Real
 		let log_wait_debt = exponentialLogScore(t, ExponentialParam{rate = rate});
 	}
 
-	if (Real(from_state) != Real(end_state)) {
-		let log_wait_debt = log_pdf_exponential_max_t(0.0, rate, from_age - end_age);
-	} else {
-		let log_wait_debt = exponentialLogScore(t, ExponentialParam{rate = rate});   
-	}
-
+  let log_wait_debt = getLogWaitDebt(from_state, end_state, rate, from_age, end_age, t);
 	let to_states = getToStates(from_state); 
 	let state_probs = normalizeSeq([mtxGet(addi(from_state,1), addi(to_states[1],1), qMatrix),
-																	mtxGet(addi(from_state1), addi(to_states[2],1), qMatrix)]);
+																	mtxGet(addi(from_state,1), addi(to_states[2],1), qMatrix)]);
 	
 	assume new_state_pos ~ Categorical(state_probs);
 	let new_state = to_states[addi(new_state_pos, 1)]; // Note: Categorical is 0-based, so we need to add 1 do get the correct position
-	let log_event_debt = categoricalLogScore(new_state_pos, state_probs); // Note: Use position instead of value
+	let log_event_debt = categoricalLogScore(new_state_pos, CategoricalParam{probs = state_probs}); // Note: Use position instead of value
 
 	let event = Event{age = new_age, host = host_index, from_state = from_state, to_state = new_state};
 	let res = propose_events_for_host(host_index, new_age, end_age, new_state, end_state, qMatrix);
 
-	return ProposedHistory{log_debt = log_wait_debt+log_event_debt+res.log_debt, events = join([event,res.events])}; // TODO: Check join
+	return ProposedHistory{log_debt = log_wait_debt+log_event_debt+res.log_debt, events = join([[event],res.events])}; // TODO: Check join
 
+}
+
+function getLogWaitDebt(from_state: Int, end_state: Int, rate: Real, from_age: Real, end_age: Real, t: Real): Real {
+	if (Real(from_state) != Real(end_state)) {
+		let log_wait_debt = log_pdf_exponential_max_t(0.0, rate, from_age - end_age);
+    return log_wait_debt;
+	} else {
+		let log_wait_debt = exponentialLogScore(t, ExponentialParam{rate = rate}); 
+    return log_wait_debt;  
+	}
+}
+
+function getWaitingTime(from_state: Int, end_state: Int, rate: Real, from_age: Real, end_age: Real): Real {
+	if (Real(from_state) != Real(end_state)) {
+		let t = sample_exponential_max_t(rate, from_age - end_age);
+    return t;
+	} else {
+		assume t ~ Exponential(rate);
+    return t;
+	}
 }
 
 function getToStates(state: Int): Int[] {    // TODO: Shouldn't it exclude 0->2 and 2->0 ?
@@ -432,7 +441,7 @@ function simulate_by_event (repertoire: Int[], events: Event[], event_index: Int
 
 	// Typical case
 	let the_event = events[event_index];
-	let rate = rate(repertoire, the_event.host, the_event.to_state, mp);
+	let rate = getRate(repertoire, the_event.host, the_event.to_state, mp);
 	let change_rate = total_rate(repertoire, mp);
 
 	// Note that the first statement will capture the cases where the proposed
@@ -461,7 +470,7 @@ function getNewState(oldRepertoire: Int[], event: Event, index: Int) {
 }
 
 // Compute rate for a proposed event
-function rate (repertoire: Int[], host_index: Int, to_state: Int, mp: ModelParams): Real {
+function getRate (repertoire: Int[], host_index: Int, to_state: Int, mp: ModelParams): Real {
 
   let from_state = repertoire[host_index];
   let base_rate = mtxGet(addi(from_state,1), addi(to_state,1), mp.qMatrix);
@@ -512,7 +521,7 @@ function gainsIf0or1 (repertoire: Int[], host_index: Int, mp: ModelParams): Real
 	
 	let from_state = repertoire[host_index];
 	if (eqi(from_state, 0) || eqi(from_state, 1)) {
-		return rate(repertoire, host_index, addi(from_state,1), mp);
+		return getRate(repertoire, host_index, addi(from_state,1), mp);
 	} else {
 		return 0.0;
 	}
