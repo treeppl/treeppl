@@ -20,8 +20,8 @@
 // TYPES
 
 type SeqTree =
-  | Leaf {age: Real, seq: Int[], newick: String}
-  | Node {age: Real, seq: Int[], left: SeqTree, right: SeqTree, newick: String}
+  | Leaf {age: Real, seq: Int[]}
+  | Node {age: Real, seq: Int[], left: SeqTree, right: SeqTree}
 
 // FUNCTIONS
 
@@ -50,8 +50,7 @@ function cluster(q: Tensor[Real], trees: SeqTree[], maxAge: Real, seqLen: Int): 
 
     // Check that we have not yet reached the root of the tree
     if (eqi(n, 1)) {
-        //let finalTree = join(["(", trees.newick[1], ":0.0);"]); //Adding final formatting newick tree
-        return trees;//finalTree; //Returning only the final newick tree string
+        return trees;
     }
     // Randomly sample two indices in the trees vector with function pickpair
     // We will combine these, named left and right child
@@ -80,10 +79,8 @@ function cluster(q: Tensor[Real], trees: SeqTree[], maxAge: Real, seqLen: Int): 
         }  
     }
 
-    // Create the next step of the Newick string
-    let newickString = join([ "(", leftChild.newick, ":", real2string(age-leftChild.age), ",", rightChild.newick, ":", real2string(age-rightChild.age), ")", "[", join(sint2string(seq)), "]" ]);
     // Combine picked pair of trees into a new node
-    let parent = Node{age=age, seq=seq, left=leftChild, right=rightChild, newick=newickString};  
+    let parent = Node{age=age, seq=seq, left=leftChild, right=rightChild};  
 
     // Compute new_trees list
     let min = mini(pairs[1], pairs[2]);  
@@ -109,10 +106,10 @@ model function myModel(data: Int[][]) : SeqTree[]
     // Define the initial trees vector (containing of the leaves)
     // NOTE need to add a function that replaces A,C,G,T with integers and handles uncertain positions, and creates the tree vector.
     let trees = [
-        Leaf{age=0.0, seq=data[1], newick=join([join(sint2string(data[1]))])}, //alternative with brackets, as internal nodes currently: newick=join(["[", join(sint2string(data[1])), "]" ])
-        Leaf{age=0.0, seq=data[2], newick=join([join(sint2string(data[2]))])}, 
-        Leaf{age=0.0, seq=data[3], newick=join([join(sint2string(data[3]))])}, 
-        Leaf{age=0.0, seq=data[4], newick=join([join(sint2string(data[4]))])} 
+        Leaf{age=0.0, seq=data[1]},
+        Leaf{age=0.0, seq=data[2]},
+        Leaf{age=0.0, seq=data[3]},
+        Leaf{age=0.0, seq=data[4]}
     ];
 
     let seqLen = 15; //NOTE This should be automatic using length() in next version. 
