@@ -92,12 +92,12 @@ lang PullNameFromConstructor = PullName + FunTypeAst + AllTypeAst
   | TyAll x -> pullName x.ty
 end
 
-lang LowerProjMatch = ProjMatchAst + MatchAst + DataPat + RecordPat + RecordTypeAst + FunTypeAst + Eq + Unify + Generalize + TypeCheck
+lang LowerProjMatch = ProjMatchAst + MatchAst + DataPat + RecordPat + RecordTypeAst + FunTypeAst + Eq + Unify + Generalize + TypeCheck + UnifyPure
   sem lowerProj : Expr -> Expr
   sem lowerProj =
   | t -> smap_Expr_Expr lowerProj t
   | TmProjMatch x ->
-    let targetTyName = match (use PullName in pullName) (tyTm x.target)
+    let targetTyName = match (use PullName in pullName) (unwrapType (tyTm x.target))
       with Some ty then ty
       else errorSingle [infoTm x.target] (join ["Could not infer this to be a variant type (found ", type2str (tyTm x.target), ")"])
     in
@@ -119,7 +119,7 @@ lang LowerProjMatch = ProjMatchAst + MatchAst + DataPat + RecordPat + RecordType
         unify _tcEnvEmpty [infoTm x.target] arr.to (tyTm x.target);
         match arr.from with recTy & TyRecord rec then
           match mapLookup x.field rec.fields with Some fieldTy then
-            if eqType fieldTy expectedResultTy
+            if optionIsSome (result.toOption (unifyPure fieldTy expectedResultTy))
             then Some (conName, recTy)
             else None ()
           else None ()
@@ -1305,8 +1305,9 @@ let compileTpplToExecutable = lam filename: String. lam options: Options.
     match parseTreePPLExn filename content with file in
     let corePplAst: Expr = compile file in
     --printLn (mexprPPLToString corePplAst);
-    let prog: Expr = typeCheck corePplAst in
+    let prog: Expr = typeCheckExpr _tcEnvEmpty corePplAst in
     let prog: Expr = lowerProj prog in
+    let prog: Expr = removeMetaVarExpr prog in
     use CPPLLang in
     let prog =  mexprCpplCompile options false prog in
     buildMExpr options prog
