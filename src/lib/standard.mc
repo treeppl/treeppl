@@ -14,6 +14,13 @@ let error = error
 
 let muli = muli
 let eqi = eqi
+let neqi = neqi
+let addi = addi
+let subi = subi
+
+let slice = lam seq. lam beg. lam mend.
+    subsequence seq (subi beg 1) (subi mend beg)
+    
 let geqi = geqi
 let gti = gti
 let addi = addi
