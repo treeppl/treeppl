@@ -314,8 +314,8 @@ function simulate_history (from_rep: HistoryPoint, to_rep: HistoryPoint, mp: Mod
 
   let proposed_unordered_events = propose_events(1, from_rep, to_rep, mp.qMatrix);
 
-	let events = quickSort(subAge, proposed_unordered_events.events);
-	//let events = proposed_unordered_events.events;  // just to avoid error
+  // order events by decreasing age
+	let events = qSort(subAge, proposed_unordered_events.events);
 
   let history_score = simulate_by_event(from_rep.repertoire, events, 1, from_rep.age, to_rep.age, mp, proposed_unordered_events.log_debt);
 
@@ -329,15 +329,16 @@ function simulate_history (from_rep: HistoryPoint, to_rep: HistoryPoint, mp: Mod
 // Propose events from independence model
 function propose_events (host_index: Int, from_rep: HistoryPoint, to_rep: HistoryPoint, qMatrix: Tensor[Real]) : ProposedHistory {
 
-  if (gti(host_index, length(from_rep.repertoire))) {             // NOTE: Isn't it more intuitive to write 
-		return ProposedHistory{log_debt = 0.0, events = []};           // if(host_index <= length(from_rep.repertoire)) continue?
+  if (gti(host_index, length(from_rep.repertoire))) {              
+		return ProposedHistory{log_debt = 0.0, events = []};       
 	}
-  let res1 = propose_events_for_host(host_index, from_rep.age, to_rep.age, 
+  let propHist1 = propose_events_for_host(host_index, from_rep.age, to_rep.age, 
 		from_rep.repertoire[host_index], to_rep.repertoire[host_index], qMatrix);
-  let res2 = propose_events(addi(host_index, 1), from_rep, to_rep, qMatrix);
 
-  return ProposedHistory{log_debt = res1.log_debt + res2.log_debt,       // TODO: Check join
-												 events = join([res1.events, res2.events])};  // is events a sequence of Events?
+  let propHist2 = propose_events(addi(host_index, 1), from_rep, to_rep, qMatrix);
+
+  return ProposedHistory{log_debt = propHist1.log_debt + propHist2.log_debt, 
+												 events = join([propHist1.events, propHist2.events])};
 
 	}
 
@@ -370,9 +371,9 @@ function propose_events_for_host (host_index: Int, from_age: Real, end_age: Real
 	let log_event_debt = categoricalLogScore(new_state_pos, CategoricalParam{probs = state_probs}); // Note: Use position instead of value
 
 	let event = Event{age = new_age, host = host_index, from_state = from_state, to_state = new_state};
-	let res = propose_events_for_host(host_index, new_age, end_age, new_state, end_state, qMatrix);
+	let propHist = propose_events_for_host(host_index, new_age, end_age, new_state, end_state, qMatrix);
 
-	return ProposedHistory{log_debt = log_wait_debt+log_event_debt+res.log_debt, events = join([[event],res.events])}; // TODO: Check join
+	return ProposedHistory{log_debt = log_wait_debt+log_event_debt+propHist.log_debt, events = join([[event], propHist.events])};
 
 }
 
@@ -450,7 +451,7 @@ function simulate_by_event (repertoire: Int[], events: Event[], event_index: Int
 	// history is impossible because the repertoire we are supposed to go to is
 	// empty (the rate is zero).
 	observe true ~ Bernoulli(rate/change_rate); // we want to die immediately here
-	let log_score = exponentialLogScore(from_age - the_event.age, ExponentialParam{rate=change_rate});
+	let logScore = exponentialLogScore(from_age - the_event.age, ExponentialParam{rate=change_rate});
 
 	let newState = getNewState(repertoire, the_event); 
 	let nhosts = length(repertoire);	
@@ -458,9 +459,9 @@ function simulate_by_event (repertoire: Int[], events: Event[], event_index: Int
 
 	let hp = HistoryPoint{age = the_event.age, repertoire = new_repertoire};
 
-	let res = simulate_by_event(new_repertoire, events, addi(event_index,1), the_event.age, end_age, mp, log_debt);
+	let simHist = simulate_by_event(new_repertoire, events, addi(event_index,1), the_event.age, end_age, mp, log_debt);
 
-	return HistoryScore{log_score = res.log_score+log_score, history = join([[hp], res.history_points])};
+	return HistoryScore{log_score = simHist.log_score+logScore, history = join([simHist.history, [hp]])};
 }
 
 function getNewState(oldRepertoire: Int[], event: Event, index: Int) {
@@ -480,7 +481,7 @@ function getRate (repertoire: Int[], host_index: Int, to_state: Int, mp: ModelPa
   // Losses are easy, no cross-repertoire modification used here
   if (gti(from_state, to_state)) {
 		
-		let n2s = foldl(count2s, 0, repertoire);
+		let n2s = fold(count2s, 0, repertoire);
 		if (eqi(from_state, 2) && Real(n2s) == 1.0) { 
 			return 0.0;
 		} else {
@@ -505,9 +506,9 @@ function getRate (repertoire: Int[], host_index: Int, to_state: Int, mp: ModelPa
 // Compute total rate of change from a repertoire
 function total_rate (repertoire: Int[], mp: ModelParams): Real {
 
-	let n1s = foldl(count1s, 0, repertoire);
+	let n1s = fold(count1s, 0, repertoire);
 	let totalLoss1 = Real(n1s) * mtxGet(2, 1, mp.qMatrix);
-	let n2s = foldl(count2s, 0, repertoire);
+	let n2s = fold(count2s, 0, repertoire);
 	let totalLoss2 = getLoss2(Real(n2s), mp);
 
   let gainsSeq = sapplyi2(repertoire, gainsIf0or1, repertoire, mp);
@@ -594,8 +595,13 @@ function getProbs(tree: ProbsTree): Tensor[Real][]{
 	return tree.probs;
 }
 
-function subAge(left: Event, right: Event) {
-  return subi(right.age, left.age);
+function subAge(left: Event, right: Event): Int {
+  let diff = subf(right.age, left.age);
+  if (diff >= 0.0){
+    return 1;
+  } else {
+			return subi(1,2);  // type error if I just write -1
+	}
 }
 
 function count2s(count: Int, host: Int): Int {

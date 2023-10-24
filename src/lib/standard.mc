@@ -18,6 +18,7 @@ let geqi = geqi
 let gti = gti
 let addi = addi
 let subi = subi
+let subf = subf
 
 ----------------------------
 --- Printing and strings ---
@@ -59,7 +60,11 @@ let length = length
 
 let zipWith = zipWith
 
-let foldl = foldl
+let fold = lam x.
+  foldl x
+
+let qSort = lam f. lam seq.
+  quickSort f seq
 
 let any = any
 
