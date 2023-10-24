@@ -194,8 +194,8 @@ function postorder_msgs(tree: TreeLabeled, iMatrix: Tensor[Real], qMatrix: Tenso
   let tMatrixLeft = mtxTrans(mtxExp(mtxSclrMul(tree.age-left.age, qMatrix)));      // TODO: Check left.age: must be wrong (see final_probs)
   let tMatrixRight = mtxTrans(mtxExp(mtxSclrMul(tree.age-right.age, qMatrix)));
 
-  let left_in_msg  = sapply2(left.out_msg, mtxMul, tMatrixLeft);
-  let right_in_msg = sapply2(right.out_msg, mtxMul, tMatrixRight);
+  let left_in_msg  = sapply1(left.out_msg, mtxMul, tMatrixLeft);
+  let right_in_msg = sapply1(right.out_msg, mtxMul, tMatrixRight);
 
   let out_msg = normalizeMessage(mulMessage(left_in_msg, right_in_msg));
 
@@ -248,8 +248,8 @@ function final_probs(tree: MsgTree, root_msg: Tensor[Real][], qMatrix: Tensor[Re
   let tMatrixLeft = mtxExp(mtxSclrMul(left_branch, qMatrix));
   let tMatrixRight = mtxExp(mtxSclrMul(right_branch, qMatrix));
 
-  let left_root_msg  = sapply2(mulMessage(root_msg,tree.left_in_msg), mtxMul, tMatrixLeft);
-  let right_root_msg = sapply2(mulMessage(root_msg,tree.right_in_msg), mtxMul, tMatrixRight);
+  let left_root_msg  = sapply1(mulMessage(root_msg,tree.left_in_msg), mtxMul, tMatrixLeft); // TODO: change name root to parent
+  let right_root_msg = sapply1(mulMessage(root_msg,tree.right_in_msg), mtxMul, tMatrixRight);
 
   let left  =  final_probs(tree.left,  left_root_msg, qMatrix, tune);
   let right =  final_probs(tree.left, right_root_msg, qMatrix, tune);
@@ -329,8 +329,8 @@ function simulate_history (from_rep: HistoryPoint, to_rep: HistoryPoint, mp: Mod
 // Propose events from independence model
 function propose_events (host_index: Int, from_rep: HistoryPoint, to_rep: HistoryPoint, qMatrix: Tensor[Real]) : ProposedHistory {
 
-  if (geqi(host_index, length(from_rep.repertoire))) {             // NOTE: Isn't it more intuitive to write 
-		return ProposedHistory{log_debt = 0.0, events = []};  // if(host_index <= length(from_rep.repertoire)) continue?
+  if (gti(host_index, length(from_rep.repertoire))) {             // NOTE: Isn't it more intuitive to write 
+		return ProposedHistory{log_debt = 0.0, events = []};           // if(host_index <= length(from_rep.repertoire)) continue?
 	}
   let res1 = propose_events_for_host(host_index, from_rep.age, to_rep.age, 
 		from_rep.repertoire[host_index], to_rep.repertoire[host_index], qMatrix);
@@ -405,7 +405,9 @@ function getToStates(state: Int): Int[] {    // TODO: Shouldn't it exclude 0->2 
 		} else {
 			if (Real(state) == 2.0) {
 				return [0,1];
-			}
+			} else {
+        return error("Invalid state");
+      }
 		}
 	}
 }
@@ -434,9 +436,9 @@ function simulate_by_event (repertoire: Int[], events: Event[], event_index: Int
 	from_age: Real, end_age: Real, mp: ModelParams, log_debt: Real) : HistoryScore {
 
 	// End case, deal with last time segment
-	if event_index > length(events) {
+	if gti(event_index, length(events)) {             // TODO CHECK: greater than, not greater or equal, right?
 		let change_rate = total_rate(repertoire, mp);
-		return HistoryScore{log_score = poissonLogScore(0, PoissonParam{rate = change_rate*(from_age-end_age)}), history_points = []};
+		return HistoryScore{log_score = poissonLogScore(0, PoissonParam{rate = change_rate*(from_age-end_age)}), history = []};
 	}
 
 	// Typical case
@@ -458,7 +460,7 @@ function simulate_by_event (repertoire: Int[], events: Event[], event_index: Int
 
 	let res = simulate_by_event(new_repertoire, events, addi(event_index,1), the_event.age, end_age, mp, log_debt);
 
-	return HistoryScore{log_score = res.log_score+log_score, history_points = join([hp, res.history_points])};
+	return HistoryScore{log_score = res.log_score+log_score, history = join([[hp], res.history_points])};
 }
 
 function getNewState(oldRepertoire: Int[], event: Event, index: Int) {
@@ -476,65 +478,74 @@ function getRate (repertoire: Int[], host_index: Int, to_state: Int, mp: ModelPa
   let base_rate = mtxGet(addi(from_state,1), addi(to_state,1), mp.qMatrix);
 
   // Losses are easy, no cross-repertoire modification used here
-  if (from_state > to_state) {
+  if (gti(from_state, to_state)) {
 		
 		let n2s = foldl(count2s, 0, repertoire);
-		if (from_state == 2 && Real(n2s) == 1.0) { 
-			return 0;
+		if (eqi(from_state, 2) && Real(n2s) == 1.0) { 
+			return 0.0;
 		} else {
 			return base_rate;
 		}
-	}
-
-	// We have a gain rate, so we need to factor in beta-dependent
-  // cross-repertoire effect
-  if (from_state == 0) {
-    let current_hosts = whichTrue(sapply(repertoire, is1or2)); 
 	} else {
-    let current_hosts = whichTrue(sapply(repertoire, is2));   
-	}
-  
-	let dist = tensorMean(mtxRowCols(mp.dMatrix, host_index, current_hosts));
-  return base_rate * (exp(-(mp.beta*(dist/mp.dMean))));
+    
+    // We have a gain rate, so we need to factor in beta-dependent cross-repertoire effect
+    if (eqi(from_state, 0)) {
+      let current_hosts = whichTrue(sapply(repertoire, is1or2)); 
+      let dist = tensorMean(mtxRowCols(mp.dMatrix, host_index, current_hosts));
+      return base_rate * (exp(-(mp.beta*(dist/mp.dMean))));
 
+    } else {
+      let current_hosts = whichTrue(sapply(repertoire, is2));   
+      let dist = tensorMean(mtxRowCols(mp.dMatrix, host_index, current_hosts));
+      return base_rate * (exp(-(mp.beta*(dist/mp.dMean))));
+    }
+  }
 }
 
 // Compute total rate of change from a repertoire
 function total_rate (repertoire: Int[], mp: ModelParams): Real {
 
 	let n1s = foldl(count1s, 0, repertoire);
-	let totalLoss1 = n1s * mtxGet(2, 1, mp.qMatrix);
+	let totalLoss1 = Real(n1s) * mtxGet(2, 1, mp.qMatrix);
 	let n2s = foldl(count2s, 0, repertoire);
-	
-	if Real(n2s) == 1.0 {
-		let totalLoss2 = 0.0;
-	} else {
-		let totalLoss2 = n2s * mtxGet(3, 2, mp.qMatrix);
-	}
+	let totalLoss2 = getLoss2(Real(n2s), mp);
 
-	let totalGains = sumReal(sapplyi(repertoire, gainsIf0or1));
+  let gainsSeq = sapplyi2(repertoire, gainsIf0or1, repertoire, mp);
+	let totalGains = sumReal(gainsSeq);
 
   return totalLoss1 + totalLoss2 + totalGains;
 }
 
-function gainsIf0or1 (repertoire: Int[], host_index: Int, mp: ModelParams): Real {
+
+function getLoss2 (n2s: Real, mp: ModelParams): Real {
+  if n2s <= 1.0 {
+		let totalLoss2 = 0.0;
+    return totalLoss2;
+	} else {
+		let totalLoss2 = n2s * mtxGet(3, 2, mp.qMatrix);
+    return totalLoss2;
+	}
+}
+
+function gainsIf0or1 (i: Int, from_state: Int, repertoire: Int[], mp: ModelParams): Real {
 	
-	let from_state = repertoire[host_index];
+	//let from_state = repertoire[i];
 	if (eqi(from_state, 0) || eqi(from_state, 1)) {
-		return getRate(repertoire, host_index, addi(from_state,1), mp);
+		return getRate(repertoire, i, addi(from_state,1), mp);
 	} else {
 		return 0.0;
 	}
 }
+
 
 // Accumulate the total log debt of proposing the
 // ancestral repertoires in the tree.
 function get_rep_debt (tree: HistoryTree): Real {
 
   if tree is HistoryLeaf {
-		return historyTree.log_rep_debt;
+		return tree.log_rep_debt;
 	} else{
-			return  get_rep_debt(historyTree.left) + get_rep_debt(historyTree.right);
+			return  get_rep_debt(tree.left) + get_rep_debt(tree.right);
 	}
 }
 

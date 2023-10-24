@@ -10,9 +10,12 @@ include "iterator.mc"
 include "ext/dist-ext.mc"
 include "seq.mc"
 
+let error = error
+
 let muli = muli
 let eqi = eqi
 let geqi = geqi
+let gti = gti
 let addi = addi
 let subi = subi
 
@@ -70,13 +73,13 @@ let sapply = lam x. lam f.
 let tapply = lam x. lam f.
   reverse (tensorFold (lam acc. lam c. cons (f c) acc) [] x)
 
--- sapplyi is a mapping that additionally passes the current index
-let sapplyi = lam x. lam f.
-  mapi f x
+-- sapply1 for passing 1 argument (a) to function f
+let sapply1 = lam x. lam f. lam a.
+  map (lam e. f e a) x
 
--- sapply2 for passing an argument a to function f
-let sapply2 = lam x. lam f. lam a.
-  map (lam v. f v a) x
+  -- sapplyi2 is a mapping that additionally passes the current index and two arguments (a and b)
+let sapplyi2 = lam x. lam f. lam a. lam b.
+  mapi (lam i. lam e. f i e a b) x
 
 -- convert an integer sequences to a real sequence
 let sint2real = lam seq.
@@ -228,7 +231,7 @@ let tensorMean = lam t.
 --- Messages ---
 ----------------
 
--- NOTE(mariana, 2020-10-05): attempt to use functions Daniel wrote 
+-- NOTE(mariana, 2023-10-05): attempt to use functions Daniel wrote 
 -- to handle Messages, which are Tensor[Real][]
 
 -- Vector normalization
@@ -256,3 +259,5 @@ let messageElementPower = lam m. lam f.
 --let normalize: [Float] -> [Float] = lam seq.
 --  let sum = foldl addf 0. seq in
 --  map (lam f. divf f sum) seq
+
+   
