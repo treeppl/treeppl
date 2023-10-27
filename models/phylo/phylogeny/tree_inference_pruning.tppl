@@ -1,34 +1,37 @@
-// Naive TreePPL script for tree inference under the
-// Jukes Cantor model with a strict clock prior. This is
-// the naive version; for effective inference, belief
-// propagation needs to be implemented in the back end.
+// TreePPL script for tree inference under the
+// Jukes Cantor model with a strict clock prior. This has pruning hard-coded.
 
 // Run this by compiling: 
-// tpplc models/phylo/phylogeny/tree_inference.tppl -m 'smc-bpf' --resample align --output testphylo
-// And then execution 1000 particles 1 sweep, using toy dataset phylo.json:
-// ./testphylo models/data/phylo.json 1000 1 > phylo_output.json
+// tpplc models/phylo/phylogeny/tree_inference_pruning.tppl -m 'smc-bpf' --resample align --output testphylo
+// And then execution 1 particle 1 sweep to test, using toy dataset phylo2.json:
+// ./testphylo models/data/phylo2.json 1 1 > phylo_output.json
 
-// Toy dataset as json file phylo.json. NOTE this should be nucleotides in later version, currently integers
-// Data is a matrix of type int, with each row
+// Toy dataset as json file phylo2.json. 
+// Data is a matrix with each row
 // consisting of the aligned DNA sequence for a single
 // taxon. The nucleotide is specified as
-//   "A" for adenine 0
-//   "C" for cytosine 1
-//   "G" for guanine 2
-//   "T" for thymine 3
+//   "A" for adenine 
+//   "C" for cytosine 
+//   "G" for guanine 
+//   "T" for thymine 
 
 // TYPES
 
-type SeqTree =
-  | Leaf {age: Real, seq: Int[]}
-  | Node {age: Real, seq: Int[], left: SeqTree, right: SeqTree}
+type Tree =
+  | Leaf {age: Real, index: Int, msg: Real[]}
+  | Node {age: Real, msg: Real[], left: Tree, right: Tree}
+
+// A message is simply four Real values corresponding to the conditional likelihoods
+// (unscaled probabilities) of the four different states (A, C, G, T).
+//type Message = Real[4]
+
 
 // FUNCTIONS
 
-// Randomly sample two indices in the trees vector, to be combined
-function buildForest(data: Int[][], forest: SeqTree[], index: Int, dataLen: Int): SeqTree[]
+// Build forest of trees from leaves, recursively
+function buildForest(data: Int[][], forest: Tree[], index: Int, dataLen: Int): Tree[]
 { 
-    let newLeaf = Leaf{age=0.0, seq=data[index]};
+    let newLeaf = Leaf{age=0.0, index = index, msg = leaf_message(data[index])};
     let new_forest = join([forest, [newLeaf]]);
     if (eqi(dataLen, index)) {
         return new_forest; 
@@ -43,23 +46,81 @@ function pickpair(n: Int): Int[]
 { 
     assume i ~ Categorical(rep(n, 1./Real(n)));  
     assume j ~ Categorical(rep(n, 1./Real(n)));  
-    if (eqi(j, i)) {
+    if (eqi(j, i)) { // NOTE how can this be done better?
         return pickpair(n); 
     }
     return [addi(i, 1), addi(j, 1)]; //adding 1 to avoid index 0
 }
 
 //Note this is not optimal in terms of repeated calculation of matrix exp
-function ctmc(initialstate: Int, q: Tensor[Real], t: Real): Real[]
-{ 
+function ctmc(initialstate: Int, q: Tensor[Real], t: Real): Real[] { 
     let choices = [[1.0, 0.0, 0.0, 0.0],[0.0, 1.0, 0.0, 0.0],[0.0, 0.0, 1.0, 0.0],[0.0, 0.0, 0.0, 1.0]]; 
     let state = rvecCreate(4,choices[addi(initialstate, 1)]); 
     let p = state*@(mtxExp(q*$t)); 
     return[mtxGet(1, 1, p), mtxGet(1, 2, p), mtxGet(1, 3, p), mtxGet(1, 4, p)];
 }
 
-function cluster(q: Tensor[Real], trees: SeqTree[], maxAge: Real, seqLen: Int): SeqTree[]
-{
+// A simple help function to compute a message for a branch in the tree in a
+// postorder traversal towards the root. We assume standard conventions here
+// for the structure of q with respect to time (rows = from-states)
+function message(start_msg: Real[], q: Tensor[Real], time: Real, seqLen: Int) : Real[] {
+    let trans_matrix = mtxTrans(mtxExp(q*$time));
+    return get_message(trans_matrix, start_msg, [], 1, seqLen);
+}
+
+function get_message(trans_matrix: Tensor[Real], start_msg: Real[], msg: Real[], index: Int, seqLen: Int) : Real[] {
+    let new_msg = mtxMul(start_msg, trans_matrix);
+    let msg =  join([msg, new_msg]);
+    if i == 15 {
+        return msg;
+    }
+    else {
+        return get_message(trans_matrix, start_msg, msg, addi(index, 1), seqLen);
+    }
+}
+
+
+// A function computing the message for leaves.
+function leaf_message(seq_data: String[]) : Real[] {
+    let msg = apply(get_leaf_message, seq_data);
+    return msg;
+}
+
+function get_leaf_message(seq: String) : Real[] {
+    if seq == "A" {
+       let msg = [1.0, 0.0, 0.0, 0.0];
+        return msg;
+    } 
+    if seq == "C" {
+        let msg = [0.0, 1.0, 0.0, 0.0];
+        return msg;
+    } 
+    if seq == "G" {
+        let msg = [0.0, 0.0, 1.0, 0.0];
+        return msg;
+    } 
+    if seq == "T" {
+        let msg = [0.0, 0.0, 0.0, 1.0];
+        return msg;
+    } 
+    if seq == "?" { //NOTE should there be error message?
+        let msg = [1.0, 1.0, 1.0, 1.0];
+        return msg;
+    } 
+    if seq == "-" { //NOTE should there be error message?
+        let msg = [1.0, 1.0, 1.0, 1.0];
+        return msg;
+    } 
+}
+
+//NOTE Do rename...
+function somefun(msg: Real[]): Real[] {
+    let stationary_probs = mtxTrans(rvecCreate(4, [0.25,0.25,0.25,0.25])); // NOTE Column vector can this be done better?
+    let log_like = log(mtxMul(msg*stationary_probs));
+    return log_like;
+} 
+
+function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seqLen: Int): Tree[] {
     let n = length(trees);
 
     // Check that we have not yet reached the root of the tree
@@ -76,25 +137,18 @@ function cluster(q: Tensor[Real], trees: SeqTree[], maxAge: Real, seqLen: Int): 
     assume t ~ Exponential(10.0);
     let age = maxAge + t;
     
-    // Propose ancestral state(s) from stationary distribution, to be corrected later
-    let seq = iid(categorical, CategoricalParam{probs=[0.25, 0.25, 0.25, 0.25]}, seqLen);
-    
-    // Observe the child states given the proposed state of parent node
-    for i in 1 to seqLen {
-        let p1 = ctmc(seq[i], q, age-leftChild.age);
-        observe leftChild.seq[i] ~ Categorical(p1);
-        if (leftChild is Node) {
-            logWeight -(categoricalLogScore(leftChild.seq[i], CategoricalParam{probs=[0.25, 0.25, 0.25, 0.25]})); 
-        }  
-        let p2 = ctmc(seq[i], q, age-rightChild.age);
-        observe rightChild.seq[i] ~ Categorical(p2);
-        if (rightChild is Node) {
-            logWeight -(categoricalLogScore(rightChild.seq[i], CategoricalParam{probs=[0.25, 0.25, 0.25, 0.25]}));
-        }  
-    }
+    // Get the output message of the new node with respect to the root of the final tree
+    let msg = element_wise_product(message(leftChild.msg, q, age-leftChild.age), message(rightChild.msg, q, age-rightChild.age));
+
+    // Now we want to factor according to the message we just computed, with state probs weighted
+    // in some suitable fashion, e.g., by the stationary probs, which are [0.25,0.25,0.25,0.25] for
+    // the Jukes Cantor model. This has the additional advantage that this is the standard assumption
+    // for the root sequence in the tree, that is, we are assuming stationarity at the root.
+    let log_likes = apply(somefun, msg);
+    logWeight (sum(log_likes)); // NOTE was factor in previous code, correct?
 
     // Combine picked pair of trees into a new node
-    let parent = Node{age=age, seq=seq, left=leftChild, right=rightChild};  
+    let parent = Node{age=age, msg=msg, left=leftChild, right=rightChild};  
 
     // Compute new_trees list
     let min = mini(pairs[1], pairs[2]);  
@@ -107,7 +161,7 @@ function cluster(q: Tensor[Real], trees: SeqTree[], maxAge: Real, seqLen: Int): 
 
 // MODEL
 
-model function myModel(data: Int[][]) : SeqTree[]
+model function myModel(data: String[][]) : Tree[]
 {
     // Define the scaled rate matrix for Jukes-Cantor
     let q = mtxCreate(4,4,
@@ -123,9 +177,9 @@ model function myModel(data: Int[][]) : SeqTree[]
     let seqLen = 15; 
     
     // Define the initial trees vector (containing of the leaves)
-    // NOTE future need to add a function that replaces A,C,G,T with integers and handles uncertain positions.
     let trees = buildForest(data, [], 1, dataLen);
 
     // Build the tree by random clustering and return 
     return cluster(q, trees, 0.0, seqLen);
 }
+
