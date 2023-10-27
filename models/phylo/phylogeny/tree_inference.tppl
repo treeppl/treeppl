@@ -4,7 +4,7 @@
 // propagation needs to be implemented in the back end.
 
 // Run this by compiling: 
-// tpplc models/phylo/phylogeny/tree_inference_naive.tppl -m 'smc-bpf' --resample align --output testphylo
+// tpplc models/phylo/phylogeny/tree_inference.tppl -m 'smc-bpf' --resample align --output testphylo
 // And then execution 1000 particles 1 sweep, using toy dataset phylo.json:
 // ./testphylo models/data/phylo.json 1000 1 > phylo_output.json
 
@@ -26,6 +26,19 @@ type SeqTree =
 // FUNCTIONS
 
 // Randomly sample two indices in the trees vector, to be combined
+function buildForest(data: Int[][], forest: SeqTree[], index: Int, dataLen: Int): SeqTree[]
+{ 
+    let newLeaf = Leaf{age=0.0, seq=data[index]};
+    let new_forest = join([forest, [newLeaf]]);
+    if (eqi(dataLen, index)) {
+        return new_forest; 
+    }
+    else {
+        return buildForest(data, new_forest, addi(index, 1), dataLen);
+    }
+}
+
+// Randomly sample two indices in the trees vector, to be combined
 function pickpair(n: Int): Int[]
 { 
     assume i ~ Categorical(rep(n, 1./Real(n)));  
@@ -36,6 +49,7 @@ function pickpair(n: Int): Int[]
     return [addi(i, 1), addi(j, 1)]; //adding 1 to avoid index 0
 }
 
+//Note this is not optimal in terms of repeated calculation of matrix exp
 function ctmc(initialstate: Int, q: Tensor[Real], t: Real): Real[]
 { 
     let choices = [[1.0, 0.0, 0.0, 0.0],[0.0, 1.0, 0.0, 0.0],[0.0, 0.0, 1.0, 0.0],[0.0, 0.0, 0.0, 1.0]]; 
@@ -103,16 +117,14 @@ model function myModel(data: Int[][]) : SeqTree[]
         (1.0/3.0), (1.0/3.0), (1.0/3.0),      -1.0]
         );        
 
-    // Define the initial trees vector (containing of the leaves)
-    // NOTE need to add a function that replaces A,C,G,T with integers and handles uncertain positions, and creates the tree vector.
-    let trees = [
-        Leaf{age=0.0, seq=data[1]},
-        Leaf{age=0.0, seq=data[2]},
-        Leaf{age=0.0, seq=data[3]},
-        Leaf{age=0.0, seq=data[4]}
-    ];
 
-    let seqLen = 15; //NOTE This should be automatic using length() in next version. 
+    //NOTE These should be automatic using length() in next version when bug is fixed.
+    let dataLen = 4; 
+    let seqLen = 15; 
+    
+    // Define the initial trees vector (containing of the leaves)
+    // NOTE future need to add a function that replaces A,C,G,T with integers and handles uncertain positions.
+    let trees = buildForest(data, [], 1, dataLen);
 
     // Build the tree by random clustering and return 
     return cluster(q, trees, 0.0, seqLen);
