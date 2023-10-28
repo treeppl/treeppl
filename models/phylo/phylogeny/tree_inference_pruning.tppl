@@ -1,19 +1,19 @@
 // TreePPL script for tree inference under the
-// Jukes Cantor model with a strict clock prior. This has pruning hard-coded.
+// Jukes Cantor model with a strict clock prior. Pruning currently hard-coded.
 
 // Run this by compiling: 
 // tpplc models/phylo/phylogeny/tree_inference_pruning.tppl -m 'smc-bpf' --resample align --output testphylo
 // And then execution 1 particle 1 sweep to test, using toy dataset phylo.json:
 // ./testphylo models/data/phylo.json 1 1 > phylo_output.json
 
-// Toy dataset as json file phylo.json. NOTE now reals, string in phylo2.json
+// Toy dataset as json file phylo.json. NOTE now integers, string in phylo2.json
 // Data is a matrix with each row
 // consisting of the aligned DNA sequence for a single
 // taxon. The nucleotide is specified as
-//   "A" for adenine 
-//   "C" for cytosine 
-//   "G" for guanine 
-//   "T" for thymine 
+//   "A" for adenine  - 0
+//   "C" for cytosine  - 1
+//   "G" for guanine - 2
+//   "T" for thymine - 3
 
 // TYPES
 
@@ -47,32 +47,6 @@ function buildForest(data: Int[][], forest: Tree[], index: Int, dataLen: Int): T
     }
 }
 
-// A simple help function to compute a message for a branch in the tree in a
-// postorder traversal towards the root. We assume standard conventions here
-// for the structure of q with respect to time (rows = from-states)
-//function message(start_msg: Tensor[Real][], q: Tensor[Real], time: Real, seqLen: Int) : Tensor[Real][] {
-//    let trans_matrix = mtxTrans(mtxExp(q *$ time));
-//    let new_msg = mtxMul(start_msg, trans_matrix);
-//    return get_message(trans_matrix, start_msg, 2, seqLen);
-//}
-
-//function get_message(trans_matrix: Tensor[Real][], start_msg: Tensor[Real][], msg: Tensor[Real], index: Int, seqLen: Int) : Tensor[Real] {
-//    let new_msg = mtxMul(start_msg, trans_matrix);
-//   let msg =  mtxCreate(0,0,[]); //join([msg, [new_msg]]);
-//    if i == 15 {
-//        return msg;
-//    }
-//    else {
-//        return get_message(trans_matrix, start_msg, msg, addi(index, 1), seqLen);
-//    }
-//}
-
-// A function computing the message for leaves.
-//function leaf_message(seq_data: Real[]) :  Tensor[Real][] {
-//    let msg = sapply(seq_data, get_leaf_message);
-//    return msg;
-//}
-
 function get_leaf_message(seq: Int) : Tensor[Real] {
     if (Real(seq) == 0.0) { //seq == "A"
        let message = rvecCreate(4, [1.0, 0.0, 0.0, 0.0]);
@@ -90,11 +64,11 @@ function get_leaf_message(seq: Int) : Tensor[Real] {
         let message = rvecCreate(4, [0.0, 0.0, 0.0, 1.0]);
         return message;
     } 
- //   if (seq == "?") { //NOTE should there be error message here?
+ //   if (seq == "?") { 
  //       let message = rvecCreate(4, [1.0, 1.0, 1.0, 1.0]);
  //       return message;
  //   } 
- // if (seq == "-") { //NOTE should there be error message here?
+ // if (seq == "-") { 
   //      let message = rvecCreate(4, [1.0, 1.0, 1.0, 1.0]);
   //      return message;
   //  }
@@ -102,7 +76,6 @@ function get_leaf_message(seq: Int) : Tensor[Real] {
         return error("Invalid state at leaf");
     }
 }     
-
 
 //Compute log lokelihood for each site
 function get_log_likes(msg: Tensor[Real]): Real {
@@ -112,6 +85,7 @@ function get_log_likes(msg: Tensor[Real]): Real {
     return log_like;
 } 
 
+// KEY FUNCTION: CLUSTER
 function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seqLen: Int): Tree[] {
     
     let n = length(trees);
@@ -141,15 +115,12 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seqLen: Int): Tre
     // Get the message of the new node. Note FIX NORMALIZATION?
     let msg = mulMessage(left_in_msg, right_in_msg);
     //let msg = normalizeMessage(mulMessage(left_in_msg, right_in_msg)); 
-    
-    //OLD// Get the output message of the new node with respect to the root of the final tree //NOTE to be double-checked
-    //OLD//let msg = normalizeMessage(mulMessage(message(leftChild.msg, q, age-leftChild.age), message(rightChild.msg, q, age-rightChild.age))); 
 
-    // Now we want to factor according to the message we just computed, with state probs weighted
+    // Now we want to weight/factor according to the message we just computed, with state probs weighted
     // in some suitable fashion, e.g., by the stationary probs, which are [0.25,0.25,0.25,0.25] for
     // the Jukes Cantor model. This has the additional advantage that this is the standard assumption
     // for the root sequence in the tree, that is, we are assuming stationarity at the root.
-    let log_likes = sapply(msg, get_log_likes); //log_likes should be a sequence of Reals
+    let log_likes = sapply(msg, get_log_likes); 
     logWeight (sumReal(log_likes)); // NOTE check if correct
 
     // Combine picked pair of trees into a new node
@@ -164,7 +135,7 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seqLen: Int): Tre
     return cluster(q, new_trees, age, seqLen);
 }
 
-// MODEL
+// MODEL FUNCTION
 
 model function myModel(data: Int[][]) : Tree[] {
     // Define the scaled rate matrix for Jukes-Cantor
@@ -179,7 +150,7 @@ model function myModel(data: Int[][]) : Tree[] {
     let dataLen = 4; //4 leaves in toy example
     let seqLen = 15; //15 nucleotides in toy example
     
-    // Define the initial trees vector (containing of the leaves)
+    // Define the initial trees sequence (containing of the leaves)
     let trees = buildForest(data, [], 1, dataLen);
 
     // Build the tree by random clustering and return 
