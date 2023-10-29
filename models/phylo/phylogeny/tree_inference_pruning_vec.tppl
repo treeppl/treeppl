@@ -2,11 +2,11 @@
 // Jukes Cantor model with a strict clock prior. Pruning currently hard-coded.
 
 // Run this by compiling: 
-// tpplc models/phylo/phylogeny/tree_inference_pruning.tppl -m 'smc-bpf' --resample align --output testphylo
-// And then execution 1 particle 1 sweep to test, using toy dataset phylo_Reals.json:
-// ./testphylo models/data/phylo_Reals.json 1 1 > phylo_output.json
+// tpplc models/phylo/phylogeny/tree_inference_vex.tppl -m 'smc-bpf' --resample align --output testphylo
+// And then execution 1 particle 1 sweep to test, using toy dataset phylo_vec.json:
+// ./testphylo models/data/phylo_vec.json 1 1 > phylo_output.json
 
-// Toy dataset as json file phylo_Reals.json. NOTE now Reals, strings in phylo_Char.json
+// Toy dataset as json file phylo_vec.json. NOTE now vector of Reals, string in phylo_Char.json
 // Data is a matrix with each row
 // consisting of the aligned DNA sequence for a single
 // taxon. The nucleotide is specified as
@@ -36,15 +36,15 @@ function pickpair(n: Int): Int[] {
 }
 
 // Build forest of trees from leaves, recursively
-function build_forest(data: Real[][], forest: Tree[], index: Int, data_len: Int, seq_len: Int): Tree[] { 
-    let new_message = sapply(data[index], get_leaf_message); 
-    let new_leaf = Leaf{age = 0.0, index = index, msg =  new_message}; 
-    let new_forest = join([forest, [new_leaf]]);
-    if (eqi(data_len, index)) {
+function buildForest(data: Tensor[Real], forest: Tree[], index: Int, dataLen: Int, seqLen: Int): Tree[] { 
+    let new_message =  tapply(mtxGetRow(index, data), get_leaf_message); 
+    let newLeaf = Leaf{age = 0.0, index = index, msg =  new_message}; 
+    let new_forest = join([forest, [newLeaf]]);
+    if (eqi(dataLen, index)) {
         return new_forest; 
     }
     else {
-        return build_forest(data, new_forest, addi(index, 1), data_len, seq_len);
+        return buildForest(data, new_forest, addi(index, 1), dataLen, seqLen);
     }
 }
 
@@ -80,7 +80,7 @@ function get_log_likes(msg: Tensor[Real]): Real {
 } 
 
 // KEY FUNCTION: CLUSTER
-function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tree[] {
+function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seqLen: Int): Tree[] {
     
     let n = length(trees);
     
@@ -92,19 +92,19 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
     // Randomly sample two indices in the trees vector with function pickpair
     // We will combine these, named left and right child
     let pairs = pickpair(n);
-    let left_child = trees[pairs[1]];
-    let right_child = trees[pairs[2]];
+    let leftChild = trees[pairs[1]];
+    let rightChild = trees[pairs[2]];
 
     // Get the age of the new internal node
     assume t ~ Exponential(10.0);
     let age = maxAge + t;
     
     // Get incoming messages from children
-    let tmatrix_left = mtxTrans(mtxExp(mtxSclrMul(age-left_child.age, q)));    
-    let tmatrix_right = mtxTrans(mtxExp(mtxSclrMul(age-right_child.age, q)));
+    let tMatrixLeft = mtxTrans(mtxExp(mtxSclrMul(age-leftChild.age, q)));    
+    let tMatrixRight = mtxTrans(mtxExp(mtxSclrMul(age-rightChild.age, q)));
   
-    let left_in_msg  = sapply1(left_child.msg, mtxMul, tmatrix_left);
-    let right_in_msg = sapply1(right_child.msg, mtxMul, tmatrix_right);
+    let left_in_msg  = sapply1(leftChild.msg, mtxMul, tMatrixLeft);
+    let right_in_msg = sapply1(rightChild.msg, mtxMul, tMatrixRight);
 
     // Get the message of the new node. 
     let node_msg = mulMessage(left_in_msg, right_in_msg);
@@ -117,7 +117,7 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
     logWeight (sumReal(log_likes)); 
 
     // Combine picked pair of trees into a new node
-    let parent = Node{age=age, msg=node_msg, left=left_child, right=right_child};  
+    let parent = Node{age=age, msg=node_msg, left=leftChild, right=rightChild};  
 
     // Compute new_trees list
     let min = mini(pairs[1], pairs[2]);  
@@ -125,27 +125,29 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
     let new_trees = join([slice(trees, 1, min), slice(trees, addi(min, 1), max), slice(trees, addi(max, 1), addi(n, 1)), [parent]]);
 
     // Recursive call to cluster for new_trees
-    return cluster(q, new_trees, age, seq_len);
+    return cluster(q, new_trees, age, seqLen);
 }
 
 // MODEL FUNCTION
 
-model function myModel(data: Real[][]) : Tree[] {
+model function myModel(data: Real[]) : Tree[] {
     // Define the scaled rate matrix for Jukes-Cantor
     let q = mtxCreate(4,4,
         [     -1.0, (1.0/3.0), (1.0/3.0), (1.0/3.0),
         (1.0/3.0),      -1.0, (1.0/3.0), (1.0/3.0),
         (1.0/3.0), (1.0/3.0),      -1.0, (1.0/3.0),
         (1.0/3.0), (1.0/3.0), (1.0/3.0),      -1.0]
-        );           
+        );        
+
+    let seqdata = mtxCreate(4, 15, data);    
 
     //NOTE These should be automatic using length() in next version when bug is fixed.
-    let data_len = 4; //4 leaves in toy example
-    let seq_len = 15; //15 nucleotides in toy example
+    let dataLen = 4; //4 leaves in toy example
+    let seqLen = 15; //15 nucleotides in toy example
     
     // Define the initial trees sequence (containing the leaves)
-    let trees = build_forest(data, [], 1, data_len, seq_len);
+    let trees = buildForest(seqdata, [], 1, dataLen, seqLen);
 
     // Build the tree by random clustering and return 
-    return cluster(q, trees, 0.0, seq_len);
+    return cluster(q, trees, 0.0, seqLen);
 }
