@@ -63,7 +63,8 @@ let bool2string: Bool -> String  = lam b.
 --- Sequences ---
 -----------------
 
-let length = length
+let length = lam x.
+  length x
 
 let zipWith = zipWith
 
@@ -89,9 +90,13 @@ let tapply = lam x. lam f.
 let sapply1 = lam x. lam f. lam a.
   map (lam e. f e a) x
 
-  -- sapplyi2 is a mapping that additionally passes the current index and two arguments (a and b)
+-- sapplyi1 is a mapping that additionally passes the current index and one argument a
+let sapplyi1 = lam x. lam f. lam a.
+  mapi (lam i. lam e. f (addi i 1) e a) x
+
+-- sapplyi2 is a mapping that additionally passes the current index and two arguments (a and b)
 let sapplyi2 = lam x. lam f. lam a. lam b.
-  mapi (lam i. lam e. f i e a b) x
+  mapi (lam i. lam e. f (addi i 1) e a b) x
 
 -- convert an integer sequences to a real sequence
 let sint2real = lam seq.
