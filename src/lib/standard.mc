@@ -8,6 +8,9 @@ include "matrix.mc"
 include "ext/matrix-ext.mc"
 include "iterator.mc"
 include "ext/dist-ext.mc"
+include "seq.mc"
+
+let error = error
 
 let muli = muli
 let eqi = eqi
@@ -18,6 +21,11 @@ let subi = subi
 let slice = lam seq. lam beg. lam mend.
     subsequence seq (subi beg 1) (subi mend beg)
     
+let geqi = geqi
+let gti = gti
+let addi = addi
+let subi = subi
+let subf = subf
 
 ----------------------------
 --- Printing and strings ---
@@ -55,13 +63,40 @@ let bool2string: Bool -> String  = lam b.
 --- Sequences ---
 -----------------
 
-let length = length
+let length = lam x.
+  length x
+
+let zipWith = zipWith
+
+let fold = lam x.
+  foldl x
+
+let qSort = lam f. lam seq.
+  quickSort f seq
+
+let any = any
 
 -- switching the order of map to make it more R-like
 -- the "etymology" should be understood as 
 -- "sequence" apply, even though in R it is something slightly different
+-- sapply == for sequences, tapply == for tensors
 let sapply = lam x. lam f.
   map f x
+
+let tapply = lam x. lam f.
+  reverse (tensorFold (lam acc. lam c. cons (f c) acc) [] x)
+
+-- sapply1 for passing 1 argument (a) to function f
+let sapply1 = lam x. lam f. lam a.
+  map (lam e. f e a) x
+
+-- sapplyi1 is a mapping that additionally passes the current index and one argument a
+let sapplyi1 = lam x. lam f. lam a.
+  mapi (lam i. lam e. f (addi i 1) e a) x
+
+-- sapplyi2 is a mapping that additionally passes the current index and two arguments (a and b)
+let sapplyi2 = lam x. lam f. lam a. lam b.
+  mapi (lam i. lam e. f (addi i 1) e a b) x
 
 -- convert an integer sequences to a real sequence
 let sint2real = lam seq.
@@ -82,6 +117,25 @@ let sbool2string = lam seq.
 -- remap make to rep to make it more R-like
 let rep = make
 
+-- Sequence normalization
+let normalizeRealSeq = lam seq.
+  let sum = foldl addf 0. seq in
+  map (lam f. divf f sum) seq
+
+-- Find elements of a sequence that are true
+let whichTrue = lam elems. 
+  foldli (lam acc. lam i. lam x. if x then snoc acc (addi i 1) else acc) [] elems
+
+-- Test cases
+utest whichTrue [true, false, true, true, false] with [1, 3, 4]
+utest whichTrue [false, false, false] with []
+utest whichTrue [] with []
+
+-- Sum all elements of a sequence
+let sumReal = lam seq.
+  foldl (lam acc. lam x. addf acc x) 0.0 seq
+
+
 ---------------
 --- Tensors ---
 ---------------
@@ -95,6 +149,8 @@ let mtxMul = matrixMul
 let mtxSclrMul = matrixMulFloat
 
 let mtxAdd = matrixElemAdd
+
+let mtxElemMul = matrixElemMul
 
 let mtxTrans = matrixTranspose
 
@@ -155,6 +211,10 @@ utest tensorToSeqExn (tensorSliceExn (mtxPow __test_43FS35GF 4) [2]) with [26676
 let mtxGet = lam row. lam col. lam tensor.
   tensorGetExn tensor [subi row 1, subi col 1]
 
+let mtxGetRow = lam row. lam tensor.
+  let r = subi row 1 in
+  tensorSubExn tensor r 1
+
 let mtxSclrMul = lam scalar. lam tensor.
   externalMatrixMulFloat scalar tensor
 
@@ -162,6 +222,17 @@ let iid = lam f. lam p. lam n.
   let params = make n p in
   map f params
 
+-- Retrieve a row vector with the columns in cols
+-- OPT(mariana/vipa, 2023-10-09): the idea is to have mtxRowCols, mtxRowsCol, and mtxRowsCols
+-- if we get the appropriate form of overloading we could make indexing (a[idxs]) 
+-- call the correct one of those later on
+let mtxRowCols = lam matrix. lam row. lam cols.
+  tensorSubSeqExn tensorCreateCArrayFloat matrix [[subi row 1], map (lam v. subi v 1) cols]
+
+-- Mean of a tensor (e.g., vectors and matrices)
+-- Was commented out by Viktor, used now by Mariana
+let tensorMean = lam t.
+  divf (tensorFold addf 0. t) (int2float (tensorSize t))
 
 -- NOTE(vsenderov, 23-10-01): Commenting two functions as they should not be
 -- used under 0-CFA
@@ -174,4 +245,36 @@ let iid = lam f. lam p. lam n.
 -- let mtxSet = lam row:Int. lam col:Int. lam tensor:Tensor[Float]. lam val:Float.
 --   ts tensor [subi row 1, subi col 1] val
 
+
+----------------
+--- Messages ---
+----------------
+
+-- NOTE(mariana, 2023-10-05): attempt to use functions Daniel wrote 
+-- to handle Messages, which are Tensor[Real][]
+
+-- TODO(vsenderov, 2023-11-02): Unit tests have to be written, but beware of floating-point comparisons!
+-- also this needs to be moved to the matrix stuff above
+-- Vector normalization
+let normalizeVec = lam v.
+  let sum = tensorFold addf 0. v in
+  tensorCreateCArrayFloat (tensorShape v) (lam i. divf (tensorGetExn v i) sum)
+
+-- Message normalization 
+-- TODO(vsenderov, 2023-11-02): This should not be in the Miking file, but rather in TPPL file
+let normalizeMessage = lam m. 
+  map normalizeVector m
+
+-- Elementwise multiplication of state likelihoods/probabilities
+-- TODO(vsenderov, 2023-11-02): This should not be in the Miking file, but rather in TPPL file
+let mulMessage = zipWith matrixElemMul
+
+-- Raises each element of a tensor to the power of the float argument
+let mtxElemPow = lam tensor. lam f.
+  tensorCreateCArrayFloat (tensorShape tensor) (lam i. pow (tensorGetExn tensor i) f)
+
+-- The original function, refactored to use the new mtxElemPow function
+-- TODO(vsenderov, 2023-11-02): This should not be in the Miking file, but rather in TPPL file
+let messageElementPower = lam m. lam f. 
+    map (lam v. mtxElemPow v f) m
 
