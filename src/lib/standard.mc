@@ -260,11 +260,6 @@ let normalizeVec = lam v.
   let sum = tensorFold addf 0. v in
   tensorCreateCArrayFloat (tensorShape v) (lam i. divf (tensorGetExn v i) sum)
 
--- Message normalization 
--- TODO(vsenderov, 2023-11-02): This should not be in the Miking file, but rather in TPPL file
-let normalizeMessage = lam m. 
-  map normalizeVector m
-
 -- Elementwise multiplication of state likelihoods/probabilities
 -- TODO(vsenderov, 2023-11-02): This should not be in the Miking file, but rather in TPPL file
 let mulMessage = zipWith matrixElemMul
