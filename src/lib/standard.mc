@@ -118,9 +118,11 @@ let sbool2string = lam seq.
 let rep = make
 
 -- Sequence normalization
-let normalizeRealSeq = lam seq.
+let seqNormalize = lam seq.
   let sum = foldl addf 0. seq in
   map (lam f. divf f sum) seq
+
+utest seqNormalize [1.0, 1.0] with [0.5, 0.5] using (eqSeq eqf)
 
 -- Find elements of a sequence that are true
 let whichTrue = lam elems. 
@@ -132,8 +134,10 @@ utest whichTrue [false, false, false] with []
 utest whichTrue [] with []
 
 -- Sum all elements of a sequence
-let sumReal = lam seq.
+let seqSumReal = lam seq.
   foldl (lam acc. lam x. addf acc x) 0.0 seq
+
+utest seqSumReal [1., 2., 3., 4., 5.] with divf (mulf 5. 6.) 2. using eqf
 
 
 ---------------
@@ -234,6 +238,31 @@ let mtxRowCols = lam matrix. lam row. lam cols.
 let tensorMean = lam t.
   divf (tensorFold addf 0. t) (int2float (tensorSize t))
 
+let __test_tesnor1: Tensor[Float] = mtxCreate 3 3 [
+    1., 1., 1.,
+    2., 2., 2.,
+    3., 3., 3.
+  ]
+
+utest tensorMean __test_tesnor1 with 2. using eqf
+
+-- Raises each element of a tensor to the power of the float argument
+let tensorElemPow = lam tensor. lam f.
+  tensorCreateCArrayFloat (tensorShape tensor) (lam i. pow (tensorGetExn tensor i) f)
+
+utest tensorToSeqExn (tensorSliceExn (tensorElemPow __test_tesnor1 2.) [0]) with [1., 1., 1.] using (eqSeq eqf)
+utest tensorToSeqExn (tensorSliceExn (tensorElemPow __test_tesnor1 2.) [1]) with [4., 4., 4.] using (eqSeq eqf)
+
+-- TODO(vsenderov, 2023-11-02): Unit tests have to be written, but beware of floating-point comparisons!
+-- Tensor normalization
+let tensorNormalize = lam v.
+  let sum = tensorFold addf 0. v in
+  tensorCreateCArrayFloat (tensorShape v) (lam i. divf (tensorGetExn v i) sum)
+
+let __test_tensor2: Tensor[Float] = rvecCreate 5 [1., 1., 1., 1., 1.]
+
+utest tensorToSeqExn (tensorSliceExn (tensorNormalize __test_tensor2) [0]) with [0.2, 0.2, 0.2, 0.2, 0.2] using (eqSeq eqf)
+
 -- NOTE(vsenderov, 23-10-01): Commenting two functions as they should not be
 -- used under 0-CFA
 -- NOTE(vsenderov, 2023-09-15): Without setting tensorSetExn to a symbol in here,
@@ -253,23 +282,23 @@ let tensorMean = lam t.
 -- NOTE(mariana, 2023-10-05): attempt to use functions Daniel wrote 
 -- to handle Messages, which are Tensor[Real][]
 
--- TODO(vsenderov, 2023-11-02): Unit tests have to be written, but beware of floating-point comparisons!
--- also this needs to be moved to the matrix stuff above
--- Vector normalization
-let normalizeVec = lam v.
-  let sum = tensorFold addf 0. v in
-  tensorCreateCArrayFloat (tensorShape v) (lam i. divf (tensorGetExn v i) sum)
+-- Message normalization 
+let messageNormalize = lam m. 
+  map tensorNormalize m
 
 -- Elementwise multiplication of state likelihoods/probabilities
--- TODO(vsenderov, 2023-11-02): This should not be in the Miking file, but rather in TPPL file
-let mulMessage = zipWith matrixElemMul
+let messageElemMul = zipWith matrixElemMul
 
--- Raises each element of a tensor to the power of the float argument
-let mtxElemPow = lam tensor. lam f.
-  tensorCreateCArrayFloat (tensorShape tensor) (lam i. pow (tensorGetExn tensor i) f)
+-- Raise each element of each sequence element to the Real power
+let messageElemPow = lam m. lam f. 
+    map (lam v. tensorElemPow v f) m
 
--- The original function, refactored to use the new mtxElemPow function
--- TODO(vsenderov, 2023-11-02): This should not be in the Miking file, but rather in TPPL file
-let messageElementPower = lam m. lam f. 
-    map (lam v. mtxElemPow v f) m
+let __test_message = [rvecCreate 2 [2., 3.], rvecCreate 2 [4., 5.]] 
+let __test_messageElemPow = messageElemPow __test_message 2.
 
+-- this test doesn't quite work -- we need to see how how do [0]
+utest tensorToSeqExn (tensorSliceExn (get __test_messageElemPow 0) [0]) with [4., 9.]
+  using (eqSeq eqf)
+
+  utest tensorToSeqExn (tensorSliceExn (get __test_messageElemPow 1) [0]) with [16., 25.]
+  using (eqSeq eqf)
