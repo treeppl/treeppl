@@ -144,6 +144,9 @@ prod left Sub: ExprTppl = left:ExprTppl "-" right:ExprTppl
 prod Neg: ExprTppl = "-" right:ExprTppl
 -- infix Division: Expr = "/"
 prod left Div: ExprTppl = left:ExprTppl "/" right:ExprTppl
+-- Power: Expr = "^"
+prod left Power: ExprTppl = left:ExprTppl "^" right:ExprTppl
+
 -- is
 prod Is: ExprTppl = thing:ExprTppl "is" constructor:UName
 -- to
@@ -187,7 +190,7 @@ prod Projection: ExprTppl = target:ExprTppl "." field:LIdent
 
 precedence {
   Projection FunCall Subscript;
-  Not;
+  Not Neg;
   Mul Div;
   Add Sub;
   ~Less Greater LessEq GreaterEq Equal Unequal;
