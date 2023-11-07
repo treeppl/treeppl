@@ -300,5 +300,5 @@ let __test_messageElemPow = messageElemPow __test_message 2.
 utest tensorToSeqExn (tensorSliceExn (get __test_messageElemPow 0) [0]) with [4., 9.]
   using (eqSeq eqf)
 
-  utest tensorToSeqExn (tensorSliceExn (get __test_messageElemPow 1) [0]) with [16., 25.]
+utest tensorToSeqExn (tensorSliceExn (get __test_messageElemPow 1) [0]) with [16., 25.]
   using (eqSeq eqf)
