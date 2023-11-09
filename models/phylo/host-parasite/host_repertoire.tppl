@@ -97,10 +97,10 @@ model function mymodel(symbiont_tree: TreeLabeled, ntips: Int, nhosts: Int, inte
 
   // Package model parameters into an object for convenient calling
   let mp = ModelParams{qMatrix = qMatrix, dMatrix = dMatrix, dMean = dMean, beta = beta};
-  
+
   let interactions_reals = sint2real(interactions);
   let iMatrix = mtxCreate(ntips, nhosts, interactions_reals);
-  
+
   // Derive params for ancestral repertoire proposals from independence model
   let probs_tree = get_proposal_params(symbiont_tree, iMatrix, qMatrix, stationary_probs, tune);
 
@@ -111,7 +111,7 @@ model function mymodel(symbiont_tree: TreeLabeled, ntips: Int, nhosts: Int, inte
 
   let log_root_rep_debt = sumReal(zipWith(categoricalLogScore, root_rep, probRecordSequence));
 	// Note: categorical works here because root_rep id 0-based
-  
+
   let valid_root = any(is2, root_rep);
 
   if !valid_root { 
@@ -120,6 +120,7 @@ model function mymodel(symbiont_tree: TreeLabeled, ntips: Int, nhosts: Int, inte
   } 
  
   let log_score_root = - ( log( (3.0 ^ Real(nhosts)) - (2.0 ^ Real(nhosts)) ) );
+
 
   // Simulate repertoire history on the symbiont tree (left and right daughters)
   let left = simulate(probs_tree.left, HistoryPoint{age = probs_tree.age, repertoire = root_rep}, mp, iMatrix);
@@ -242,7 +243,7 @@ function final_probs(tree: MsgTree, parent_msg: Tensor[Real][], qMatrix: Tensor[
   let right_parent_msg = sapply1(mulMessage(parent_msg,tree.right_in_msg), mtxMul, tMatrixRight);
 
   let left  =  final_probs(tree.left,  left_parent_msg, qMatrix, tune);
-  let right =  final_probs(tree.left, right_parent_msg, qMatrix, tune);
+  let right =  final_probs(tree.right, right_parent_msg, qMatrix, tune);
 
   return ProbsNode{age = tree.age, label = tree.label, left = left, right = right, probs = probs};
 }
@@ -255,7 +256,7 @@ function simulate (tree: ProbsTree, start: HistoryPoint, mp: ModelParams, iMatri
     
   // Propose a repertoire. The propose mechanism means that the simulation
   // should be "penalized" for the probability associated with the draw. 
-  let probs = getProbs(tree);
+  let probs = getProbs(tree);  // TODO: is this needed?
   let probRecordSequence = sapply(tree.probs, createProbRecord);
   let repertoire = sapply(probRecordSequence, categorical);      // Note: assume is within function categorical
     
@@ -303,9 +304,9 @@ function simulate_history (from_rep: HistoryPoint, to_rep: HistoryPoint, mp: Mod
   // Simulate repertoire evolution from full model, one event at a time
   let history_score = simulate_by_event(from_rep.repertoire, eventSeq, 1, from_rep.age, 
     to_rep.age, mp, proposed_unordered_events.log_debt);
-
+	
   // Now we have both debt and score at an alignment point 
-  logWeight(history_score.log_score - proposed_unordered_events.log_debt);
+  logWeight(history_score.log_score - proposed_unordered_events.log_debt); 
 
   return history_score.history;
 }
@@ -332,6 +333,17 @@ function propose_events_for_host (host_index: Int, from_age: Real, end_age: Real
 	from_state: Int, end_state: Int, qMatrix: Tensor[Real]) : ProposedHistory {
 		
 	let rate = -(mtxGet(addi(from_state,1), addi(from_state,1), qMatrix));
+  
+  // Kill the particle if we are trying to subdivide a time segment that
+  // is too short. This will come with a big penalty in either case but
+  // continuing to run the code will result in numerical problems like
+  // sampling waiting times that are -0. and getting debts that are inf,
+  // both of which are difficult to handle.
+  if (rate * (from_age - end_age) < 1E-15 && !eqi(from_state,end_state)) {
+    weight 0.0;
+    resample;
+  }
+
   let t = getWaitingTime(from_state, end_state, rate, from_age, end_age);
 	let new_age = from_age - t;
 
@@ -342,8 +354,6 @@ function propose_events_for_host (host_index: Int, from_age: Real, end_age: Real
 	if (new_age < end_age) {
 		let log_wait_debt = poissonLogScore(0, PoissonParam{rate = rate*(from_age - end_age)});
 		return ProposedHistory{log_debt = log_wait_debt, events = []};
-	} else {
-		let log_wait_debt = exponentialLogScore(t, ExponentialParam{rate = rate});
 	}
 
   let log_wait_debt = getLogWaitDebt(from_state, end_state, rate, from_age, end_age, t);
@@ -365,19 +375,16 @@ function propose_events_for_host (host_index: Int, from_age: Real, end_age: Real
 }
 
 function getLogWaitDebt(from_state: Int, end_state: Int, rate: Real, from_age: Real, end_age: Real, t: Real): Real {
-	if (Real(from_state) != Real(end_state)) {
-		let log_wait_debt = log_pdf_exponential_max_t(0.0, rate, from_age - end_age);
-    return log_wait_debt;
+	if (!eqi(from_state,end_state)) {
+		return log_pdf_exponential_max_t(t, rate, from_age - end_age);
 	} else {
-		let log_wait_debt = exponentialLogScore(t, ExponentialParam{rate = rate}); 
-    return log_wait_debt;  
+		return exponentialLogScore(t, ExponentialParam{rate = rate}); 
 	}
 }
 
 function getWaitingTime(from_state: Int, end_state: Int, rate: Real, from_age: Real, end_age: Real): Real {
-	if (Real(from_state) != Real(end_state)) {
-		let t = sample_exponential_max_t(rate, from_age - end_age);
-    return t;
+	if (!eqi(from_state,end_state)) {
+		return sample_exponential_max_t(rate, from_age - end_age);
 	} else {
 		assume t ~ Exponential(rate);
     return t;
@@ -437,8 +444,12 @@ function simulate_by_event (repertoire: Int[], eventSeq: Event[], event_index: I
 	// Note that the first statement will capture the cases where the proposed
 	// history is impossible because the repertoire we are supposed to go to is
 	// empty (the rate is zero).
-	observe true ~ Bernoulli(rate/change_rate); // we want to die immediately here - TODO: check
-	let logScore = exponentialLogScore(from_age - the_event.age, ExponentialParam{rate=change_rate});
+	if (rate == 0.0) {
+    weight 0.0;
+    resample;
+  }
+  let exp_log_prob = exponentialLogScore(from_age - the_event.age, ExponentialParam{rate=change_rate});
+  let logScore = exp_log_prob + log(rate/change_rate);
 
   // Update repertoire with the change in the_event
   let new_repertoire = sapplyi1(repertoire, getNewState, the_event);
@@ -446,7 +457,7 @@ function simulate_by_event (repertoire: Int[], eventSeq: Event[], event_index: I
   // Simulate next event
 	let simHist = simulate_by_event(new_repertoire, eventSeq, addi(event_index,1), the_event.age, end_age, mp, log_debt);
 
-	return HistoryScore{log_score = simHist.log_score+logScore, history = join([simHist.history, [hp]])};
+	return HistoryScore{log_score = simHist.log_score + logScore, history = join([simHist.history, [hp]])};
 }
 
 // Update host states
