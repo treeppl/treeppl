@@ -4,9 +4,9 @@
 // propagation needs to be implemented in the back end.
 
 // Run this by compiling: 
-// tpplc models/phylo/phylogeny/tree_inference.tppl -m 'smc-bpf' --resample align --output testphylo
-// And then execution 1000 particles 1 sweep, using toy dataset phylo.json:
-// ./testphylo models/data/phylo.json 10000 1 > phylo_naive.json
+// tpplc models/phylo/phylogeny/tree_inference.tppl -m 'smc-apf' --resample align --output testphylo
+// And then execution 10000 particles 1 sweep, using toy dataset phylo_Ints.json:
+// ./testphylo models/data/phylo_Ints.json 10000 1 > phylo_naive.json
 
 // Toy dataset as json file phylo.json. NOTE this should be nucleotides in later version, currently integers
 // Data is a matrix of type int, with each row
