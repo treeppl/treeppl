@@ -116,6 +116,16 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
     let log_likes = sapply(node_msg, get_log_likes);  
     logWeight (sumReal(log_likes)); 
 
+    // Pruning fix
+    if (left_child is Node) {
+        let log_likes_left = sapply(left_child.msg, get_log_likes);  
+        logWeight -(sumReal(log_likes_left)); 
+    }
+    if (right_child is Node) {
+        let log_likes_right = sapply(right_child.msg, get_log_likes);  
+        logWeight -(sumReal(log_likes_right)); 
+    }
+
     // Combine picked pair of trees into a new node
     let parent = Node{age=age, msg=node_msg, left=left_child, right=right_child};  
 
