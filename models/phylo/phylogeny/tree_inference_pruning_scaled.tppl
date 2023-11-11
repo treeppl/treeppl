@@ -6,14 +6,14 @@
 // And then execution 10000 particles 1 sweep to test, using toy dataset phylo_Reals.json:
 // ./testphylo models/data/phylo_Reals.json 10000 1 > phylo_pruning.json
 
-// Toy dataset as json file phylo_Reals.json. 
+// Toy dataset as json file phylo_Reals.json. NOTE now Reals, strings in phylo_Char.json
 // Data is a matrix with each row
 // consisting of the aligned DNA sequence for a single
 // taxon. The nucleotide is specified as
-//   "A" for adenine  - 0.0
-//   "C" for cytosine  - 1.0
-//   "G" for guanine - 2.0
-//   "T" for thymine - 3.0
+//   "A" for adenine  - 0
+//   "C" for cytosine  - 1
+//   "G" for guanine - 2
+//   "T" for thymine - 3
 
 // TYPES
 
