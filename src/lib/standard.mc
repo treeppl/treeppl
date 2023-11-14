@@ -139,6 +139,12 @@ let seqSumReal = lam seq.
 
 utest seqSumReal [1., 2., 3., 4., 5.] with divf (mulf 5. 6.) 2. using eqf
 
+-- Sum all elements of a sequence (int)
+let seqSumInt = lam seq.
+  foldl (lam acc. lam x. addi acc x) 0 seq
+
+utest seqSumInt [1, 2, 3, 4, 5] with 15 using eqi
+
 
 ---------------
 --- Tensors ---
@@ -173,11 +179,17 @@ let mtxCreateId = lam dim.
 utest tensorToSeqExn (tensorSliceExn (mtxCreateId 2) [0]) with [1., 0.] using (eqSeq eqf)
 utest tensorToSeqExn (tensorSliceExn (mtxCreateId 2) [1]) with [0., 1.] using (eqSeq eqf)
 
+utest tensorToSeqExn (tensorSliceExn (mtxCreateId 3) [0]) with [1., 0., 0.] using (eqSeq eqf)
+utest tensorToSeqExn (tensorSliceExn (mtxCreateId 3) [1]) with [0., 1., 0.] using (eqSeq eqf)
+
+
 -- matrix exponentiation
 recursive
   let mtxPow = lam mtx: Tensor[Float]. lam pow: Int.
-    if eqi pow 0 then
-      mtxCreateId (tensorRank mtx) -- Assuming tensorRank gives the dimension of the matrix
+    if neqi (get (tensorShape mtx) 0) (get (tensorShape mtx) 1) then
+      error "Matrix must be square"
+    else if eqi pow 0 then
+      mtxCreateId (get (tensorShape mtx) 0) -- Assuming a squareMatrix
     else if eqi pow 1 then
       mtx
     else if eqi (modi pow 2) 0 then
@@ -195,6 +207,17 @@ let __test_43FS35GF: Tensor[Float] = mtxCreate 3 3 [
   4., 5., 6.,
   7., 8., 9.
 ]
+
+
+-- Test for exponent 0
+utest tensorToSeqExn (tensorSliceExn (mtxPow __test_43FS35GF 0) [0]) with [1., 0., 0.] using (eqSeq eqf)
+utest tensorToSeqExn (tensorSliceExn (mtxPow __test_43FS35GF 0) [1]) with [0., 1., 0.] using (eqSeq eqf)
+utest tensorToSeqExn (tensorSliceExn (mtxPow __test_43FS35GF 0) [2]) with [0., 0., 1.] using (eqSeq eqf)
+
+-- Test for exponent 1
+utest tensorToSeqExn (tensorSliceExn (mtxPow __test_43FS35GF 1) [0]) with [1., 2., 3.] using (eqSeq eqf)
+utest tensorToSeqExn (tensorSliceExn (mtxPow __test_43FS35GF 1) [1]) with [4., 5., 6.] using (eqSeq eqf)
+utest tensorToSeqExn (tensorSliceExn (mtxPow __test_43FS35GF 1) [2]) with [7., 8., 9.] using (eqSeq eqf)
 
 -- Test for exponent 2
 utest tensorToSeqExn (tensorSliceExn (mtxPow __test_43FS35GF 2) [0]) with [30., 36., 42.] using (eqSeq eqf)
