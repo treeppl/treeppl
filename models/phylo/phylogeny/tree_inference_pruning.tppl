@@ -71,7 +71,7 @@ function get_leaf_message(seq: Real) : Tensor[Real] {
     }
 }     
 
-//Compute log lokelihood for each site
+//Compute log likelihood for each site
 function get_log_likes(msg: Tensor[Real]): Real {
     let stationary_probs = cvecCreate(4, [0.25,0.25,0.25,0.25]); 
     let like = mtxMul(msg, stationary_probs); 
@@ -96,8 +96,8 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
     let right_child = trees[pairs[2]];
 
     // Get the age of the new internal node
-    //assume t ~ Exponential(10.0);
-    let t = 2.0;
+    assume t ~ Exponential(10.0);
+    //let t = 2.0;
     let age = maxAge + t;
     
     // Get incoming messages from children
@@ -116,8 +116,8 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
     // for the root sequence in the tree, that is, we are assuming stationarity at the root.
     let log_likes = sapply(node_msg, get_log_likes);  
 
-    printLn("check:");
-    printLn(real2string((seqSumReal(log_likes))));
+    //printLn("check:");
+    //printLn(real2string((seqSumReal(log_likes))));
     logWeight (seqSumReal(log_likes)); 
 
     // Remove weights of previous internal nodes
@@ -154,8 +154,8 @@ model function myModel(data: Real[][]) : Tree[] {
         );           
 
     //NOTE These should be automatic using length() in next version when bug is fixed.
-    let data_len = 2; //4 leaves in toy example
-    let seq_len = 6; //15 nucleotides in toy example
+    let data_len = 4; //4 leaves in toy example
+    let seq_len = 15; //15 nucleotides in toy example
     
     // Define the initial trees sequence (containing the leaves)
     let trees = build_forest(data, [], 1, data_len, seq_len);
