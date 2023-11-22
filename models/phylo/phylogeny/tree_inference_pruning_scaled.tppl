@@ -101,15 +101,14 @@ function norm_mess(msg: Tensor[Real]): Tensor[Real] {
 } 
 
 //Rescale message for each site
-function rescale_msg(msg: Tensor[Real][], left_factors: Real[], right_factors: Real[], index: Int, seq_len: Int, scaled_messages: Tensor[Real][]): Tensor[Real][] {
-    let fac = left_factors[index] * right_factors[index];
-    let msg_fac = mtxSclrMul(fac, msg[index]);
-    let scaled_messages = join([scaled_messages, [msg_fac]]);
+function update_factors(factors: Real[], left_factors: Real[], right_factors: Real[], index: Int, seq_len: Int, new_factors: Real[]): Real[] {
+    let fac = factors[index] * left_factors[index] * right_factors[index];
+    let new_factors = join([new_factors, [fac]]);
     if (eqi(seq_len, index)) {
-        return scaled_messages; 
+        return new_factors; 
     }
     else {
-        return rescale_msg(msg, left_factors, right_factors, addi(index, 1), seq_len, scaled_messages);
+        return update_factors(factors, left_factors, right_factors, addi(index, 1), seq_len, new_factors);
     }
 } 
 
@@ -142,16 +141,16 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
 
     // Get the message of the new node, scale it with incoming factors
     let node_msg = messageElemMul(left_in_msg, right_in_msg); 
-    let node_msg_rescaled = rescale_msg(node_msg, left_child.factors, right_child.factors, 1, seq_len, []);
+    let factors = sapply(node_msg, get_factor); 
+    let new_factors = update_factors(factors, left_child.factors, right_child.factors, 1, seq_len, []);
     
-    // Get new factors, Normalize the rescaled node message
-    let likelihood = sapply(node_msg_rescaled, get_like);  
-    let new_factors = sapply(node_msg_rescaled, get_factor); 
-    let node_msg_norm = sapply(node_msg_rescaled, norm_mess);
+    // Get likelihood, Normalize the rescaled node message
+    let likelihood = sapply(node_msg, get_like);  
+    let node_msg_norm = sapply(node_msg, norm_mess);
 
     // Weight
-    logWeight (seqSumReal(sapply(likelihood, log)));        //This requires that we remove the weight for previous intenal nodes. 
-    // logWeight (seqSumReal(sapply(new_factors, log)));    //Gives logZ of around -90 for toy dataset, should be -80.
+    //logWeight (seqSumReal(sapply(likelihood, log)));        //This requires that we remove the weight for previous intenal nodes. 
+     logWeight (seqSumReal(sapply(new_factors, log)));    //Gives logZ of around -90 for toy dataset, should be -80.
 
     // Combine picked pair of trees into a new node
     let parent = Node{age=age, msg=node_msg_norm, factors= new_factors, left=left_child, right=right_child};  
