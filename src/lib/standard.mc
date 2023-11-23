@@ -76,6 +76,10 @@ let qSort = lam f. lam seq.
 
 let any = any
 
+-- sapply1 for passing 1 argument (a) to function f
+let sapply1 = lam x. lam f. lam a.
+  map (lam e. f e a) x
+
 -- switching the order of map to make it more R-like
 -- the "etymology" should be understood as 
 -- "sequence" apply, even though in R it is something slightly different
