@@ -54,7 +54,7 @@ function ctmc(initialstate: Int, q: Tensor[Real], t: Real): Real[]
 { 
     let choices = [[1.0, 0.0, 0.0, 0.0],[0.0, 1.0, 0.0, 0.0],[0.0, 0.0, 1.0, 0.0],[0.0, 0.0, 0.0, 1.0]]; 
     let state = rvecCreate(4,choices[addi(initialstate, 1)]); 
-    let p = state*@(mtxExp(q*$t)); 
+    let p = state *@ (mtxExp(q *$ t)); 
     return[mtxGet(1, 1, p), mtxGet(1, 2, p), mtxGet(1, 3, p), mtxGet(1, 4, p)];
 }
 

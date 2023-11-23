@@ -18,8 +18,8 @@
 // TYPES
 
 type Tree =
-  | Leaf {age: Real, index: Int, msg: Real[]}
-  | Node {age: Real, msg: Real[], left: Tree, right: Tree}
+  | Leaf {age: Real, index: Int, msg: Tensor[Real][]}
+  | Node {age: Real, msg: Tensor[Real][], left: Tree, right: Tree}
 
 // A message is simply four Real values corresponding to the conditional likelihoods
 // (unscaled probabilities) of the four different states (A, C, G, T).
@@ -29,9 +29,8 @@ type Tree =
 // FUNCTIONS
 
 // Build forest of trees from leaves, recursively
-function buildForest(data: Int[][], forest: Tree[], index: Int, dataLen: Int): Tree[]
-{ 
-    let newLeaf = Leaf{age=0.0, index = index, msg = leaf_message(data[index])};
+function buildForest(data: String[][], forest: Tree[], index: Int, dataLen: Int): Tree[] { 
+    let newLeaf = Leaf{age = 0.0, index = index, msg = leaf_message(data[index])};
     let new_forest = join([forest, [newLeaf]]);
     if (eqi(dataLen, index)) {
         return new_forest; 
@@ -42,8 +41,7 @@ function buildForest(data: Int[][], forest: Tree[], index: Int, dataLen: Int): T
 }
 
 // Randomly sample two indices in the trees vector, to be combined
-function pickpair(n: Int): Int[]
-{ 
+function pickpair(n: Int): Int[] { 
     assume i ~ Categorical(rep(n, 1./Real(n)));  
     assume j ~ Categorical(rep(n, 1./Real(n)));  
     if (eqi(j, i)) { // NOTE how can this be done better?
@@ -52,25 +50,18 @@ function pickpair(n: Int): Int[]
     return [addi(i, 1), addi(j, 1)]; //adding 1 to avoid index 0
 }
 
-//Note this is not optimal in terms of repeated calculation of matrix exp
-function ctmc(initialstate: Int, q: Tensor[Real], t: Real): Real[] { 
-    let choices = [[1.0, 0.0, 0.0, 0.0],[0.0, 1.0, 0.0, 0.0],[0.0, 0.0, 1.0, 0.0],[0.0, 0.0, 0.0, 1.0]]; 
-    let state = rvecCreate(4,choices[addi(initialstate, 1)]); 
-    let p = state*@(mtxExp(q*$t)); 
-    return[mtxGet(1, 1, p), mtxGet(1, 2, p), mtxGet(1, 3, p), mtxGet(1, 4, p)];
-}
-
 // A simple help function to compute a message for a branch in the tree in a
 // postorder traversal towards the root. We assume standard conventions here
 // for the structure of q with respect to time (rows = from-states)
-function message(start_msg: Real[], q: Tensor[Real], time: Real, seqLen: Int) : Real[] {
-    let trans_matrix = mtxTrans(mtxExp(q*$time));
-    return get_message(trans_matrix, start_msg, [], 1, seqLen);
+function message(start_msg: Tensor[Real][], q: Tensor[Real], time: Real, seqLen: Int) : Tensor[Real][] {
+    let trans_matrix = mtxTrans(mtxExp(q *$ time));
+    let new_msg = mtxMul(start_msg, trans_matrix);
+    return get_message(trans_matrix, start_msg, 2, seqLen);
 }
 
-function get_message(trans_matrix: Tensor[Real], start_msg: Real[], msg: Real[], index: Int, seqLen: Int) : Real[] {
+function get_message(trans_matrix: Tensor[Real], start_msg: Tensor[Real][], msg: Tensor[Real], index: Int, seqLen: Int) : Tensor[Real] {
     let new_msg = mtxMul(start_msg, trans_matrix);
-    let msg =  join([msg, new_msg]);
+    let msg =  mtxCreate(0,0,[]); //join([msg, [new_msg]]);
     if i == 15 {
         return msg;
     }
@@ -79,54 +70,55 @@ function get_message(trans_matrix: Tensor[Real], start_msg: Real[], msg: Real[],
     }
 }
 
-
 // A function computing the message for leaves.
-function leaf_message(seq_data: String[]) : Real[] {
+function leaf_message(seq_data: String[]) :  Tensor[Real][] {
     let msg = apply(get_leaf_message, seq_data);
     return msg;
 }
 
-function get_leaf_message(seq: String) : Real[] {
+function get_leaf_message(seq: String) : Tensor[Real] {
     if seq == "A" {
-       let msg = [1.0, 0.0, 0.0, 0.0];
-        return msg;
+       let message = rvecCreate(4, [1.0, 0.0, 0.0, 0.0]);
+        return message;
     } 
     if seq == "C" {
-        let msg = [0.0, 1.0, 0.0, 0.0];
-        return msg;
+        let message = rvecCreate(4, [0.0, 1.0, 0.0, 0.0]);
+        return message;
     } 
     if seq == "G" {
-        let msg = [0.0, 0.0, 1.0, 0.0];
-        return msg;
+        let message = rvecCreate(4, [0.0, 0.0, 1.0, 0.0]);
+        return message;
     } 
     if seq == "T" {
-        let msg = [0.0, 0.0, 0.0, 1.0];
-        return msg;
+        let message = rvecCreate(4, [0.0, 0.0, 0.0, 1.0]);
+        return message;
     } 
     if seq == "?" { //NOTE should there be error message?
-        let msg = [1.0, 1.0, 1.0, 1.0];
-        return msg;
+        let message = rvecCreate(4, [1.0, 1.0, 1.0, 1.0]);
+        return message;
     } 
     if seq == "-" { //NOTE should there be error message?
-        let msg = [1.0, 1.0, 1.0, 1.0];
+        let message = rvecCreate(4, [1.0, 1.0, 1.0, 1.0]);
         return msg;
     } 
 }
 
-//NOTE Do rename...
-function somefun(msg: Real[]): Real[] {
-    let stationary_probs = mtxTrans(rvecCreate(4, [0.25,0.25,0.25,0.25])); // NOTE Column vector can this be done better?
-    let log_like = log(mtxMul(msg*stationary_probs));
+//Compute log lokelihood for each site
+function get_log_likes(msg: Tensor[Real]): Real[] {
+    let stationary_probs = mtxTrans(rvecCreate(4, [0.25,0.25,0.25,0.25])); // NOTE Column vector, can this be done better?
+    let log_like = log(mtxMul(msg * stationary_probs));
     return log_like;
 } 
 
 function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seqLen: Int): Tree[] {
+    
     let n = length(trees);
-
+    
     // Check that we have not yet reached the root of the tree
     if (eqi(n, 1)) {
         return trees;
     }
+
     // Randomly sample two indices in the trees vector with function pickpair
     // We will combine these, named left and right child
     let pairs = pickpair(n);
@@ -137,15 +129,15 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seqLen: Int): Tre
     assume t ~ Exponential(10.0);
     let age = maxAge + t;
     
-    // Get the output message of the new node with respect to the root of the final tree
-    let msg = element_wise_product(message(leftChild.msg, q, age-leftChild.age), message(rightChild.msg, q, age-rightChild.age));
+    // Get the output message of the new node with respect to the root of the final tree //NOTE to be double-checked
+    let msg = normalizeMessage(mulMessage(message(leftChild.msg, q, age-leftChild.age), message(rightChild.msg, q, age-rightChild.age))); 
 
     // Now we want to factor according to the message we just computed, with state probs weighted
     // in some suitable fashion, e.g., by the stationary probs, which are [0.25,0.25,0.25,0.25] for
     // the Jukes Cantor model. This has the additional advantage that this is the standard assumption
     // for the root sequence in the tree, that is, we are assuming stationarity at the root.
-    let log_likes = apply(somefun, msg);
-    logWeight (sum(log_likes)); // NOTE was factor in previous code, correct?
+    let log_likes = apply(get_log_likes, msg);
+    logWeight (sum(log_likes)); // NOTE check if correct syntax!
 
     // Combine picked pair of trees into a new node
     let parent = Node{age=age, msg=msg, left=leftChild, right=rightChild};  
@@ -161,8 +153,7 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seqLen: Int): Tre
 
 // MODEL
 
-model function myModel(data: String[][]) : Tree[]
-{
+model function myModel(data: String[][]) : Tree[] {
     // Define the scaled rate matrix for Jukes-Cantor
     let q = mtxCreate(4,4,
         [     -1.0, (1.0/3.0), (1.0/3.0), (1.0/3.0),
@@ -173,8 +164,8 @@ model function myModel(data: String[][]) : Tree[]
 
 
     //NOTE These should be automatic using length() in next version when bug is fixed.
-    let dataLen = 4; 
-    let seqLen = 15; 
+    let dataLen = 4; //4 leaves in toy example
+    let seqLen = 15; //15 nucleotides in toy example
     
     // Define the initial trees vector (containing of the leaves)
     let trees = buildForest(data, [], 1, dataLen);
