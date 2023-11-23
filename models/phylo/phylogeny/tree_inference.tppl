@@ -6,7 +6,7 @@
 // Run this by compiling: 
 // tpplc models/phylo/phylogeny/tree_inference.tppl -m 'smc-bpf' --resample align --output testphylo
 // And then execution 1000 particles 1 sweep, using toy dataset phylo.json:
-// ./testphylo models/data/phylo.json 1000 1 > phylo_output.json
+// ./testphylo models/data/phylo.json 10000 1 > phylo_naive.json
 
 // Toy dataset as json file phylo.json. NOTE this should be nucleotides in later version, currently integers
 // Data is a matrix of type int, with each row
@@ -25,7 +25,7 @@ type SeqTree =
 
 // FUNCTIONS
 
-// Randomly sample two indices in the trees vector, to be combined
+// Build forest of trees from leaves, recursively
 function buildForest(data: Int[][], forest: SeqTree[], index: Int, dataLen: Int): SeqTree[]
 { 
     let newLeaf = Leaf{age=0.0, seq=data[index]};
@@ -39,6 +39,7 @@ function buildForest(data: Int[][], forest: SeqTree[], index: Int, dataLen: Int)
 }
 
 // Randomly sample two indices in the trees vector, to be combined
+// NOTE how can this be done better?
 function pickpair(n: Int): Int[]
 { 
     assume i ~ Categorical(rep(n, 1./Real(n)));  
@@ -53,7 +54,7 @@ function pickpair(n: Int): Int[]
 function ctmc(initialstate: Int, q: Tensor[Real], t: Real): Real[]
 { 
     let choices = [[1.0, 0.0, 0.0, 0.0],[0.0, 1.0, 0.0, 0.0],[0.0, 0.0, 1.0, 0.0],[0.0, 0.0, 0.0, 1.0]]; 
-    let state = rvecCreate(4,choices[addi(initialstate, 1)]); 
+    let state = rvecCreate(4, choices[addi(initialstate, 1)]); 
     let p = state *@ (mtxExp(q *$ t)); 
     return[mtxGet(1, 1, p), mtxGet(1, 2, p), mtxGet(1, 3, p), mtxGet(1, 4, p)];
 }
@@ -122,7 +123,7 @@ model function myModel(data: Int[][]) : SeqTree[]
     let dataLen = 4; 
     let seqLen = 15; 
     
-    // Define the initial trees vector (containing of the leaves)
+    // Define the initial trees vector (containing the leaves)
     // NOTE future need to add a function that replaces A,C,G,T with integers and handles uncertain positions.
     let trees = buildForest(data, [], 1, dataLen);
 

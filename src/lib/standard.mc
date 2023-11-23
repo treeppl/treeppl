@@ -76,6 +76,8 @@ let qSort = lam f. lam seq.
 
 let any = any
 
+let zipWith = zipWith
+
 -- sapply1 for passing 1 argument (a) to function f
 let sapply1 = lam x. lam f. lam a.
   map (lam e. f e a) x
@@ -169,6 +171,10 @@ let mtxElemMul = matrixElemMul
 let mtxTrans = matrixTranspose
 
 let mtxExp = matrixExponential
+
+let mtxGetRow = lam row. lam tensor.
+  let r = subi row 1 in
+  tensorSubExn tensor r 1
 
 -- we cannot change the function parametrization and keep the same name
 -- will bring confusion
