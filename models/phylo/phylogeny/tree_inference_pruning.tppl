@@ -3,8 +3,8 @@
 
 // Run this by compiling: 
 // tpplc models/phylo/phylogeny/tree_inference_pruning.tppl -m 'smc-bpf' --resample align --output testphylo
-// And then execution 1 particle 1 sweep to test, using toy dataset phylo2.json:
-// ./testphylo models/data/phylo2.json 1 1 > phylo_output.json
+// And then execution 1 particle 1 sweep to test, using toy dataset phylo.json:
+// ./testphylo models/data/phylo.json 1 1 > phylo_output.json
 
 // Toy dataset as json file phylo.json. NOTE now reals, string in phylo2.json
 // Data is a matrix with each row
@@ -21,24 +21,8 @@ type Tree =
   | Leaf {age: Real, index: Int, msg: Tensor[Real][]}
   | Node {age: Real, msg: Tensor[Real][], left: Tree, right: Tree}
 
-// A message is simply four Real values corresponding to the conditional likelihoods
-// (unscaled probabilities) of the four different states (A, C, G, T).
-//type Message = Real[4]
-
 
 // FUNCTIONS
-
-// Build forest of trees from leaves, recursively
-function buildForest(data: Real[][], forest: Tree[], index: Int, dataLen: Int): Tree[] { 
-    let newLeaf = Leaf{age = 0.0, index = index, msg = leaf_message(data[index])};
-    let new_forest = join([forest, [newLeaf]]);
-    if (eqi(dataLen, index)) {
-        return new_forest; 
-    }
-    else {
-        return buildForest(data, new_forest, addi(index, 1), dataLen);
-    }
-}
 
 // Randomly sample two indices in the trees vector, to be combined
 function pickpair(n: Int): Int[] { 
@@ -48,6 +32,19 @@ function pickpair(n: Int): Int[] {
         return pickpair(n); 
     }
     return [addi(i, 1), addi(j, 1)]; //adding 1 to avoid index 0
+}
+
+// Build forest of trees from leaves, recursively
+function buildForest(data: Int[][], forest: Tree[], index: Int, dataLen: Int): Tree[] { 
+    let new_message = sapply(data[index], get_leaf_message);
+    let newLeaf = Leaf{age = 0.0, index = index, msg =  new_message}; //leaf_message(data[index])};
+    let new_forest = join([forest, [newLeaf]]);
+    if (eqi(dataLen, index)) {
+        return new_forest; 
+    }
+    else {
+        return buildForest(data, new_forest, addi(index, 1), dataLen);
+    }
 }
 
 // A simple help function to compute a message for a branch in the tree in a
@@ -71,25 +68,25 @@ function pickpair(n: Int): Int[] {
 //}
 
 // A function computing the message for leaves.
-function leaf_message(seq_data: Real[]) :  Tensor[Real][] {
-    let msg = sapply(seq_data, get_leaf_message);
-    return msg;
-}
+//function leaf_message(seq_data: Real[]) :  Tensor[Real][] {
+//    let msg = sapply(seq_data, get_leaf_message);
+//    return msg;
+//}
 
-function get_leaf_message(seq: Real) : Tensor[Real] {
-    if (seq == 0.0) { //seq == "A"
+function get_leaf_message(seq: Int) : Tensor[Real] {
+    if (Real(seq) == 0.0) { //seq == "A"
        let message = rvecCreate(4, [1.0, 0.0, 0.0, 0.0]);
         return message;
     } 
-    if (seq == 1.0) { //{seq == "C"
+    if (Real(seq) == 1.0) { //{seq == "C"
         let message = rvecCreate(4, [0.0, 1.0, 0.0, 0.0]);
         return message;
     } 
-    if (seq == 2.0) { //{seq == "G"
+    if (Real(seq) == 2.0) { //{seq == "G"
         let message = rvecCreate(4, [0.0, 0.0, 1.0, 0.0]);
         return message;
     } 
-    if (seq == 3.0) {  //{seq == "T"
+    if (Real(seq) == 3.0) {  //{seq == "T"
         let message = rvecCreate(4, [0.0, 0.0, 0.0, 1.0]);
         return message;
     } 
@@ -108,9 +105,10 @@ function get_leaf_message(seq: Real) : Tensor[Real] {
 
 
 //Compute log lokelihood for each site
-function get_log_likes(msg: Tensor[Real]): Real[] {
+function get_log_likes(msg: Tensor[Real]): Real {
     let stationary_probs = mtxTrans(rvecCreate(4, [0.25,0.25,0.25,0.25])); // NOTE Column vector, can this be done better?
-    let log_like = log(mtxMul(msg * stationary_probs));
+    let like = mtxMul(msg, stationary_probs); 
+    let log_like = log(mtxGet(1, 1, like));
     return log_like;
 } 
 
@@ -140,9 +138,9 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seqLen: Int): Tre
     let left_in_msg  = sapply1(leftChild.msg, mtxMul, tMatrixLeft);
     let right_in_msg = sapply1(rightChild.msg, mtxMul, tMatrixRight);
   
-    // Get the message of the new node
+    // Get the message of the new node. Note FIX NORMALIZATION?
     let msg = mulMessage(left_in_msg, right_in_msg);
-    //let msg = normalizeMessage(mulMessage(left_in_msg, right_in_msg)); FIX NORMALIZATION
+    //let msg = normalizeMessage(mulMessage(left_in_msg, right_in_msg)); 
     
     //OLD// Get the output message of the new node with respect to the root of the final tree //NOTE to be double-checked
     //OLD//let msg = normalizeMessage(mulMessage(message(leftChild.msg, q, age-leftChild.age), message(rightChild.msg, q, age-rightChild.age))); 
@@ -151,8 +149,8 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seqLen: Int): Tre
     // in some suitable fashion, e.g., by the stationary probs, which are [0.25,0.25,0.25,0.25] for
     // the Jukes Cantor model. This has the additional advantage that this is the standard assumption
     // for the root sequence in the tree, that is, we are assuming stationarity at the root.
-    let log_likes = sapply(get_log_likes, msg);
-    logWeight (sum(log_likes)); // NOTE check if correct syntax!
+    let log_likes = sapply(msg, get_log_likes); //log_likes should be a sequence of Reals
+    logWeight (sumReal(log_likes)); // NOTE check if correct
 
     // Combine picked pair of trees into a new node
     let parent = Node{age=age, msg=msg, left=leftChild, right=rightChild};  
@@ -168,7 +166,7 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seqLen: Int): Tre
 
 // MODEL
 
-model function myModel(data: Real[][]) : Tree[] {
+model function myModel(data: Int[][]) : Tree[] {
     // Define the scaled rate matrix for Jukes-Cantor
     let q = mtxCreate(4,4,
         [     -1.0, (1.0/3.0), (1.0/3.0), (1.0/3.0),
@@ -176,7 +174,6 @@ model function myModel(data: Real[][]) : Tree[] {
         (1.0/3.0), (1.0/3.0),      -1.0, (1.0/3.0),
         (1.0/3.0), (1.0/3.0), (1.0/3.0),      -1.0]
         );        
-
 
     //NOTE These should be automatic using length() in next version when bug is fixed.
     let dataLen = 4; //4 leaves in toy example
