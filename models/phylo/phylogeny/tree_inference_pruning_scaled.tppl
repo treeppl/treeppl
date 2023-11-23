@@ -93,6 +93,12 @@ function get_factor(msg: Tensor[Real]): Real {
     return factor;
 } 
 
+//Only get factor for each site
+function get_factor2(msg: Tensor[Real]): Real {
+    let factor = mtxGet(1, 1, msg)*0.25 + mtxGet(1, 2, msg)*0.25  + mtxGet(1, 3, msg)*0.25  + mtxGet(1, 4, msg)*0.25 ;
+    return factor;
+} 
+
 //Normalise message for each site
 function norm_mess(msg: Tensor[Real]): Tensor[Real] {
     let factor = mtxGet(1, 1, msg) + mtxGet(1, 2, msg) + mtxGet(1, 3, msg) + mtxGet(1, 4, msg);
@@ -100,7 +106,7 @@ function norm_mess(msg: Tensor[Real]): Tensor[Real] {
     return norm_msg;
 } 
 
-//Rescale message for each site
+//Update factors at node
 function update_factors(factors: Real[], left_factors: Real[], right_factors: Real[], index: Int, seq_len: Int, new_factors: Real[]): Real[] {
     let fac = factors[index] * left_factors[index] * right_factors[index];
     let new_factors = join([new_factors, [fac]]);
@@ -109,6 +115,18 @@ function update_factors(factors: Real[], left_factors: Real[], right_factors: Re
     }
     else {
         return update_factors(factors, left_factors, right_factors, addi(index, 1), seq_len, new_factors);
+    }
+} 
+
+function rescale_msg(msg: Tensor[Real][], left_factors: Real[], right_factors: Real[], index: Int, seq_len: Int, scaled_messages: Tensor[Real][]): Tensor[Real][] {
+    let fac = left_factors[index] * right_factors[index];
+    let msg_fac = mtxSclrMul(fac, msg[index]);
+    let scaled_messages = join([scaled_messages, [msg_fac]]);
+    if (eqi(seq_len, index)) {
+        return scaled_messages; 
+    }
+    else {
+        return rescale_msg(msg, left_factors, right_factors, addi(index, 1), seq_len, scaled_messages);
     }
 } 
 
@@ -129,7 +147,8 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
     let right_child = trees[pairs[2]];
 
     // Get the age of the new internal node
-    assume t ~ Exponential(10.0);
+    //assume t ~ Exponential(10.0);
+    let t = 2.0;
     let age = maxAge + t;
     
     // Get incoming messages from children
@@ -141,19 +160,28 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
 
     // Get the message of the new node, scale it with incoming factors
     let node_msg = messageElemMul(left_in_msg, right_in_msg); 
+    let node_msg_rescaled = rescale_msg(node_msg, left_child.factors, right_child.factors, 1, seq_len, []);
+
     let factors = sapply(node_msg, get_factor); 
     let new_factors = update_factors(factors, left_child.factors, right_child.factors, 1, seq_len, []);
     
     // Get likelihood, Normalize the rescaled node message
-    let likelihood = sapply(node_msg, get_like);  
+    let loglikelihood = sapply(node_msg_rescaled, get_log_likes);  
     let node_msg_norm = sapply(node_msg, norm_mess);
 
-    // Weight
+    printLn("check new fac:");
+    printLn(real2string((seqSumReal(sapply(new_factors, log)))));
+    printLn("check factor:");
+    printLn(real2string((seqSumReal(sapply(factors, log)))));
+    printLn("check like:");
+    printLn(real2string((seqSumReal(loglikelihood))));
+
+    // Weights
     //logWeight (seqSumReal(sapply(likelihood, log)));        //This requires that we remove the weight for previous intenal nodes. 
-     logWeight (seqSumReal(sapply(new_factors, log)));    //Gives logZ of around -90 for toy dataset, should be -80.
+     logWeight (seqSumReal(loglikelihood));  
 
     // Combine picked pair of trees into a new node
-    let parent = Node{age=age, msg=node_msg_norm, factors= new_factors, left=left_child, right=right_child};  
+    let parent = Node{age=age, msg=node_msg_norm, factors=new_factors, left=left_child, right=right_child};  
 
     // Compute new_trees list
     let min = mini(pairs[1], pairs[2]);  

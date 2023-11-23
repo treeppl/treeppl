@@ -96,8 +96,8 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
     let right_child = trees[pairs[2]];
 
     // Get the age of the new internal node
-    assume t ~ Exponential(10.0);
-    //let t = 2.0;
+    //assume t ~ Exponential(10.0);
+    let t = 2.0;
     let age = maxAge + t;
     
     // Get incoming messages from children
@@ -116,17 +116,22 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
     // for the root sequence in the tree, that is, we are assuming stationarity at the root.
     let log_likes = sapply(node_msg, get_log_likes);  
 
-    //printLn("check:");
-    //printLn(real2string((seqSumReal(log_likes))));
+    printLn("check:");
+    printLn(real2string((seqSumReal(log_likes))));
+    
     logWeight (seqSumReal(log_likes)); 
 
     // Remove weights of previous internal nodes
     if (left_child is Node) {
         let log_likes_left = sapply(left_child.msg, get_log_likes);  
+        printLn("check minus1 :");
+        printLn(real2string((seqSumReal(log_likes_left))));
         logWeight -(seqSumReal(log_likes_left)); 
     }
     if (right_child is Node) {
         let log_likes_right = sapply(right_child.msg, get_log_likes);  
+        printLn("check minus2 :");
+        printLn(real2string((seqSumReal(log_likes_right))));
         logWeight -(seqSumReal(log_likes_right)); 
     }
 
