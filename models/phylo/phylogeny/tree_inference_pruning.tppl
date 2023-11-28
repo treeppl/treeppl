@@ -2,11 +2,11 @@
 // Jukes Cantor model with a strict clock prior. Pruning currently hard-coded.
 
 // Run this by compiling: 
-// tpplc models/phylo/phylogeny/tree_inference_pruning.tppl -m 'smc-apf' --resample align --output testphylo
-// And then execution 10000 particles 1 sweep to test, using toy dataset phylo_Reals.json:
-// ./testphylo models/data/phylo_Reals.json 10000 1 > phylo_pruning.json
+// tpplc models/phylo/phylogeny/tree_inference_pruning.tppl -m 'smc-apf' --resample align --output phylo
+// And then execution 10000 particles 1 sweep, using for example toy dataset phylo_toydata2.json:
+// ./phylo models/data/treeinference/phylo_toydata2.json 10000 1 > phylo_pruning.json
 
-// Toy dataset as json file phylo_Reals.json. 
+// Toy dataset as json file phylo_toydata2.json. 
 // Data is a matrix with each row
 // consisting of the aligned DNA sequence for a single
 // taxon. The nucleotide is specified as
@@ -84,7 +84,7 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
     
     let n = length(trees);
     
-    // Check that we have not yet reached the root of the tree
+    // Check if we have reached the root of the tree
     if (eqi(n, 1)) {
         return trees;
     }
@@ -120,14 +120,10 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
     // Remove weights of previous internal nodes
     if (left_child is Node) {
         let log_likes_left = sapply(left_child.msg, get_log_likes);  
-        printLn("check minus1 :");
-        printLn(real2string((seqSumReal(log_likes_left))));
         logWeight -(seqSumReal(log_likes_left)); 
     }
     if (right_child is Node) {
         let log_likes_right = sapply(right_child.msg, get_log_likes);  
-        printLn("check minus2 :");
-        printLn(real2string((seqSumReal(log_likes_right))));
         logWeight -(seqSumReal(log_likes_right)); 
     }
 

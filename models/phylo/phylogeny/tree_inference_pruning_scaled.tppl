@@ -2,24 +2,24 @@
 // Jukes Cantor model with a strict clock prior. Pruning currently hard-coded.
 
 // Run this by compiling: 
-// tpplc models/phylo/phylogeny/tree_inference_pruning_scaled.tppl -m 'smc-apf' --resample align --output testphylo_scaled
-// And then execution 10000 particles 1 sweep to test, using toy dataset phylo_Reals.json:
-// ./testphylo_scaled models/data/phylo_Reals.json 10000 1 > phylo_pruning_scaled.json
+// tpplc models/phylo/phylogeny/tree_inference_pruning_scaled.tppl -m 'smc-apf' --resample align --output phylo_scaled
+// And then execution 10000 particles 1 sweep, using for example toy dataset phylo_toydata2.json:
+// ./phylo_scaled models/data/treeinference/phylo_toydata2.json 10000 1 > phylo_pruning_scaled.json
 
-// Toy dataset as json file phylo_Reals.json. NOTE now Reals, strings in phylo_Char.json
+// Toy dataset as json file phylo_toydata2.json.
 // Data is a matrix with each row
 // consisting of the aligned DNA sequence for a single
 // taxon. The nucleotide is specified as
-//   "A" for adenine  - 0
-//   "C" for cytosine  - 1 
-//   "G" for guanine - 2
-//   "T" for thymine - 3
+//   "A" for adenine  - 0.0
+//   "C" for cytosine  - 1.0
+//   "G" for guanine - 2.0
+//   "T" for thymine - 3.0
 
 // TYPES
 
 type Tree =
-  | Leaf {age: Real, index: Int, msg: Tensor[Real][], factors: Real[]}
-  | Node {age: Real, msg: Tensor[Real][], factors: Real[], left: Tree, right: Tree}
+  | Leaf {age: Real, index: Int, msg: Tensor[Real][]}
+  | Node {age: Real, msg: Tensor[Real][], left: Tree, right: Tree}
 
 
 // FUNCTIONS
@@ -38,7 +38,7 @@ function pickpair(n: Int): Int[] {
 // Build forest of trees from leaves, recursively
 function build_forest(data: Real[][], forest: Tree[], index: Int, data_len: Int, seq_len: Int): Tree[] { 
     let new_message = sapply(data[index], get_leaf_message); 
-    let new_leaf = Leaf{age = 0.0, index = index, msg =  new_message, factors = rep(seq_len, 1.0)}; 
+    let new_leaf = Leaf{age = 0.0, index = index, msg =  new_message}; 
     let new_forest = join([forest, [new_leaf]]);
     if (eqi(data_len, index)) {
         return new_forest; 
@@ -90,7 +90,7 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
     
     let n = length(trees);
     
-    // Check that we have not yet reached the root of the tree
+    // Check if we have reached the root of the tree
     if (eqi(n, 1)) {
         
         // Stationarity at root
@@ -127,10 +127,10 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
     let node_msg_norm = sapply(node_msg, norm_mess);
 
     // Weights
-     logWeight (seqSumReal(sapply(factors, log)));  
+    logWeight (seqSumReal(sapply(factors, log)));  
 
     // Combine picked pair of trees into a new node
-    let parent = Node{age=age, msg=node_msg_norm, factors=factors, left=left_child, right=right_child};  
+    let parent = Node{age=age, msg=node_msg_norm, left=left_child, right=right_child};  
 
     // Compute new_trees list
     let min = mini(pairs[1], pairs[2]);  
