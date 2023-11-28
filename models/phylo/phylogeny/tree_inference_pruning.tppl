@@ -150,9 +150,8 @@ model function myModel(data: Real[][]) : Tree[] {
         (1.0/3.0), (1.0/3.0), (1.0/3.0),      -1.0]
         );           
 
-    //NOTE These should be automatic using length() in next version when bug is fixed.
-    let data_len = 4; //4 leaves in toy example
-    let seq_len = 15; //15 nucleotides in toy example
+    let data_len = length(data);
+    let seq_len =  length(data[1]);
     
     // Define the initial trees sequence (containing the leaves)
     let trees = build_forest(data, [], 1, data_len, seq_len);
