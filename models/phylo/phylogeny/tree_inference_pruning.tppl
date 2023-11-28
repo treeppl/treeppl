@@ -96,8 +96,7 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
     let right_child = trees[pairs[2]];
 
     // Get the age of the new internal node
-    //assume t ~ Exponential(10.0);
-    let t = 2.0;
+    assume t ~ Exponential(10.0);
     let age = maxAge + t;
     
     // Get incoming messages from children
@@ -115,9 +114,6 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
     // the Jukes Cantor model. This has the additional advantage that this is the standard assumption
     // for the root sequence in the tree, that is, we are assuming stationarity at the root.
     let log_likes = sapply(node_msg, get_log_likes);  
-
-    printLn("check:");
-    printLn(real2string((seqSumReal(log_likes))));
     
     logWeight (seqSumReal(log_likes)); 
 
