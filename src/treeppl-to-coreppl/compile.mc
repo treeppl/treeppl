@@ -554,7 +554,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     lam cont. TmLet {
       ident = a.randomVar.v,
       tyBody = tyunknown_,
-      tyAnnot = tyunknown_,
+      tyAnnot = optionMapOr tyunknown_ compileTypeTppl a.ty,
       body = TmAssume {
         dist = compileExprTppl context a.dist,
         ty = tyunknown_,
@@ -585,7 +585,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     lam cont. TmLet {
       ident = a.var.v,
       tyBody = tyunknown_,
-      tyAnnot = tyunknown_,
+      tyAnnot = optionMapOr tyunknown_ compileTypeTppl a.ty,
       body =  compileExprTppl context a.val,
       inexpr = cont,
       ty = tyunknown_,
