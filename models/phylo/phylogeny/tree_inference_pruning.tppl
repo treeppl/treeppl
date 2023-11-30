@@ -25,7 +25,6 @@ type Tree =
 // FUNCTIONS
 
 // Randomly sample two indices in the trees vector, to be combined
-// NOTE how can this be done better?
 function pickpair(n: Int): Int[] { 
     assume i ~ Categorical(rep(n, 1./Real(n)));  
     assume j ~ Categorical(rep(n, 1./Real(n)));  

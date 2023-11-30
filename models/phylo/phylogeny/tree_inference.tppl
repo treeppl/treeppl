@@ -39,7 +39,6 @@ function buildForest(data: Int[][], forest: SeqTree[], index: Int, dataLen: Int)
 }
 
 // Randomly sample two indices in the trees vector, to be combined
-// Note: how can this be done better?
 function pickpair(n: Int): Int[]
 { 
     assume i ~ Categorical(rep(n, 1./Real(n)));  
