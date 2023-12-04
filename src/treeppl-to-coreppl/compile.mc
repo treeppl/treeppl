@@ -35,6 +35,99 @@ let parseMCoreFileNoDeadCodeElim = lam filename.
       {defaultBootParserParseMCoreFileArg with eliminateDeadCode = false}
         filename
 
+lang OverloadedBinOpAst = Ast
+  syn BinOp =
+  syn Expr =
+  | TmOverloadedBinOp {info : Info, op : BinOp, ty : Type}
+
+  sem infoTm =
+  | TmOverloadedBinOp x -> x.info
+  sem withInfo info =
+  | TmOverloadedBinOp x -> TmOverloadedBinOp {x with info = info}
+
+  sem tyTm =
+  | TmOverloadedBinOp x -> x.ty
+  sem withType ty =
+  | TmOverloadedBinOp x -> TmOverloadedBinOp {x with ty = ty}
+
+  sem mkBinOp : Info -> BinOp -> Expr
+  sem mkBinOp info = | op -> TmOverloadedBinOp
+    { info = info
+    , op = op
+    , ty = tyunknown_
+    }
+
+  sem binOpMkTypes : Info -> TCEnv -> BinOp -> {left : Type, right : Type, return : Type}
+
+  sem resolveBinOp : Info -> {left : Type, right : Type, return : Type, op : BinOp} -> Expr
+end
+
+lang OverloadedBinOpTypeCheck = TypeCheck + OverloadedBinOpAst
+  sem typeCheckExpr env =
+  | TmOverloadedBinOp x ->
+    let types = binOpMkTypes x.info env x.op in
+    let ty = tyarrows_ [types.left, types.right, types.return] in
+    TmOverloadedBinOp {x with ty = ty}
+end
+
+lang Desugar = Ast
+  sem desugarExpr : Expr -> Expr
+  sem desugarExpr = | tm ->
+    smap_Expr_Expr desugarExpr tm
+end
+
+lang OverloadedBinOpDesugar = Desugar + OverloadedBinOpAst + FunTypeAst
+  sem desugarExpr =
+  | TmOverloadedBinOp x ->
+    match unwrapType x.ty with TyArrow {from = left, to = TyArrow {from = right, to = return}} then
+      resolveBinOp x.info {left = unwrapType left, right = unwrapType right, return = unwrapType return, op = x.op}
+    else error "Compiler error, wrong type shape on TmOverloadedBinOp"
+end
+
+lang OverloadedMath = OverloadedBinOpAst + ArithIntAst + ArithFloatAst + CmpIntAst + CmpFloatAst + IntTypeAst + FloatTypeAst + UnknownTypeAst
+  syn BinOp =
+  -- NOTE(vipa, 2023-12-18): Same both operands and the return have
+  -- the same type
+  | BOAdd
+  | BOSub
+  | BODiv
+  | BOMul
+
+  -- NOTE(vipa, 2023-12-18): Both operands have the same type, return
+  -- is Bool
+  | BOEq
+  | BONeq
+  | BOLt
+  | BOLe
+  | BOGt
+  | BOGe
+
+  sem binOpMkTypes info env =
+  | BOAdd _ | BOSub _ | BODiv _ | BOMul _ ->
+    let ty = newmonovar env.currentLvl info in
+    {left = ty, right = ty, return = ty}
+
+  | BOEq _ | BONeq _
+  | BOLt _ | BOLe _ | BOGt _ | BOGe _ ->
+    let ty = newmonovar env.currentLvl info in
+    {left = ty, right = ty, return = tyWithInfo info tybool_}
+
+  -- NOTE(vipa, 2023-12-18): Fill in the rest
+  sem resolveBinOp info =
+  | x & {op = BOAdd _, left = TyInt _} -> withInfo info (const_ x.return (CAddi ()))
+  | x & {op = BOAdd _, left = TyFloat _} -> withInfo info (const_ x.return (CAddf ()))
+
+  | x & {op = BOEq _, left = TyInt _} -> withInfo info (const_ x.return (CEqi ()))
+  | x & {op = BOEq _, left = TyFloat _} -> withInfo info (const_ x.return (CEqf ()))
+
+  | {left = TyUnknown _} ->
+    errorSingle [info] "Could not infer the types for this operator."
+  -- NOTE(vipa, 2023-12-18): This would have to be specific in the
+  -- operators we look at if we add additional ones, or if we add
+  -- support for, e.g., equality on arbitrary things
+  | _ -> errorSingle [info] "This operator is only permissible on numeric types, i.e., Int or Real."
+end
+
 -- Pattern match over an algebraic type where each constructor carries
 -- a record, pulling out the field with the given name.
 lang ProjMatchAst = Ast
@@ -150,7 +243,7 @@ lang ProjMatchTypeCheck = TypeCheck + ProjMatchAst + FunTypeAst + RecordTypeAst 
         (foldl wrap errorMsg relevantConstructors))
 end
 
-lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Externals + MExprSym + FloatAst + ProjMatchAst + Resample + GenerateJsonSerializers + MExprEliminateDuplicateCode
+lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Externals + MExprSym + FloatAst + ProjMatchAst + Resample + GenerateJsonSerializers + MExprEliminateDuplicateCode + OverloadedMath
 
   -- a type with useful information passed down from compile
   type TpplCompileContext = {
@@ -910,11 +1003,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       info = x.info,
       lhs = TmApp {
         info = x.info,
-        lhs = TmConst {
-          ty = tyunknown_,
-          info = x.info,
-          val = CAddf ()
-        },
+        lhs = mkBinOp x.op (BOAdd ()),
         rhs = compileExprTppl context x.left,
         ty = tyunknown_
       },
@@ -1140,11 +1229,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       info = x.info,
       lhs = TmApp {
         info = x.info,
-        lhs = TmConst {
-          ty = tyunknown_,
-          info = x.info,
-          val = CEqf ()
-        },
+        lhs = mkBinOp x.op (BOEq ()),
         rhs = compileExprTppl context x.left,
         ty = tyunknown_
       },
@@ -1289,6 +1374,7 @@ end
 
 lang TreePPLThings = TreePPLAst + TreePPLCompile
   + ProjMatchTypeCheck + ProjMatchPprint + MExprAst
+  + OverloadedMath + OverloadedBinOpDesugar + OverloadedBinOpTypeCheck
 end
 
 
@@ -1299,6 +1385,7 @@ let compileTpplToExecutable = lam filename: String. lam options: Options.
   let corePplAst: Expr = compile file in
   --printLn (mexprPPLToString corePplAst);
   let prog: Expr = typeCheckExpr _tcEnvEmpty corePplAst in
+  let prog = desugarExpr prog in
   use CPPLLang in
   let prog =  mexprCpplCompile options false prog in
   buildMExpr options prog
