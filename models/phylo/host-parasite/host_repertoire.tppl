@@ -109,7 +109,7 @@ model function mymodel(symbiont_tree: TreeLabeled, ntips: Int, nhosts: Int, inte
   let probRecordSequence = sapply(probs_tree.probs, createProbRecord);
   let root_rep = sapply(probRecordSequence, categorical);
 
-  let log_root_rep_debt = sumReal(zipWith(categoricalLogScore, root_rep, probRecordSequence));
+  let log_root_rep_debt = seqSumReal(zipWith(categoricalLogScore, root_rep, probRecordSequence));
 	// Note: categorical works here because root_rep id 0-based
 
   let valid_root = any(is2, root_rep);
@@ -260,7 +260,7 @@ function simulate (tree: ProbsTree, start: HistoryPoint, mp: ModelParams, iMatri
   let probRecordSequence = sapply(tree.probs, createProbRecord);
   let repertoire = sapply(probRecordSequence, categorical);      // Note: assume is within function categorical
     
-  let log_rep_debt = sumReal(zipWith(categoricalLogScore, repertoire, probRecordSequence)); 
+  let log_rep_debt = seqSumReal(zipWith(categoricalLogScore, repertoire, probRecordSequence)); 
 	// Note: categorical works here because repertoire id 0-based
   	
   let valid_rep = any(is2, repertoire);  
@@ -276,7 +276,7 @@ function simulate (tree: ProbsTree, start: HistoryPoint, mp: ModelParams, iMatri
 
 		let obs_msg = observationMessage(mtxGetRow(tree.label, iMatrix)); 
 		let obsRecordSequence = sapply(obs_msg, createProbRecord);
-		let log_score = sumReal(zipWith(categoricalLogScore, repertoire, obsRecordSequence));
+		let log_score = seqSumReal(zipWith(categoricalLogScore, repertoire, obsRecordSequence));
 		// Note: categorical works here because repertoire id 0-based
 		
 		return HistoryLeaf{age = tree.age, label = tree.label, repertoire = repertoire, 
@@ -358,7 +358,7 @@ function propose_events_for_host (host_index: Int, from_age: Real, end_age: Real
 
   let log_wait_debt = getLogWaitDebt(from_state, end_state, rate, from_age, end_age, t);
 	let to_states = getToStates(from_state); 
-	let state_probs = normalizeSeq([mtxGet(addi(from_state,1), addi(to_states[1],1), qMatrix),
+	let state_probs = seqNormalize([mtxGet(addi(from_state,1), addi(to_states[1],1), qMatrix),
 																	mtxGet(addi(from_state,1), addi(to_states[2],1), qMatrix)]);
 	
 	assume new_state_pos ~ Categorical(state_probs);
@@ -509,7 +509,7 @@ function total_rate (repertoire: Int[], mp: ModelParams): Real {
 	let totalLoss2 = getLoss2(Real(n2s), mp);
 
   let gainsSeq = sapplyi2(repertoire, gainsIf0or1, repertoire, mp);
-	let totalGains = sumReal(gainsSeq);
+	let totalGains = seqSumReal(gainsSeq);
 
   return totalLoss1 + totalLoss2 + totalGains;
 }

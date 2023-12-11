@@ -12,20 +12,18 @@ include "seq.mc"
 
 let error = error
 
+let subf = subf
 let muli = muli
-let eqi = eqi
-let neqi = neqi
 let addi = addi
 let subi = subi
+let eqi = eqi
+let neqi = neqi
+let geqi = geqi
+let gti = gti
 
 let slice = lam seq. lam beg. lam mend.
     subsequence seq (subi beg 1) (subi mend beg)
-    
-let geqi = geqi
-let gti = gti
-let addi = addi
-let subi = subi
-let subf = subf
+
 
 ----------------------------
 --- Printing and strings ---
