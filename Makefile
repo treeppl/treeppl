@@ -32,6 +32,12 @@ uninstall:
 	rm ${bin_path}/${tppl_name}
 	rm -rf $(src_path)
 
+libtest:
+	mi compile src/lib/standard.mc --test
+	./standard
+	@echo 
+	rm -f standard
+
 # Filtering successful tests
 test: src/treeppl-to-coreppl/compile.mc
 	mi compile src/treeppl-to-coreppl/compile.mc --test
