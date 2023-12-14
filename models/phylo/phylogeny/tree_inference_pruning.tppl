@@ -10,10 +10,10 @@
 // Data is a matrix with each row
 // consisting of the aligned DNA sequence for a single
 // taxon. The nucleotide is specified as
-//   "A" for adenine  - 0.0
-//   "C" for cytosine  - 1.0
-//   "G" for guanine - 2.0
-//   "T" for thymine - 3.0
+//   "A" for adenine  - 0
+//   "C" for cytosine  - 1
+//   "G" for guanine - 2
+//   "T" for thymine - 3
 
 // TYPES
 
@@ -35,7 +35,7 @@ function pickpair(n: Int): Int[] {
 }
 
 // Build forest of trees from leaves, recursively
-function build_forest(data: Real[][], forest: Tree[], index: Int, data_len: Int, seq_len: Int): Tree[] { 
+function build_forest(data: Int[][], forest: Tree[], index: Int, data_len: Int, seq_len: Int): Tree[] { 
     let new_message = sapply(data[index], get_leaf_message); 
     let new_leaf = Leaf{age = 0.0, index = index, msg =  new_message}; 
     let new_forest = join([forest, [new_leaf]]);
@@ -48,20 +48,20 @@ function build_forest(data: Real[][], forest: Tree[], index: Int, data_len: Int,
 }
 
 // Get message from leaves for each site
-function get_leaf_message(seq: Real) : Tensor[Real] {
-    if (seq == 0.0) { // "A"
+function get_leaf_message(seq: Int) : Tensor[Real] {
+    if (eqi(seq, 0)) { // "A"
        let message = rvecCreate(4, [1.0, 0.0, 0.0, 0.0]);
         return message;
     } 
-    if (seq == 1.0) { // "C"
+    if (eqi(seq, 1)) { // "C"
         let message = rvecCreate(4, [0.0, 1.0, 0.0, 0.0]);
         return message;
     } 
-    if (seq == 2.0) { // "G"
+    if (eqi(seq, 2)) { // "G"
         let message = rvecCreate(4, [0.0, 0.0, 1.0, 0.0]);
         return message;
     } 
-    if (seq == 3.0) {  // "T"
+    if (eqi(seq, 3)) {  // "T"
         let message = rvecCreate(4, [0.0, 0.0, 0.0, 1.0]);
         return message;
     } 
@@ -140,7 +140,7 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
 
 // MODEL FUNCTION
 
-model function myModel(data: Real[][]) : Tree[] {
+model function myModel(data: Int[][]) : Tree[] {
     // Define the scaled rate matrix for Jukes-Cantor
     let q = mtxCreate(4,4,
         [     -1.0, (1.0/3.0), (1.0/3.0), (1.0/3.0),
