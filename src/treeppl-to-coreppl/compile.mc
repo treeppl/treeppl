@@ -264,7 +264,6 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     let tpplLibLoc = (concat tpplSrcLoc "/lib/standard.tppl") in
     let tpplLibContent = readFile tpplLibLoc in
     match parseTreePPLExn tpplLibLoc tpplLibContent with tpplLibFile in
-    --let tpplLibAst: Expr = compileFunctionsOnly cc tpplLibFile in
     match (compileFunctionsOnly cc tpplLibFile) with [libTypes, libFunctions] in
 
     -- Compile the model function
@@ -347,7 +346,6 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     let complete = bindall_ (join
       [ [ stdlib
         , libCompile
-        --, tpplLibAst
         , types
         , functions
         , libFunctions
