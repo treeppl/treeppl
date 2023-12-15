@@ -174,7 +174,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     withInfo mergedInfo (semi_ l r)
 
 
-  sem compileFunctionsOnly: TpplCompileContext -> FileTppl -> Expr
+  sem compileFunctionsOnly: TpplCompileContext -> FileTppl -> [Expr]
   sem compileFunctionsOnly (cc: TpplCompileContext) =
   | DeclSequenceFileTppl x ->
 
@@ -214,12 +214,13 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       } in
 
       -- Combine the compiled types and functions
-      let complete = bindall_ [ types, functions ] in
+      --let complete = bindall_ [ types, functions ] in
 
       -- Remove duplicate definitions
-      let complete = eliminateDuplicateCode complete in
+      --let complete = eliminateDuplicateCode complete in
 
-      complete
+      --complete
+      [types, functions]
 
 
 
@@ -263,7 +264,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     let tpplLibLoc = (concat tpplSrcLoc "/lib/standard.tppl") in
     let tpplLibContent = readFile tpplLibLoc in
     match parseTreePPLExn tpplLibLoc tpplLibContent with tpplLibFile in
-    let tpplLibAst: Expr = compileFunctionsOnly cc tpplLibFile in
+    --let tpplLibAst: Expr = compileFunctionsOnly cc tpplLibFile in
+    match (compileFunctionsOnly cc tpplLibFile) with [libTypes, libFunctions] in
 
     -- Compile the model function
     let invocation = match findMap mInvocation x.decl with Some x
@@ -298,6 +300,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     in
     let types = foldl bindCon unit_ constructors in
     let types = foldl bindType types typeNames in
+    let types = bindall_ [libTypes, types] in
     let inputType: Type = tyrecord_ (map (lam t. (nameGetStr t.0, t.1)) argNameTypes) in
 
     let modelTypes: [Type] = [inputType, returnType] in
@@ -344,9 +347,10 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     let complete = bindall_ (join
       [ [ stdlib
         , libCompile
-        , tpplLibAst
+        --, tpplLibAst
         , types
         , functions
+        , libFunctions
         , inputR
         ]
       , inputArgs
