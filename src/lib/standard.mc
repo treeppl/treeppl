@@ -12,20 +12,18 @@ include "seq.mc"
 
 let error = error
 
+let subf = subf
 let muli = muli
-let eqi = eqi
-let neqi = neqi
 let addi = addi
 let subi = subi
+let eqi = eqi
+let neqi = neqi
+let geqi = geqi
+let gti = gti
 
 let slice = lam seq. lam beg. lam mend.
     subsequence seq (subi beg 1) (subi mend beg)
-    
-let geqi = geqi
-let gti = gti
-let addi = addi
-let subi = subi
-let subf = subf
+
 
 ----------------------------
 --- Printing and strings ---
@@ -306,6 +304,40 @@ utest tensorToSeqExn (tensorSliceExn (tensorNormalize __test_tensor2) [0]) with 
 -- -- otherwise type error.
 -- let mtxSet = lam row:Int. lam col:Int. lam tensor:Tensor[Float]. lam val:Float.
 --   ts tensor [subi row 1, subi col 1] val
+
+
+----------------
+--- Messages ---
+----------------
+
+-- NOTE(mariana, 2023-10-05): attempt to use functions Daniel wrote 
+-- to handle Messages, which are Tensor[Real][]
+
+-- Vector normalization
+let normalizeVector = lam v.
+  let sum = tensorFold addf 0. v in
+  tensorCreateCArrayFloat (tensorShape v) (lam i. divf (tensorGetExn v i) sum)
+
+-- Message normalization 
+let normalizeMessage = lam m. 
+  map normalizeVector m
+
+-- Elementwise multiplication of state likelihoods/probabilities
+let mulMessage = zipWith matrixElemMul
+
+-- Raises each element to the power of the float argument
+let messageElementPower = lam m. lam f. 
+    map (lam v.
+      tensorCreateCArrayFloat (tensorShape v) (lam i. pow (tensorGetExn v i) f)
+  ) m
+
+
+
+
+-- Sequence normalization
+--let normalize: [Float] -> [Float] = lam seq.
+--  let sum = foldl addf 0. seq in
+--  map (lam f. divf f sum) seq
 
 
 ----------------
