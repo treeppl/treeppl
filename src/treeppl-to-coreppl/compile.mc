@@ -36,12 +36,10 @@ let parseMCoreFileNoDeadCodeElim = lam filename.
         filename
 
 -- Pattern match over an algebraic type where each constructor carries
--- a record, pulling out the field with the given name. Additionally,
--- only pull out that field if the type agrees with `ty`. This last
--- part is probably not optimal, but seems the easiest for now.
+-- a record, pulling out the field with the given name.
 lang ProjMatchAst = Ast
   syn Expr =
-  | TmProjMatch {info : Info, target : Expr, field : SID, ty : Type, env : TCEnv}
+  | TmProjMatch {info : Info, target : Expr, field : SID, ty : Type}
 
   sem infoTm =
   | TmProjMatch x -> x.info
@@ -71,19 +69,11 @@ lang ProjMatchPprint = PrettyPrint + ProjMatchAst
     (env, join [target, ".", pprintLabelString x.field])
 end
 
-lang ProjMatchTypeCheck = TypeCheck + ProjMatchAst
-  sem typeCheckExpr env =
-  | TmProjMatch x ->
-    let target = typeCheckExpr env x.target in
-    let ty = newvar env.currentLvl x.info in
-    TmProjMatch {x with target = target, ty = ty, env = env}
-end
-
-lang PullName = AppTypeAst + ConTypeAst
+lang PullName = AppTypeAst + ConTypeAst + MetaVarTypeAst + AliasTypeAst
   sem pullName =
   | TyApp x -> pullName x.lhs
   | TyCon x -> Some x.ident
-  | _ -> None ()
+  | ty -> (rappAccumL_Type_Type (lam. lam ty. (pullName ty, ty)) (None ()) ty).0
 end
 
 lang PullNameFromConstructor = PullName + FunTypeAst + AllTypeAst
@@ -92,46 +82,34 @@ lang PullNameFromConstructor = PullName + FunTypeAst + AllTypeAst
   | TyAll x -> pullName x.ty
 end
 
-lang LowerProjMatch = ProjMatchAst + MatchAst + DataPat + RecordPat + RecordTypeAst + FunTypeAst + Eq + Unify + Generalize + TypeCheck + UnifyPure
-  sem lowerProj : Expr -> Expr
-  sem lowerProj =
-  | t -> smap_Expr_Expr lowerProj t
+lang ProjMatchTypeCheck = TypeCheck + ProjMatchAst + FunTypeAst + RecordTypeAst + RecordPat
+  sem typeCheckExpr env =
   | TmProjMatch x ->
-    let targetTyName = match (use PullName in pullName) (unwrapType (tyTm x.target))
-      with Some ty then ty
-      else errorSingle [infoTm x.target] (join ["Could not infer this to be a variant type (found ", type2str (tyTm x.target), ")"])
-    in
-    let expectedResultTy = x.ty in
-    let filterConstructorNames : (Name, Type) -> Option (Name, Type) = lam pair.
-      match pair with (conName, conTy) in
-      let conTyName = match use PullNameFromConstructor in pullName conTy
-        with Some tyName then tyName
-        else error "Every constructor should end in a type that is named" in
-      -- TODO(vipa, 2023-01-30): We would actually like to unify and
-      -- then proceed *if it succeeds*, but we can't fail a
-      -- unification without ending the program presently
-      if nameEq targetTyName conTyName then
-        match inst x.info x.env.currentLvl conTy with TyArrow arr in
-        -- TODO(vipa, 2022-12-20): I'm not entirely sure we want to run
-        -- arbitrary type-checking stuff after the actual typechecking
-        -- phase, but I believe these uses are at least correct, and
-        -- should not leak any new types into the generated code.
-        unify _tcEnvEmpty [infoTm x.target] arr.to (tyTm x.target);
-        match arr.from with recTy & TyRecord rec then
-          match mapLookup x.field rec.fields with Some fieldTy then
-            if optionIsSome (result.toOption (unifyPure fieldTy expectedResultTy))
-            then Some (conName, recTy)
+    let target = typeCheckExpr env x.target in
+    match (use PullName in pullName) (tyTm target) with Some tyName then
+      let constructorIsRelevant = lam pair.
+        match pair with (conName, conTy) in
+        match use PullNameFromConstructor in pullName conTy with Some conTyName then
+          if nameEq conTyName tyName then
+            match inst x.info env.currentLvl conTy with TyArrow arr in
+            unify env [infoTm target] arr.to (tyTm target);
+            match unwrapType arr.from with recTy & TyRecord rec then
+              optionMap (lam x. {conName = conName, recTy = recTy, fieldTy = x}) (mapLookup x.field rec.fields)
             else None ()
           else None ()
-        else None ()
-      else None ()
-    in
-    -- OPT(vipa, 2022-12-20): This potentially repeats a lot of work
-    let relevantConstructors = mapOption filterConstructorNames (mapBindings x.env.conEnv) in
+        else None () in
+      -- OPT(vipa, 2022-12-20): This potentially repeats a lot of work
+      let relevantConstructors = mapOption constructorIsRelevant (mapBindings env.conEnv) in
+      match relevantConstructors with [c] ++ cs then
+        for_ cs (lam c2. unify env [infoTy c.fieldTy, infoTy c2.fieldTy] c.fieldTy c2.fieldTy);
+        desugarTmProjMatch x.info target x.field c.fieldTy relevantConstructors
+      else errorSingle [infoTm target] (join ["This value doesn't appear to have a '", sidToString x.field, "' field."])
+    else errorSingle [infoTm target] "This type isn't known to be a custom type, maybe you need to add a type annotation?"
 
+  sem desugarTmProjMatch info target field fieldTy = | relevantConstructors  ->
     let errorMsg =
-      let msg = join ["Field '", sidToString x.field, "' not found"] in
-      match errorMsg [{errorDefault with info = x.info, msg = msg}] {single = "", multi = ""}
+      let msg = join ["Field '", sidToString field, "' not found"] in
+      match errorMsg [{errorDefault with info = info, msg = msg}] {single = "", multi = ""}
       with (info, msg) in
       let msg = infoErrorString info msg in
       let print = print_ (str_ msg) in
@@ -148,27 +126,28 @@ lang LowerProjMatch = ProjMatchAst + MatchAst + DataPat + RecordPat + RecordType
     let iSidRecordProj_ = lam i. lam target. lam sid. lam recordTy.
       let varName = nameSym "x" in
       let pat = PatRecord
-        { bindings = mapInsert sid (inpvar_ i varName) (mapEmpty cmpSID)
+        { bindings = mapInsert sid (withTypePat fieldTy (inpvar_ i varName)) (mapEmpty cmpSID)
         , info = i
         , ty = recordTy
         } in
-      imatch_ i target pat (invar_ i varName) never_ in
-    let match_ = imatch_ x.info in
-    let npcon_ = inpcon_ x.info in
-    let nvar_ = invar_ x.info in
-    let npvar_ = inpvar_ x.info in
+      withType fieldTy (imatch_ i target pat (withType fieldTy (invar_ i varName)) (withType fieldTy never_)) in
+    let match_ = imatch_ info in
+    let npcon_ = inpcon_ info in
+    let nvar_ = invar_ info in
+    let npvar_ = inpvar_ info in
+    let targetTy = tyTm target in
     let varName = nameSym "target" in
-    let var = invar_ x.info varName in
-    let wrap : Expr -> (Name, Type) -> Expr = lam next. lam pair.
-      match pair with (conName, recTy) in
+    let var = withType targetTy (invar_ info varName) in
+    let wrap : Expr -> {conName : Name, recTy : Type, fieldTy : Type} -> Expr = lam next. lam alt.
       let xName = nameSym "x" in
-      match_ var (npcon_ conName (npvar_ xName))
-        (iSidRecordProj_ x.info (nvar_ xName) x.field recTy)
-        next
-    in
-    bind_
-      (nulet_ varName x.target)
-      (foldl wrap errorMsg relevantConstructors)
+      withType alt.fieldTy
+        (match_ var (withTypePat targetTy (npcon_ alt.conName (withTypePat alt.recTy (npvar_ xName))))
+          (iSidRecordProj_ info (withType alt.recTy (nvar_ xName)) field alt.recTy)
+          next) in
+    withType fieldTy
+      (bind_
+        (nulet_ varName target)
+        (foldl wrap errorMsg relevantConstructors))
 end
 
 lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Externals + MExprSym + FloatAst + ProjMatchAst + Resample + GenerateJsonSerializers + MExprEliminateDuplicateCode
@@ -193,15 +172,15 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     let infoR = infoTm r in
     let mergedInfo = mergeInfo infoL infoR in
     withInfo mergedInfo (semi_ l r)
-    
+
 
   sem compileFunctionsOnly: TpplCompileContext -> FileTppl -> Expr
   sem compileFunctionsOnly (cc: TpplCompileContext) =
   | DeclSequenceFileTppl x ->
-  
+
       -- Compile type definitions
       let types = map (compileTpplTypeDecl cc) x.decl in
-  
+
       let typeNames = mapOption (lam x. x.0) types in
       let constructors = join (map (lam x. x.1) types) in
       let bindType = lam inexpr. lam name.
@@ -211,7 +190,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
           tyIdent = tyWithInfo name.i (tyvariant_ []),
           inexpr = inexpr,
           ty = tyunknown_,
-          info = name.i  
+          info = name.i
         }
       in
       let bindCon = lam inexpr. lam pair.
@@ -225,7 +204,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       in
       let types = foldl bindCon unit_ constructors in
       let types = foldl bindType types typeNames in
-  
+
       -- Compile TreePPL functions
       let functions = TmRecLets {
         bindings = mapOption (compileTpplFunction cc) x.decl,
@@ -233,15 +212,15 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
         ty = tyunknown_,
         info = x.info
       } in
-  
+
       -- Combine the compiled types and functions
       let complete = bindall_ [ types, functions ] in
-  
+
       -- Remove duplicate definitions
       let complete = eliminateDuplicateCode complete in
-  
+
       complete
-    
+
 
 
 
@@ -320,7 +299,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     let types = foldl bindCon unit_ constructors in
     let types = foldl bindType types typeNames in
     let inputType: Type = tyrecord_ (map (lam t. (nameGetStr t.0, t.1)) argNameTypes) in
-    
+
     let modelTypes: [Type] = [inputType, returnType] in
     match addJsonSerializers modelTypes types with (result, types, _) in
     match mapLookup returnType result with Some outputHandler in
@@ -722,8 +701,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       info = x.info,
       target = compileExprTppl context x.target,
       field = stringToSid x.field.v,
-      ty = tyunknown_,
-      env = _tcEnvEmpty  -- TODO(vipa, 2022-12-21): This is technically supposed to be private
+      ty = tyunknown_
     }
 
   | FunCallExprTppl x ->
@@ -771,7 +749,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       dist = DPoisson {
         lambda = compileExprTppl context d.rate
       },
-      ty = tyunknown_, 
+      ty = tyunknown_,
       info = d.info
     }
 
@@ -780,7 +758,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       dist = DExponential {
         rate = compileExprTppl context d.rate
       },
-      ty = tyunknown_, 
+      ty = tyunknown_,
       info = d.info
     }
 
@@ -790,7 +768,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
         k = compileExprTppl context d.shape,
         theta = compileExprTppl context d.scale
       },
-      ty = tyunknown_, 
+      ty = tyunknown_,
       info = d.info
     }
 
@@ -819,7 +797,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
         a = compileExprTppl context d.a,
         b = compileExprTppl context d.b
       },
-      ty = tyunknown_, 
+      ty = tyunknown_,
       info = d.info
   }
 
@@ -857,7 +835,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
         n = compileExprTppl context d.n,
         p = compileExprTppl context d.prob
       },
-      ty = tyunknown_, 
+      ty = tyunknown_,
       info = d.info
   }
 
@@ -967,7 +945,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       lhs = TmConst {
         ty = tyunknown_,
         info = x.info,
-        val = CNegf ()  -- assuming CNegf constant for negation 
+        val = CNegf ()  -- assuming CNegf constant for negation
       },
       rhs = compileExprTppl context x.right,
       ty = tyunknown_
@@ -1041,7 +1019,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
         rhs = compileExprTppl context x.right,
         ty = tyunknown_
       }
-        
+
   | MatrixLeftScalarMulExprTppl x ->
     TmApp {
         info = x.info,
@@ -1249,7 +1227,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
 
   | SequenceExprTppl x ->
     let ce = lam x.
-      compileExprTppl context x 
+      compileExprTppl context x
     in
     TmSeq {
       tms = map ce x.values,
@@ -1310,22 +1288,20 @@ end
 
 
 lang TreePPLThings = TreePPLAst + TreePPLCompile
-    + LowerProjMatch + ProjMatchTypeCheck + ProjMatchPprint
+  + ProjMatchTypeCheck + ProjMatchPprint + MExprAst
 end
 
 
 let compileTpplToExecutable = lam filename: String. lam options: Options.
   use TreePPLThings in
-    let content = readFile filename in
-    match parseTreePPLExn filename content with file in
-    let corePplAst: Expr = compile file in
-    --printLn (mexprPPLToString corePplAst);
-    let prog: Expr = typeCheckExpr _tcEnvEmpty corePplAst in
-    let prog: Expr = lowerProj prog in
-    let prog: Expr = removeMetaVarExpr prog in
-    use CPPLLang in
-    let prog =  mexprCpplCompile options false prog in
-    buildMExpr options prog
+  let content = readFile filename in
+  match parseTreePPLExn filename content with file in
+  let corePplAst: Expr = compile file in
+  --printLn (mexprPPLToString corePplAst);
+  let prog: Expr = typeCheckExpr _tcEnvEmpty corePplAst in
+  use CPPLLang in
+  let prog =  mexprCpplCompile options false prog in
+  buildMExpr options prog
 
 -- output needs to be an absolute path
 let runCompiledTpplProgram: Options -> String -> Int -> ExecResult =
@@ -1389,7 +1365,7 @@ compileTpplToExecutable testTpplProgram testOptions;
 let testProgramExecResult = runCompiledTpplProgram testOptions testJsonInput 1 in
 
 utest testProgramExecResult.returncode with 0 in
-utest testProgramExecResult.stderr with 
+utest testProgramExecResult.stderr with
 "blab
 
 blab
