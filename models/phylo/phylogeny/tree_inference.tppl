@@ -5,10 +5,10 @@
 
 // Run this by compiling: 
 // tpplc models/phylo/phylogeny/tree_inference.tppl -m 'smc-apf' --resample align --output basic_phylo
-// And then execution 10000 particles 1 sweep, using for example toy dataset phylo_toydata2_Ints.json.json:
-// ./basic_phylo models/data/treeinference/phylo_toydata2_Ints.json 10000 1 > basic_phylo.json
+// And then execution 10000 particles 1 sweep, using for example toy dataset phylo_toydata2.json.json:
+// ./basic_phylo models/data/treeinference/phylo_toydata2.json 10000 1 > basic_phylo.json
 
-// Toy dataset as json file phylo_toydata2_Ints.json. Integers. 
+// Toy dataset as json file phylo_toydata2.json. Integers. 
 // Data is a matrix, with each row
 // consisting of the aligned DNA sequence for a single
 // taxon. The nucleotide is specified as
@@ -16,6 +16,7 @@
 //   "C" for cytosine 1
 //   "G" for guanine 2
 //   "T" for thymine 3
+//   "-" currently not handled in this model
 
 // TYPES
 

@@ -3,8 +3,8 @@
 
 // Run this by compiling: 
 // tpplc models/phylo/phylogeny/tree_inference_pruning_scaled.tppl -m 'smc-apf' --resample align --output phylo_scaled
-// And then execution 10000 particles 1 sweep, using for example toy dataset phylo_toydata2.json:
-// ./phylo_scaled models/data/treeinference/phylo_toydata2.json 10000 1 > phylo_pruning_scaled.json
+// And then execution x particles x sweeps, using for example toy dataset phylo_toydata2.json:
+// ./phylo_scaled models/data/treeinference/phylo_toydata2.json 1000 1 > phylo_pruning_scaled.json
 
 // Toy dataset as json file phylo_toydata2.json.
 // Data is a matrix with each row
@@ -14,6 +14,7 @@
 //   "C" for cytosine  - 1
 //   "G" for guanine - 2
 //   "T" for thymine - 3
+//   "-" for gaps - 4 //To be extended
 
 // TYPES
 
@@ -63,6 +64,10 @@ function get_leaf_message(seq: Int) : Tensor[Real] {
     } 
     if (eqi(seq, 3)) {  // "T"
         let message = rvecCreate(4, [0.0, 0.0, 0.0, 1.0]);
+        return message;
+    } 
+    if (eqi(seq, 4)) {  // "-"
+        let message = rvecCreate(4, [1.0, 1.0, 1.0, 1.0]);
         return message;
     } 
     else {
@@ -142,7 +147,7 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
 
 // MODEL FUNCTION
 
-model function myModel(data: Int[][]) : Tree[] {
+model function myModel(data: Int[][]) : () {
     // Define the scaled rate matrix for Jukes-Cantor
     let q = mtxCreate(4,4,
         [     -1.0, (1.0/3.0), (1.0/3.0), (1.0/3.0),
@@ -158,5 +163,6 @@ model function myModel(data: Int[][]) : Tree[] {
     let trees = build_forest(data, [], 1, data_len, seq_len);
 
     // Build the tree by random clustering and return 
-    return cluster(q, trees, 0.0, seq_len);
+    // return cluster(q, trees, 0.0, seq_len);
+    cluster(q, trees, 0.0, seq_len); //Not returning the tree currently
 }
