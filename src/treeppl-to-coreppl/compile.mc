@@ -347,8 +347,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       [ [ stdlib
         , libCompile
         , types
-        , functions
         , libFunctions
+        , functions
         , inputR
         ]
       , inputArgs
