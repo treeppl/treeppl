@@ -698,6 +698,17 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
 
   sem compileExprTppl (context: TpplCompileContext) =
 
+  | AnonFunExprTppl x ->
+    let args = if null x.args
+      then [(nameNoSym "", tyint_)]
+      else map (lam a. (a.name.v, compileTypeTppl a.ty)) x.args in
+    let body = foldr (lam f. lam e. f e)
+      (withInfo x.info unit_)
+      (map (compileStmtTppl context) x.stmts) in
+    let wrap = lam pair. lam body.
+      withInfo x.info (nlam_ pair.0 pair.1 body) in
+    foldr wrap body args
+
   | ProjectionExprTppl x ->
     TmProjMatch {
       info = x.info,
