@@ -183,6 +183,12 @@ prod left MatrixPower: ExprTppl = left:ExprTppl "^$" right:ExprTppl -- imagined 
 
   -- because the right has to be an integer not another matrix
 
+-- Anonymous functions
+
+prod AnonFun: ExprTppl = "function"
+  "(" (args:{name:LName ":" ty:TypeTppl} args:{"," name:LName ":" ty:TypeTppl}*)? ")"
+  "{" stmts:StmtTppl* "}"
+
 -- Function call as expression
 prod FunCall: ExprTppl = f:ExprTppl "(" (args:ExprTppl ("," args:ExprTppl)*)? ")"
 
