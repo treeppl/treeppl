@@ -1,0 +1,535 @@
+/**
+ * Qualitatitive Trait Evolution Model
+ * 
+ * Models the joint evolution of a gene and phenotype.
+ */
+
+type QTTree =
+  | QTLeaf  { age: Real
+            , index: Int
+            , sequence: String
+            , character: String
+            , stateSequence: Int[]
+            , characterState: Int
+            }
+  | QTNode  { left: QTTree
+            , right: QTTree
+            , age: Real
+            }
+  | QTWeightedLeaf  { age: Real
+                    , messageSequence: Tensor[Real][]
+                    , characterMessage: Tensor[Real]
+                    , partialLogWeight: Real
+                    }
+  | QTWeightedNode  { left: QTTree
+                    , right: QTTree
+                    , age: Real
+                    , partialLogWeight: Real
+                    }
+
+function tree2string(tree: QTTree): String {
+  if (tree is QTLeaf) {
+    return join(["QTLeaf(", int2string(tree.index), ")"]);
+  } 
+  if (tree is QTNode) {
+    return join(["QTNode(", tree2string(tree.left), ", ", tree2string(tree.right), ")"]);
+  } 
+  if (tree is QTWeightedNode) {
+    return join(["QTWeightedNode(", int2string(tree.index), ")"]);
+  }
+  if (tree is QTNode) {
+    return join( ["QTLeaf(", int2string(tree.index), ")"] );
+  }
+  printLn("Error (tree2string): unexpected tree structure");
+  return "Error (tree2string): unexpected tree structure";
+}
+
+function gammaZeroMix(rho: Bool, a: Real, b: Real): Real {
+  if (rho) {
+    assume x ~ Gamma(a, b);
+    return x;
+  } 
+  return 0.0;
+}
+
+type ModelDynamics = ModelDynamics  { qChar: Tensor[Real]
+                                    , jChar: Tensor[Real]
+                                    , qMol: Tensor[Real]
+                                    , jMol: Tensor[Real]
+                                    , nu: Real
+                                    , charMessages: Real[][]
+//                                 , molMessages: Real[][]
+                                    }
+
+type QTParm = QTParm  { lambda: Real // Rate of phenotypic evolution
+                      , mu: Real     // Rate of molecular evolution
+                      , nu: Real     // Rate of joint evolution
+                      }
+
+/**
+* Q-T-BIRDS model
+*
+* @param tree: QTTree            - Phylogenetic tree, the tips of which have 
+*                                  sequence and phenotype information
+* @param normQChar: Tensor[Real] - Normalized Q matrix for the phenotype
+* @param JChar: Tensor[Real]     - Jump matrix for the phenotype
+* @param normQMol: Tensor[Real]  - Normalized Q matrix for the gene
+* @param JMol: Tensor[Real]      - Jump matrix for the gene
+* @param lamShape: Real          - Hyperparameter of the Gamma distribution for
+*                                  the phenotype transition rate
+* @param lamScale: Real          - Hyperparameter of the Gamma distribution for
+*                                  the phenotype transition rate
+* @param muShape: Real           - Hyperparameter of the Gamma distribution for
+*                                  the gene transition rate
+* @param muScale: Real           - Hyperparameter of the Gamma distribution for
+*                                  the gene transition rate
+* @param nuShape: Real           - Hyperparameter of the Gamma distribution for
+*                                  the joint transition rate
+* @param nuScale: Real           - Hyperparameter of the Gamma distribution for
+*                                  the joint transition rate
+* @param pa: Real                - Prob of correlation rho ~ Beta(pa, pb)
+* @param pb: Real                - Prob of correlation rho ~ Beta(pa, pb)
+*    
+* @return [lam, mu, nu, p]
+*/
+model function qtbirds( tree: QTTree
+                      , normQChar: Tensor[Real]
+                      , jChar: Tensor[Real]
+                      , charMessages: Real[][]
+                      , normQMol: Tensor[Real]
+                      , jMol: Tensor[Real]
+                      , lamShape: Real
+                      , lamScale: Real
+                      , muShape: Real
+                      , muScale: Real
+                      , nuShape: Real
+                      , nuScale: Real
+                      , pa: Real
+                      , pb: Real
+                      ): Real[] 
+{
+  // printMtx(normQChar);
+  // printMtx(jChar);
+  // printMtx(normQMol);
+  // printMtx(jMol);
+  // printLn(real2string(lamShape));
+  // printLn(real2string(lamScale));
+  // printLn(real2string(muShape));
+  // printLn(real2string(muScale));
+  // printLn(real2string(nuShape));
+  // printLn(real2string(nuScale));
+
+  assume lam ~ Gamma(lamShape, lamScale);
+  assume mu ~ Gamma(muShape, muScale);
+  assume nu ~ Gamma(nuShape, nuScale); // comment this ...
+  let p = 0.0;                         // and this and ...
+  
+  // and uncomment the following lines, if you want nu to be a mix between
+  // 0 and gamma
+  //assume p ~ Beta(pa, pb);
+  //assume rho ~ Bernoulli(p);
+  //let nu = gammaZeroMix(rho, nuShape, nuScale);
+
+  // $* scalar multiplication
+  let m = ModelDynamics { qChar = lam $* normQChar
+                        , jChar = jChar
+                        , charMessages = charMessages
+                        , qMol = mu $* normQMol
+                        , jMol = jMol
+                        , nu = nu
+                        };
+
+  let something = coalesceQTTree(tree, m, false); // Outermost call, so no need to resample
+
+  return [lam, mu, nu, p];
+}
+
+
+/**
+ * Processes a QTTree and conditions on its likelihood
+ *
+ * It traverses the nodes of tree and calls coalesceQTTwig
+ * on subtrees that have just two children who are leafs.
+ *
+ * @param tree 
+ * @param m
+ * @param doresample - Whether to resample after processing the tree
+ *                     the idea is that the first invocation of this
+ *                     function should be with False, as it corresponds
+ *                     to outermost recursion; after that the subsequent
+ *                     recursive calls will have True
+ *
+ * @return QTTree that matches the QTWeightedLeaf constructor
+ */
+function coalesceQTTree(tree: QTTree, m: ModelDynamics, doresample: Bool) : QTTree {
+  if (tree.left is QTLeaf) && (tree.right is QTLeaf) {
+    let newTree = QTWeightedNode  { left = tree.left
+                                  , right = tree.right
+                                  , age = tree.age
+                                  , partialLogWeight = 0.0
+                                  }; 
+    return coalesceQTTwig(newTree, m, doresample);
+  } 
+  if (tree.left is QTLeaf) && (tree.right is QTNode) {
+    let rightTree = coalesceQTTree(tree.right, m, true); // matches QTWeightedLeaf, resample in the inner calls
+    let newTree = QTWeightedNode  { left = tree.left
+                                  , right = rightTree
+                                  , age = tree.age
+                                  , partialLogWeight = rightTree.partialLogWeight
+                                  };
+    return coalesceQTTwig(newTree, m, doresample);
+  }
+  if (tree.left is QTNode) && (tree.right is QTLeaf) {
+    let leftTree = coalesceQTTree(tree.left, m, true); // matches QTWeightedLeaf, resample in the inner calls
+    let newTree = QTWeightedNode  { left = leftTree
+                                  , right = tree.right
+                                  , age = tree.age
+                                  , partialLogWeight = leftTree.partialLogWeight
+                                  };
+    return coalesceQTTwig(newTree, m, doresample);
+  } 
+  if (tree.left is QTNode) && (tree.right is QTNode) {
+    let leftTree = coalesceQTTree(tree.left, m, true); // matches QTWeightedLeaf, resample in the inner calls
+    let rightTree = coalesceQTTree(tree.right, m, true); // matches QTWeightedLeaf, resample in the inner calls
+    let newTree = QTWeightedNode  { left = leftTree
+                                  , right = rightTree
+                                  , age = tree.age
+                                  , partialLogWeight = leftTree.partialLogWeight + rightTree.partialLogWeight
+                                  };
+    return coalesceQTTwig(newTree, m, doresample);
+  } 
+  else {
+    printLn("Error (coalesceQTTree): unexpected tree structure");
+    weight 0.0;
+    let errorTree = QTWeightedNode { left = tree.left
+                          , right = tree.right
+                          , age = tree.age
+                          , partialLogWeight = log(0.0) // -Inf??
+                          };
+    return errorTree;
+  }
+}
+
+
+/*
+ * coalesceQTTwig deals with a subtree that has two leafs as children
+ * (they can be weighted or unweighted)
+ */  
+function coalesceQTTwig(tree: QTTree, m: ModelDynamics, doresample: Bool): QTTree {
+  let leftTime = getAgeDiff(tree, tree.left);
+  let rightTime = getAgeDiff(tree, tree.right);
+
+  let leftMessageSequence = getMessageSequence(tree.left);
+  let rightMessageSequence = getMessageSequence(tree.right);
+
+  let leftCharacterMessage = getCharacterMessage(tree.left, m.charMessages);
+  let rightCharacterMessage = getCharacterMessage(tree.right, m.charMessages);
+
+  let leftMessageSequenceEvolution = evolveMessageSequence(leftMessageSequence, m, leftTime);
+  let newLeftMessageSequence = leftMessageSequenceEvolution.messageSequence;  // should work now
+  // ... jumps leftMessageSequenceEvolution.characterJumps
+  // if not, workaround below:
+  ///let newLeftMessageSequence = sapply(leftMessageSequenceEvolution.messageSequence, idTensorReal);     // workaround
+  
+  
+  let rightMessageSequenceEvolution = evolveMessageSequence(rightMessageSequence, m, rightTime);
+  let newRightMessageSequence = rightMessageSequenceEvolution.messageSequence; // should work now
+  // ... jumps rightMessageSequenceEvolution.characterJumps
+  // if not, workaround
+  //let newRightMessageSequence = sapply(rightMessageSequenceEvolution.messageSequence, idTensorReal);
+  
+
+  // we need to zipWith left and right and element-wise multiply left and right
+  // TODO one of the messages may be missing (-1.)
+  let newMessageSequence = zipWith( mtxElemMulMissing
+                                  , newLeftMessageSequence
+                                  , newRightMessageSequence 
+                                  ); // ~~TODO check zipWith and implement hadamardMul~~
+
+  //  Still possible to have missing data after the previous operation
+  // computeMessageLogLikelihood takes this account
+  let logWeightSequence = sapply(newMessageSequence, computeMessageLogLikelihood);
+
+  let newLeftCharMessage = evolveCharacter( leftCharacterMessage
+                                          , m
+                                          , leftTime
+                                          , leftMessageSequenceEvolution.characterJumps
+                                          );
+
+  let newRightCharMessage = evolveCharacter ( rightCharacterMessage
+                                            , m
+                                            , rightTime
+                                            , rightMessageSequenceEvolution.characterJumps
+                                            );
+
+  let newCharMessage = mtxElemMul(newLeftCharMessage, newRightCharMessage); // characters are never missing :)
+  let logWeightChar = computeMessageLogLikelihood(newCharMessage);
+  
+  let partialLogWeight = seqSumReal(logWeightSequence) + logWeightChar;
+
+  logWeight (partialLogWeight - tree.partialLogWeight);
+  
+  // printLn(join( [  "Merging "
+  //               , int2string(getIndex(tree.left))
+  //               , " and "
+  //               ,  int2string(getIndex(tree.right)) 
+  //               ]
+  //             )
+  //         ); //workaround for tree.left.index
+  // printLn(join( [  "Partial log weight: "
+  //               , real2string(partialLogWeight)
+  //               , "Character contribution: "
+  //               , real2string(logWeightChar)
+  //               ]
+  //             )
+  //         );
+
+  if (doresample) {
+    resample;
+  }
+
+  let newTree = QTWeightedLeaf  { age = tree.age
+                                , messageSequence = newMessageSequence
+                                , characterMessage = newCharMessage
+                                , partialLogWeight = partialLogWeight
+                                };
+  return newTree;
+}
+
+
+function getMessageSequence(tree: QTTree): Tensor[Real][] {
+  if (tree is QTLeaf) {
+    return sapply(tree.stateSequence, getMessage);
+  }
+  if (tree is QTWeightedLeaf) {
+    let mesSeq = tree.messageSequence; // should work now
+    // workaround reconstruct sequence
+    //let mesSeq = sapply(tree.messageSequence, idTensorReal);   
+    //let mesSeq = idSTensorReal(tree.messageSequence); // used to be a workaround
+    return mesSeq;
+  }
+  else {
+    printLn("Error (getMessageSequence): unexpected tree structure");
+    weight 0.0;
+    return [];
+  }
+}
+
+// TODO/ WIP: What if the state is missing??
+function getMessage(state: Int): Tensor[Real] {
+  /* NOTE(vsenderov, 2023-11-01)
+     - Messages hard-coded for now
+     - see https://github.com/treeppl/treeppl/issues/30
+  */ 
+  if (eqi(state, subi(0, 1))) {
+    return rvecCreate(4, [-1., -1., -1., -1.]);  // for now this is how we encode missing data
+  }
+
+  let messages = [[1., 0., 0., 0.],    // 0
+                  [0., 1., 0., 0.],    // 1
+                  [0., 0., 1., 0.],    // 2
+                  [0., 0., 0., 1.]];   // 3
+
+  return rvecCreate(4, messages[addi(state, 1)]); // one-indexing of arrays, but zero-indexing of states
+}
+
+
+function getCharacterMessage(tree: QTTree, messages: Real[][]): Tensor[Real]
+{
+  if (tree is QTLeaf)
+  {
+    let l = length(messages);
+    let curState = idInt(tree.characterState); // workaround
+    let rTensor = rvecCreate(l, messages[addi(1, curState)]);
+    return rTensor;
+  } 
+  
+  if (tree is QTWeightedLeaf)
+  {
+    return tree.characterMessage;
+  } 
+  
+  else 
+  {
+    error("Error: getCharacterMessage: unexpected tree structure");
+    return rvecCreate(1, [0.0]);
+  }
+}
+
+
+type MessageEvolution = MessageEvolution  { message: Tensor[Real]
+                                          , sJumps: Int
+                                          }
+
+// workaround not elegant, otherwise name clash
+function meGetMessage (mes: MessageEvolution): Tensor[Real]
+{
+  return mes.message;
+}
+
+// workaround not elegant
+function meGetJumps (mes: MessageEvolution): Int
+{
+  return mes.sJumps;
+}
+
+
+/**
+* Using the Q-T-BIRDS model, evolve a single message along a branch of length t
+* 
+* @param dyn: ModelDynamics
+* @param t: Real  Time of evolution
+* @param mes: Tensor[Real]
+*   The initial likelihood as a row vector
+*   If the mes has negative values, it is considered missing data
+*/
+function evolveMessageClosure ( dyn: ModelDynamics
+                              , t: Real
+                              , u: Real
+                              , mes: Tensor[Real]
+                              ): MessageEvolution
+{
+  assume sJumps ~ Poisson(dyn.nu * t * u); // divided by number of nucleotides
+  // Missing data case
+  let myScalar = mtxGet(1, 1, mes);
+  if (myScalar < 0.) { // we will skip the linear algebra if the message is missing
+    return MessageEvolution {
+      message = mes,
+      sJumps = sJumps
+    };
+  }
+  let res = mes *@ ( ( dyn.jMol ^$ sJumps ) *@ (mtxExp(dyn.qMol *$ t)));
+  // TODO do something for operator precedence to avoid so many parens
+  return MessageEvolution {
+    message = res,
+    sJumps = sJumps
+  };
+}
+
+
+function evolveCharacter(mes: Tensor[Real], m: ModelDynamics, t: Real, sJumps: Int): Tensor[Real]
+{
+  // TODO on top of that we need to add the s-jumps
+  let res = mes *@ ( (m.jChar ^$ sJumps) *@ (mtxExp(m.qChar *$ t)) );
+  return res;
+}
+
+
+type MessageSequenceEvolution = MessageSequenceEvolution { 
+  messageSequence: Tensor[Real][], 
+  characterJumps: Int
+}
+
+
+/**
+* Using the Q-T-BIRDS model, evolve the messages along a branch of length t
+*/
+function evolveMessageSequence( messages: Tensor[Real][]
+                              , m: ModelDynamics
+                              , t: Real
+                              ) : MessageSequenceEvolution
+{
+  let u = 1.0/Real(length(messages));
+  let evolveMessage = evolveMessageClosure(m, t, u); // partial application
+  let ret = sapply(messages, evolveMessage);
+
+  return MessageSequenceEvolution {
+    messageSequence = sapply(ret, meGetMessage),  // workaround, projecting from res with explictly defined functions, but would be better with anonymous functions
+    characterJumps = seqSumInt(sapply(ret, meGetJumps))
+  };
+}
+
+
+/**
+ * NOTE(vsenderov, 2023-11-08) This function proved very easy to introduce bugs
+ * into.  Makes the necesseity for writing tests even more apparent.
+ * 
+*/
+function computeMessageLogLikelihood(mes: Tensor[Real]): Real
+{
+  if (isMissing(mes)) {
+    return 0.;
+  }
+  // TODO incorporate equilibrium probabilities in this computation
+  // TODO write tests
+  let l = dim(mes)[2];
+  let base = rep(l, 1.0);
+  let cvec = cvecCreate(l, base);
+  let msum = mes *@ cvec; // msum is now a 1x1 vector
+  let msumReal = mtxGet(1, 1, msum);
+  return log(msumReal);
+}
+
+
+// ██╗    ██╗ ██████╗ ██████╗ ██╗  ██╗ █████╗ ██████╗  ██████╗ ██╗   ██╗███╗   ██╗██████╗ ███████╗
+// ██║    ██║██╔═══██╗██╔══██╗██║ ██╔╝██╔══██╗██╔══██╗██╔═══██╗██║   ██║████╗  ██║██╔══██╗██╔════╝
+// ██║ █╗ ██║██║   ██║██████╔╝█████╔╝ ███████║██████╔╝██║   ██║██║   ██║██╔██╗ ██║██║  ██║███████╗
+// ██║███╗██║██║   ██║██╔══██╗██╔═██╗ ██╔══██║██╔══██╗██║   ██║██║   ██║██║╚██╗██║██║  ██║╚════██║
+// ╚███╔███╔╝╚██████╔╝██║  ██║██║  ██╗██║  ██║██║  ██║╚██████╔╝╚██████╔╝██║ ╚████║██████╔╝███████║
+//  ╚══╝╚══╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚═════╝ ╚══════╝
+//https://patorjk.com/software/taag/#p=testall&h=1&v=1&f=Univers&t=WORKAROUNDS
+
+function getAgeDiff(parent: QTTree, child: QTTree)
+{
+  return parent.age - child.age;
+}
+
+
+function idTensorReal(t: Tensor[Real])
+{
+  return t;
+}
+
+
+function idSTensorReal(t: Tensor[Real][])
+{
+  return t;
+}
+
+
+function idSeq(s: Real[]) {
+  return s;
+}
+
+
+function idInt(i: Int) {
+  return i;
+}
+
+function getIndex(tree: QTTree): Int
+{
+  if (tree is QTLeaf)
+  {
+    return tree.index;
+  }
+
+  return (9999);
+}
+
+
+/**
+ * Multiplies two tensors, ignores if missing data is encoded as -1.
+ * Hack!
+ */
+function mtxElemMulMissing(a: Tensor[Real], b: Tensor[Real]): Tensor[Real] {
+  if (isMissing(a)) {
+    if (isMissing(b)) {
+      return a; // doesn't matter which one we return, both are missing
+    }
+    // only a is missing, b not
+    return b;
+  }
+  if (isMissing(b)) {
+    // a not missing but b is missing
+    return a;
+  }
+  // neither one is missing, multiply
+  return mtxElemMul(a, b);
+}
+
+function isMissing(x: Tensor[Real]): Bool {
+  if (mtxGet(1, 1, x) < 0.) {
+    return true;
+  }
+  return false;
+}
