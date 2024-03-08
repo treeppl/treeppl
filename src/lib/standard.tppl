@@ -295,3 +295,11 @@ function printMtx(m: Tensor[Real]): () {
 
 //   return result;
 // }
+
+
+function bool2real(b: Bool): Real {
+  if (b) {
+    return 1.0;
+  }
+  return 0.0;
+}

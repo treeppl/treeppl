@@ -7,6 +7,7 @@ tppl_name=tpplc
 bin_path=${HOME}/.local/bin
 src_path=${HOME}/.local/src/treeppl/
 tppl_src=src/.
+tppl_models=models
 
 tppl_tmp_file := $(shell mktemp)
 build/${tppl_name}: $(shell find src -path 'src/lib' -prune -o \( -name "*.mc" -o -name "*.syn" \) -print)
@@ -21,6 +22,7 @@ install: build/${tppl_name}
 	cp build/${tppl_name} ${bin_path}/${tppl_name}
 	chmod +x ${bin_path}/${tppl_name}
 	cp -rf $(tppl_src) $(src_path)
+	cp -rf $(tppl_models) $(src_path)
 	@echo "\n${RED}Attention:${RESET}"
 	@echo "${tppl_name} has been installed to ${bin_path} and the TreePPL sources have been installed to $(src_path)."
 	@echo "Please, ensure that the PATH and the MCORE_LIBS environment variables have been set accordingly."
