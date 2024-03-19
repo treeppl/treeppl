@@ -1337,7 +1337,8 @@ let testOptions =  {
     printAcceptanceRate = false,
     pmcmcParticles = 2,
     seed = None (),
-    extractSimplification = "none"
+    extractSimplification = "none",
+    subsample = false
   } in
 
 -- test hello world
