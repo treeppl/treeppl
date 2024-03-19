@@ -88,7 +88,7 @@ lang ProjMatchTypeCheck = TypeCheck + ProjMatchAst + FunTypeAst + RecordTypeAst 
     let target = typeCheckExpr env x.target in
     match (use PullName in pullName) (tyTm target) with Some tyName then
       let constructorIsRelevant = lam pair.
-        match pair with (conName, conTy) in
+        match pair with (conName, (conLvl, conTy)) in
         match use PullNameFromConstructor in pullName conTy with Some conTyName then
           if nameEq conTyName tyName then
             match inst x.info env.currentLvl conTy with TyArrow arr in
@@ -488,6 +488,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
 
   sem compileTypeTppl =
   | TypeUsageTypeTppl x -> TyCon {
+      data = tyunknown_,
       ident = x.name.v,
       info = x.name.i
     }
