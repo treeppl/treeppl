@@ -3,7 +3,6 @@
 
 // Run this by compiling: 
 // tpplc models/phylo/phylogeny/tree_inference_pruning_scaled_gtr.tppl -m 'smc-apf' --resample align --output phylo_gtr
-// tpplc models/phylo/phylogeny/tree_inference_pruning_scaled_gtr.tppl -m 'smc-bpf' --output phylo_gtr
 // And then execution x particles x sweeps, using for example toy dataset phylo_toydata2.json:
 // ./phylo_gtr models/data/treeinference/phylo_toydata2.json 1000 1 > phylo_pruning_gtr.json
 

@@ -4,12 +4,9 @@
 // produce a state-of-the-art model with MCMC, using
 // suitable drift kernels, slice sampling, or with HMC.
 
-// DATA : phylo_toydata3.json
-
 // Run this by compiling: 
-// tpplc models/phylo/phylogeny/substmodel_belief_propagation_noratevartppl.tppl -m 'smc-bpf' --output substmodel
 // tpplc models/phylo/phylogeny/substmodel_belief_propagation_noratevartppl.tppl -m 'smc-apf' --resample align --output substmodel
-// And then execution x particles x sweeps, using for example toy dataset phylo_toydata2.json:
+// And then execution x particles x sweeps, using for example toy dataset phylo_toydata3.json:
 // ./substmodel models/data/treeinference/phylo_toydata3.json 10000 1 > substmodel_output.json
 
 // Data is a matrix of integers character, with each row
@@ -27,10 +24,6 @@
 
 // TYPES
 
-// ToDo JC clock rate model:
-// sample clock rate
-// Exp q (same as tree inference) with branch length times clock rate
-
 type TheReturn = TheReturn{stationary_probs: Real[], exchangeability_rates: Real[]}
 
 type GTR_Tree =
@@ -39,7 +32,6 @@ type GTR_Tree =
 
 
 // MODEL FUNCTIONS
-
 
 // A help function to compute the scaled rate matrix for GTR
 function gtr(pi: Real[], r: Real[]) : Tensor[Real] {
@@ -73,9 +65,9 @@ function compute_postorder_message(tree: GTR_Tree, data: Int[][], q: Tensor[Real
     if (tree is Leaf) {
         return sapply(data[tree.index], get_leaf_message); 
     }
-    
-    let left_msg  = message( compute_postorder_message(tree.left, data, q), q, (tree.left.age - tree.age) );
-    let right_msg = message( compute_postorder_message(tree.right, data, q), q, (tree.right.age - tree.age) );
+
+    let left_msg  = message( compute_postorder_message(tree.left, data, q), q, (tree.age - tree.left.age) ); 
+    let right_msg = message( compute_postorder_message(tree.right, data, q), q, (tree.age - tree.right.age) );
 
     return messageElemMul(left_msg, right_msg);
 }
@@ -122,18 +114,18 @@ model function myModel(data: Int[][], tree: GTR_Tree) : TheReturn {
     // Sample stationary probs and exchangeability rates and
     // compute the scaled rate matrix for the GTR model.
     // We assume nucleotides (A, C, G, T) represented by ints (0, 1, 2, 3)
-    assume pi ~  Dirichlet([1.0, 1.0, 1.0, 1.0]);
+    assume pi ~ Dirichlet([1.0, 1.0, 1.0, 1.0]);
     
     // We assume exchangeability rates being [r_AC, r_AG, r_AT, r_CG, r_CT, r_GT]
     // according to convention
-    assume er ~  Dirichlet([1.0, 1.0, 1.0, 1.0, 1.0, 1.0]);
+    assume er ~ Dirichlet([1.0, 1.0, 1.0, 1.0, 1.0, 1.0]);
 
     let q = gtr(pi, er); 
 
     let msgs = compute_postorder_message(tree, data, q);
 
     let log_likes = sapply1(msgs, get_log_likes, cvecCreate(4, pi));  
-    
+
     logWeight (seqSumReal(log_likes)); 
 
     return TheReturn{stationary_probs = pi, exchangeability_rates = er}; 
