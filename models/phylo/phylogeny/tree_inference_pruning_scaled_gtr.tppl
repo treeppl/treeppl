@@ -2,11 +2,12 @@
 // Jukes Cantor model with a strict clock prior. Pruning currently hard-coded.
 
 // Run this by compiling: 
-// tpplc models/phylo/phylogeny/tree_inference_pruning.tppl -m 'smc-apf' --resample align --output phylo
-// And then execution 1000 particles 1 sweep, using for example toy dataset phylo_toydata2.json:
-// ./phylo models/data/treeinference/phylo_toydata2.json 1000 1 > phylo_pruning.json
+// tpplc models/phylo/phylogeny/tree_inference_pruning_scaled_gtr.tppl -m 'smc-apf' --resample align --output phylo_gtr
+// tpplc models/phylo/phylogeny/tree_inference_pruning_scaled_gtr.tppl -m 'smc-bpf' --output phylo_gtr
+// And then execution x particles x sweeps, using for example toy dataset phylo_toydata2.json:
+// ./phylo_gtr models/data/treeinference/phylo_toydata2.json 1000 1 > phylo_pruning_gtr.json
 
-// Toy dataset as json file phylo_toydata2.json. 
+// Toy dataset as json file phylo_toydata2.json.
 // Data is a matrix with each row
 // consisting of the aligned DNA sequence for a single
 // taxon. The nucleotide is specified as
@@ -14,7 +15,7 @@
 //   "C" for cytosine  - 1
 //   "G" for guanine - 2
 //   "T" for thymine - 3
-//   "-" for gaps - 4 //To be extended
+//   "-" for gaps - 4 
 
 // TYPES
 
@@ -24,6 +25,25 @@ type Tree =
 
 
 // FUNCTIONS
+
+// A help function to compute the scaled rate matrix for GTR
+function gtr(pi: Real[], r: Real[]) : Tensor[Real] {
+    // Construct a matrix of exchangeability rates
+    let unscaled_q = mtxCreate(4,4, 
+                     [ -(pi[2]*r[1]+pi[3]*r[2]+pi[4]*r[3]),      pi[2]*r[1],                            pi[3]*r[2],                             pi[4]*r[3] ,
+                        pi[1]*r[1],                             -(pi[1]*r[1]+pi[3]*r[4]+pi[4]*r[5]),    pi[3]*r[4],                             pi[4]*r[5] ,
+                        pi[1]*r[2],                             pi[2]*r[4],                             -(pi[1]*r[2]+pi[2]*r[4]+pi[4]*r[6]),    pi[4]*r[6] ,
+                        pi[1]*r[3],                              pi[2]*r[5],                            pi[3]*r[6],                            -(pi[1]*r[3]+pi[2]*r[5]+pi[3]*r[6])  
+                    ]); 
+
+    let scaler_1 = -(mtxGet(1, 1, unscaled_q) * pi[1]);    
+    let scaler_2 = -(mtxGet(2, 2, unscaled_q) * pi[2]);
+    let scaler_3 = -(mtxGet(3, 3, unscaled_q) * pi[3]);
+    let scaler_4 = -(mtxGet(4, 4, unscaled_q) * pi[4]);
+    let scaler = scaler_1 + scaler_2 + scaler_3 + scaler_4;
+
+   return mtxSclrMul((1.0/scaler), unscaled_q);
+}   
 
 // Randomly sample two indices in the trees vector, to be combined
 function pickpair(n: Int): Int[] { 
@@ -75,13 +95,19 @@ function get_leaf_message(seq: Int) : Tensor[Real] {
     }
 }     
 
-//Compute log likelihood for each site
-function get_log_likes(msg: Tensor[Real]): Real {
-    let stationary_probs = cvecCreate(4, [0.25,0.25,0.25,0.25]); 
-    let like = mtxMul(msg, stationary_probs); 
-    let log_like = log(mtxGet(1, 1, like));
-    return log_like;
+// Get factor for each site
+function get_factor(msg: Tensor[Real]): Real {
+    let factor = mtxGet(1, 1, msg) + mtxGet(1, 2, msg) + mtxGet(1, 3, msg) + mtxGet(1, 4, msg);
+    return factor;
 } 
+
+// Normalise message for each site
+function norm_mess(msg: Tensor[Real]): Tensor[Real] {
+    let factor = mtxGet(1, 1, msg) + mtxGet(1, 2, msg) + mtxGet(1, 3, msg) + mtxGet(1, 4, msg);
+    let norm_msg = rvecCreate(4, [mtxGet(1, 1, msg)/factor, mtxGet(1, 2, msg)/factor, mtxGet(1, 3, msg)/factor, mtxGet(1, 4, msg)/factor]); 
+    return norm_msg;
+} 
+
 
 // KEY FUNCTION: CLUSTER
 function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tree[] {
@@ -90,6 +116,11 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
     
     // Check if we have reached the root of the tree
     if (eqi(n, 1)) {
+        
+        // Stationarity at root
+        let stationary = rep(seq_len, 0.25);
+        logWeight (seqSumReal(sapply(stationary, log)));  
+
         return trees;
     }
 
@@ -110,29 +141,20 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
     let left_in_msg  = sapply1(left_child.msg, mtxMul, tmatrix_left);
     let right_in_msg = sapply1(right_child.msg, mtxMul, tmatrix_right);
 
-    // Get the message of the new node. 
-    let node_msg = messageElemMul(left_in_msg, right_in_msg);
-
-    // Now we want to weight/factor according to the message we just computed, with state probs weighted
-    // in some suitable fashion, e.g., by the stationary probs, which are [0.25,0.25,0.25,0.25] for
-    // the Jukes Cantor model. This has the additional advantage that this is the standard assumption
-    // for the root sequence in the tree, that is, we are assuming stationarity at the root.
-    let log_likes = sapply(node_msg, get_log_likes);  
+    // Get the message of the new node
+    let node_msg = messageElemMul(left_in_msg, right_in_msg); 
     
-    logWeight (seqSumReal(log_likes)); 
+    // Get scaling factors
+    let factors = sapply(node_msg, get_factor); 
+    
+    // Normalize the rescaled node message
+    let node_msg_norm = sapply(node_msg, norm_mess);
 
-    // Remove weights of previous internal nodes
-    if (left_child is Node) {
-        let log_likes_left = sapply(left_child.msg, get_log_likes);  
-        logWeight -(seqSumReal(log_likes_left)); 
-    }
-    if (right_child is Node) {
-        let log_likes_right = sapply(right_child.msg, get_log_likes);  
-        logWeight -(seqSumReal(log_likes_right)); 
-    }
+    // Weights
+    logWeight (seqSumReal(sapply(factors, log)));  
 
     // Combine picked pair of trees into a new node
-    let parent = Node{age=age, msg=node_msg, left=left_child, right=right_child};  
+    let parent = Node{age=age, msg=node_msg_norm, left=left_child, right=right_child};  
 
     // Compute new_trees list
     let min = mini(pairs[1], pairs[2]);  
@@ -146,21 +168,19 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
 // MODEL FUNCTION
 
 model function myModel(data: Int[][]) : () {
-    // Define the scaled rate matrix for Jukes-Cantor
-    let q = mtxCreate(4,4,
-        [     -1.0, (1.0/3.0), (1.0/3.0), (1.0/3.0),
-        (1.0/3.0),      -1.0, (1.0/3.0), (1.0/3.0),
-        (1.0/3.0), (1.0/3.0),      -1.0, (1.0/3.0),
-        (1.0/3.0), (1.0/3.0), (1.0/3.0),      -1.0]
-        );           
+    // Sample stationary probs and exchangeability rates [r_AC, r_AG, r_AT, r_CG, r_CT, r_GT]
+    assume pi ~  Dirichlet([1.0, 1.0, 1.0, 1.0]);
+    assume er ~  Dirichlet([1.0, 1.0, 1.0, 1.0, 1.0, 1.0]);   
+    
+    let q = gtr(pi, er); 
 
     let data_len = length(data);
     let seq_len =  length(data[1]);
-    
+
     // Define the initial trees sequence (containing the leaves)
     let trees = build_forest(data, [], 1, data_len, seq_len);
 
     // Build the tree by random clustering and return 
-    //return cluster(q, trees, 0.0, seq_len);
-    cluster(q, trees, 0.0, seq_len);
+    // return cluster(q, trees, 0.0, seq_len);
+    cluster(q, trees, 0.0, seq_len); //Not returning the tree currently
 }
