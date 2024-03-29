@@ -1338,7 +1338,11 @@ let testOptions =  {
     printAcceptanceRate = false,
     pmcmcParticles = 2,
     seed = None (),
-    extractSimplification = "none"
+    extractSimplification = "none",
+    odeSolverMethod = "rk4",
+    stepSize = 1e-3,
+    subsample = false,
+    subsampleSize = 1
   } in
 
 -- test hello world
