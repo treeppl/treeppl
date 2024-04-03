@@ -88,7 +88,7 @@ lang ProjMatchTypeCheck = TypeCheck + ProjMatchAst + FunTypeAst + RecordTypeAst 
     let target = typeCheckExpr env x.target in
     match (use PullName in pullName) (tyTm target) with Some tyName then
       let constructorIsRelevant = lam pair.
-        match pair with (conName, conTy) in
+        match pair with (conName, (conLvl, conTy)) in
         match use PullNameFromConstructor in pullName conTy with Some conTyName then
           if nameEq conTyName tyName then
             match inst x.info env.currentLvl conTy with TyArrow arr in
@@ -488,6 +488,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
 
   sem compileTypeTppl =
   | TypeUsageTypeTppl x -> TyCon {
+      data = tyunknown_,
       ident = x.name.v,
       info = x.name.i
     }
@@ -697,6 +698,17 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
   sem compileExprTppl: TpplCompileContext -> ExprTppl -> Expr
 
   sem compileExprTppl (context: TpplCompileContext) =
+
+  | AnonFunExprTppl x ->
+    let args = if null x.args
+      then [(nameNoSym "", tyint_)]
+      else map (lam a. (a.name.v, compileTypeTppl a.ty)) x.args in
+    let body = foldr (lam f. lam e. f e)
+      (withInfo x.info unit_)
+      (map (compileStmtTppl context) x.stmts) in
+    let wrap = lam pair. lam body.
+      withInfo x.info (nlam_ pair.0 pair.1 body) in
+    foldr wrap body args
 
   | ProjectionExprTppl x ->
     TmProjMatch {
@@ -1337,7 +1349,11 @@ let testOptions =  {
     printAcceptanceRate = false,
     pmcmcParticles = 2,
     seed = None (),
-    extractSimplification = "none"
+    extractSimplification = "none",
+    odeSolverMethod = "rk4",
+    stepSize = 1e-3,
+    subsample = false,
+    subsampleSize = 1
   } in
 
 -- test hello world
