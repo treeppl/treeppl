@@ -39,15 +39,12 @@ function buildForest(data: Int[][], forest: SeqTree[], index: Int, dataLen: Int)
     }
 }
 
-// Randomly sample two indices in the trees vector, to be combined
-function pickpair(n: Int): Int[]
-{ 
-    assume i ~ Categorical(rep(n, 1./Real(n)));  
-    assume j ~ Categorical(rep(n, 1./Real(n)));  
-    if (eqi(j, i)) {
-        return pickpair(n); 
-    }
-    return [addi(i, 1), addi(j, 1)]; //adding 1 to avoid index 0
+// Randomly sample two indices in the trees vector, to be combined. Avoiding mirror cases. 
+function pickpair(n: Int): Int[] { 
+    assume i_1 ~ Categorical(rep(subi(n, 1), 1./Real(subi(n, 1))));  
+    let i = addi(i_1, 2); //Adding two, avoiding index zero for i and avoiding trouble picking j
+    assume j ~ Categorical(rep(subi(i, 1), 1./Real(subi(i, 1))));  // j is always smaller than i, avoiding mirror cases
+    return [i, addi(j, 1)]; //avoid index of zero for j
 }
 
 //Note: this is not optimal, in terms of repeated calculation of matrix exp
