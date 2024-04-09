@@ -1,11 +1,11 @@
 // TreePPL script for inference substitution
-// model parameters of the GTR + Gamma model for a fixed
+// model parameters of the GTR model for a fixed
 // tree. Here we use explicit belief propagation, which should
 // produce a state-of-the-art model with MCMC, using
 // suitable drift kernels, slice sampling, or with HMC.
 
 // Run this by compiling: 
-// tpplc models/phylo/phylogeny/substmodel_belief_propagation_noratevartppl.tppl -m 'smc-apf' --resample align --output substmodel
+// tpplc models/phylo/phylogeny/substmodel_belief_propagation.tppl -m 'smc-apf' --resample align --output substmodel
 // And then execution x particles x sweeps, using for example toy dataset phylo_toydata3.json:
 // ./substmodel models/data/treeinference/phylo_toydata3.json 10000 1 > substmodel_output.json
 
