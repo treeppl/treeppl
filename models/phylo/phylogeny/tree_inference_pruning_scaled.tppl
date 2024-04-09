@@ -80,7 +80,7 @@ function get_msg(msg: Msg_fac): Tensor[Real] {
     return msg.norm_msg;
 } 
 
-// Get factor for each site
+// Get log factor for each site
 function log_factor(msg: Msg_fac): Real {
     return log(msg.factor);
 } 
