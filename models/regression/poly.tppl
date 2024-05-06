@@ -1,0 +1,37 @@
+function calculatePolynomial(index: Int, coeff: Real[], x: Real):Real {
+    // TODO: Fix needing to cast index
+    if (int2real(index) >= int2real(length(coeff))) {
+        return 0.0;
+    } else {
+        //NOTE: Ambiguity errors recurse
+        //return coeff[index + 1] * x^n + calculatePolynomial(addi(index, 1), coeff, x);
+        //TODO: Fix needing to cast index
+        //return ( coeff[addi(index, 1)] * ( x^int2real(index)) ) + calculatePolynomial(addi(index, 1), coeff, x);
+        return ( coeff[addi(index, 1)] * ( x^ ( int2real(index) ) ) ) + calculatePolynomial(addi(index, 1), coeff, x);
+    }
+}
+
+function polynomialFunction(coeff: Real[], x: Real):Real {
+    return calculatePolynomial(0, coeff, x);
+}
+
+
+
+model function poly(data: Real[][]): Int {
+    assume n ~ Poisson(1.0); // sample the degree of the polynomial
+    let sigma = 1.0; // noise term
+
+    // Sample the coefficients from n + 1 (we need one coeff for const poly)
+    let coeffs = repApply(addi(n, 1), function() {
+        assume g ~ Gaussian(0.0, 1.0);
+        return g;
+    });
+
+    // likelihood
+    sapply(data, function(datum: Real[]) {
+        let predictedY = polynomialFunction(coeffs, datum[1]);
+        observe datum[2] ~ Gaussian(predictedY, sigma);
+    });
+    
+    return n;
+}

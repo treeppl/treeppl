@@ -121,6 +121,9 @@ let sbool2string = lam seq.
 -- remap make to rep to make it more R-like
 let rep = make
 
+-- WebPPL inspired
+let repApply = create
+
 -- Sequence normalization
 let seqNormalize = lam seq.
   let sum = foldl addf 0. seq in
