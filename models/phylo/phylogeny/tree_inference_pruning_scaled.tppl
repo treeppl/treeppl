@@ -2,7 +2,7 @@
 // Jukes Cantor model with a strict clock prior. Pruning currently hard-coded.
 
 // Run this by compiling: 
-// tpplc models/phylo/phylogeny/tree_inference_pruning_scaled_new.tppl -m 'smc-apf' --resample align --output phylo_scaled
+// tpplc models/phylo/phylogeny/tree_inference_pruning_scaled.tppl -m 'smc-apf' --resample align --output phylo_scaled
 // And then execution x particles x sweeps, using for example toy dataset phylo_toydata2.json:
 // ./phylo_scaled models/data/treeinference/phylo_toydata2.json 1000 1 > phylo_pruning_scaled.json
 // ./phylo_scaled models/data/treeinference/primates.json 10000 3 > phylo_pruning_scaled_primates.json
