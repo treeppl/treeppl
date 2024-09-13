@@ -1,12 +1,14 @@
 // TreePPL script for tree inference under the
-// Jukes Cantor model with a strict clock prior. Pruning currently hard-coded.
+// GTR model with a strict clock prior. Pruning currently hard-coded.
 
 // Run this by compiling: 
-// tpplc models/phylo/phylogeny/tree_inference_pruning_scaled_gtr.tppl -m 'smc-apf' --resample align --output phylo_gtr
-// And then execution x particles x sweeps, using for example toy dataset phylo_toydata2.json:
-// ./phylo_gtr models/data/treeinference/phylo_toydata2.json 1000 1 > phylo_pruning_gtr.json
+// tpplc models/phylo/phylogeny/tree_inference_pruning_gtr.tppl -m 'smc-apf' --resample align --output phylo_gtr
+// Or if subsampling is desired, where n is the number of samples in putput:
+// tpplc models/phylo/phylogeny/tree_inference_pruning_gtr.tppl -m 'smc-apf' --resample align --subsample -n 1 --output phylo_gtr
+// And then execution 1000 particles 1 sweep, using for example toy dataset phylo_toydata.json:
+// ./phylo_gtr models/data/treeinference/phylo_toydata.json 1000 1 > phylo_pruning_gtr.json
 
-// Toy dataset as json file phylo_toydata2.json.
+// Toy dataset as json file phylo_toydata.json. 
 // Data is a matrix with each row
 // consisting of the aligned DNA sequence for a single
 // taxon. The nucleotide is specified as
@@ -14,15 +16,14 @@
 //   "C" for cytosine  - 1
 //   "G" for guanine - 2
 //   "T" for thymine - 3
-//   "-" for gaps - 4 
+//   "-" for gaps - 4 //To be extended
 
 // TYPES
 
-type Tree =
+type MsgTree =
   | Leaf {age: Real, index: Int, msg: Tensor[Real][]}
-  | Node {age: Real, msg: Tensor[Real][], left: Tree, right: Tree}
+  | Node {age: Real, msg: Tensor[Real][], left: MsgTree, right: MsgTree}
 
-type Msg_fac = Msg_fac{norm_msg: Tensor[Real], factor: Real}
 
 // FUNCTIONS
 
@@ -54,7 +55,7 @@ function pickpair(n: Int): Int[] {
 }
 
 // Build forest of trees from leaves, recursively
-function build_forest(data: Int[][], forest: Tree[], index: Int, data_len: Int, seq_len: Int): Tree[] { 
+function build_forest(data: Int[][], forest: MsgTree[], index: Int, data_len: Int, seq_len: Int): MsgTree[] { 
     let new_message = sapply(data[index], get_leaf_message); 
     let new_leaf = Leaf{age = 0.0, index = index, msg =  new_message}; 
     let new_forest = join([forest, [new_leaf]]);
@@ -93,36 +94,21 @@ function get_leaf_message(seq: Int) : Tensor[Real] {
     }
 }     
 
-// Get msg for each site
-function get_msg(msg: Msg_fac): Tensor[Real] {
-    return msg.norm_msg;
+//Compute log likelihood for each site
+function get_log_likes(msg: Tensor[Real], pi: Real[]): Real {
+    let stationary_probs = cvecCreate(4, pi); 
+    let like = mtxMul(msg, stationary_probs); 
+    let log_like = log(mtxGet(1, 1, like));
+    return log_like;
 } 
-
-// Get log factor for each site
-function log_factor(msg: Msg_fac): Real {
-    return log(msg.factor);
-} 
-
-// Normalise message for each site
-function norm_mess(msg: Tensor[Real]): Msg_fac {
-    let factor = mtxGet(1, 1, msg) + mtxGet(1, 2, msg) + mtxGet(1, 3, msg) + mtxGet(1, 4, msg);
-    let norm_msg = rvecCreate(4, [mtxGet(1, 1, msg)/factor, mtxGet(1, 2, msg)/factor, mtxGet(1, 3, msg)/factor, mtxGet(1, 4, msg)/factor]); 
-    return Msg_fac{norm_msg = norm_msg, factor = factor};
-} 
-
 
 // KEY FUNCTION: CLUSTER
-function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tree[] {
+function cluster(q: Tensor[Real], trees: MsgTree[], maxAge: Real, seq_len: Int, pi: Real[]): MsgTree[] {
     
     let n = length(trees);
     
     // Check if we have reached the root of the tree
     if (eqi(n, 1)) {
-        
-        // Stationarity at root
-        let stationary = rep(seq_len, 0.25);
-        logWeight (seqSumReal(sapply(stationary, log)));  
-
         return trees;
     }
 
@@ -143,45 +129,50 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
     let left_in_msg  = sapply1(left_child.msg, mtxMul, tmatrix_left);
     let right_in_msg = sapply1(right_child.msg, mtxMul, tmatrix_right);
 
-    // Get the message of the new node
-    let node_msg = messageElemMul(left_in_msg, right_in_msg); 
-    
-    // Normalize the rescaled node message
-    let node_msg_fac = sapply(node_msg, norm_mess); 
+    // Get the message of the new node. 
+    let node_msg = messageElemMul(left_in_msg, right_in_msg);
 
     // Weights
-    logWeight (seqSumReal(sapply(node_msg_fac, log_factor)));  
+    let log_likes = sapply1(node_msg, get_log_likes, pi);  
+    logWeight (seqSumReal(log_likes)); 
 
-    let node_msg_norm = sapply(node_msg_fac, get_msg);  
+    // Remove weights of previous internal nodes
+    if (left_child is Node) {
+        let log_likes_left = sapply1(left_child.msg, get_log_likes, pi);  
+        logWeight -(seqSumReal(log_likes_left)); 
+    }
+    if (right_child is Node) {
+        let log_likes_right = sapply1(right_child.msg, get_log_likes, pi);  
+        logWeight -(seqSumReal(log_likes_right)); 
+    }
 
     // Combine picked pair of trees into a new node
-    let parent = Node{age=age, msg=node_msg_norm, left=left_child, right=right_child};  
+    let parent = Node{age=age, msg=node_msg, left=left_child, right=right_child};  
 
     // Compute new_trees list
-    let min = mini(pairs[1], pairs[2]);  
-    let max = maxi(pairs[1], pairs[2]); 
+    let min = pairs[2];  
+    let max = pairs[1];  
     let new_trees = join([slice(trees, 1, min), slice(trees, addi(min, 1), max), slice(trees, addi(max, 1), addi(n, 1)), [parent]]);
 
     // Recursive call to cluster for new_trees
-    return cluster(q, new_trees, age, seq_len);
+    return cluster(q, new_trees, age, seq_len, pi);
 }
 
 // MODEL FUNCTION
 
-model function myModel(data: Int[][]) : () {
+model function myModel(data: Int[][]) : MsgTree[] {
     // Sample stationary probs and exchangeability rates [r_AC, r_AG, r_AT, r_CG, r_CT, r_GT]
-    assume pi ~  Dirichlet([1.0, 1.0, 1.0, 1.0]);
+    assume pi ~ Dirichlet([1.0, 1.0, 1.0, 1.0]);
     assume er ~  Dirichlet([1.0, 1.0, 1.0, 1.0, 1.0, 1.0]);   
     
-    let q = gtr(pi, er); 
+    let q = gtr(pi, er);     
 
     let data_len = length(data);
     let seq_len =  length(data[1]);
-
+    
     // Define the initial trees sequence (containing the leaves)
     let trees = build_forest(data, [], 1, data_len, seq_len);
 
     // Build the tree by random clustering and return 
-    // return cluster(q, trees, 0.0, seq_len);
-    cluster(q, trees, 0.0, seq_len); //Not returning the tree currently
+    return cluster(q, trees, 0.0, seq_len, pi);
 }

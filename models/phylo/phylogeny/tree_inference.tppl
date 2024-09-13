@@ -5,10 +5,12 @@
 
 // Run this by compiling: 
 // tpplc models/phylo/phylogeny/tree_inference.tppl -m 'smc-apf' --resample align --output basic_phylo
-// And then execution 10000 particles 1 sweep, using for example toy dataset phylo_toydata2.json.json:
-// ./basic_phylo models/data/treeinference/phylo_toydata2.json 10000 1 > basic_phylo.json
+// Or if subsampling is desired, where n is the number of samples in putput:
+// tpplc models/phylo/phylogeny/tree_inference.tppl -m 'smc-apf' --resample align --subsample -n 1 --output basic_phylo
+// And then execution 10000 particles 1 sweep, using for example toy dataset phylo_toydata.json.json:
+// ./basic_phylo models/data/treeinference/phylo_toydata.json 10000 1 > basic_phylo.json
 
-// Toy dataset as json file phylo_toydata2.json. Integers. 
+// Toy dataset as json file phylo_toydata.json. Integers. 
 // Data is a matrix, with each row
 // consisting of the aligned DNA sequence for a single
 // taxon. The nucleotide is specified as
@@ -95,8 +97,8 @@ function cluster(q: Tensor[Real], trees: SeqTree[], maxAge: Real, seqLen: Int): 
     let parent = Node{age=age, seq=seq, left=leftChild, right=rightChild};  
 
     // Compute new_trees list
-    let min = mini(pairs[1], pairs[2]);  
-    let max = maxi(pairs[1], pairs[2]); 
+    let min = pairs[2];  
+    let max = pairs[1]; 
     let new_trees = join([slice(trees, 1, min), slice(trees, addi(min, 1), max), slice(trees, addi(max, 1), addi(n, 1)), [parent]]);
 
     // Recursive call to cluster for new_trees

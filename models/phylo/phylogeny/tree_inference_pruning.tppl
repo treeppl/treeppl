@@ -3,8 +3,10 @@
 
 // Run this by compiling: 
 // tpplc models/phylo/phylogeny/tree_inference_pruning.tppl -m 'smc-apf' --resample align --output phylo
-// And then execution 1000 particles 1 sweep, using for example toy dataset phylo_toydata2.json:
-// ./phylo models/data/treeinference/phylo_toydata2.json 1000 1 > phylo_pruning.json
+// Or if subsampling is desired, where n is the number of samples in putput:
+// tpplc models/phylo/phylogeny/tree_inference_pruning.tppl -m 'smc-apf' --resample align --subsample -n 1 --output phylo
+// And then execution 1000 particles 1 sweep, using for example toy dataset phylo_toydata.json:
+// ./phylo models/data/treeinference/phylo_toydata.json 10000 1 > phylo_pruning.json
 
 // Toy dataset as json file phylo_toydata2.json. 
 // Data is a matrix with each row
@@ -18,9 +20,9 @@
 
 // TYPES
 
-type Tree =
+type MsgTree =
   | Leaf {age: Real, index: Int, msg: Tensor[Real][]}
-  | Node {age: Real, msg: Tensor[Real][], left: Tree, right: Tree}
+  | Node {age: Real, msg: Tensor[Real][], left: MsgTree, right: MsgTree}
 
 
 // FUNCTIONS
@@ -34,7 +36,7 @@ function pickpair(n: Int): Int[] {
 }
 
 // Build forest of trees from leaves, recursively
-function build_forest(data: Int[][], forest: Tree[], index: Int, data_len: Int, seq_len: Int): Tree[] { 
+function build_forest(data: Int[][], forest: MsgTree[], index: Int, data_len: Int, seq_len: Int): MsgTree[] { 
     let new_message = sapply(data[index], get_leaf_message); 
     let new_leaf = Leaf{age = 0.0, index = index, msg =  new_message}; 
     let new_forest = join([forest, [new_leaf]]);
@@ -82,7 +84,7 @@ function get_log_likes(msg: Tensor[Real]): Real {
 } 
 
 // KEY FUNCTION: CLUSTER
-function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tree[] {
+function cluster(q: Tensor[Real], trees: MsgTree[], maxAge: Real, seq_len: Int): MsgTree[] {
     
     let n = length(trees);
     
@@ -111,12 +113,8 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
     // Get the message of the new node. 
     let node_msg = messageElemMul(left_in_msg, right_in_msg);
 
-    // Now we want to weight/factor according to the message we just computed, with state probs weighted
-    // in some suitable fashion, e.g., by the stationary probs, which are [0.25,0.25,0.25,0.25] for
-    // the Jukes Cantor model. This has the additional advantage that this is the standard assumption
-    // for the root sequence in the tree, that is, we are assuming stationarity at the root.
+    // Weights
     let log_likes = sapply(node_msg, get_log_likes);  
-    
     logWeight (seqSumReal(log_likes)); 
 
     // Remove weights of previous internal nodes
@@ -133,8 +131,8 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
     let parent = Node{age=age, msg=node_msg, left=left_child, right=right_child};  
 
     // Compute new_trees list
-    let min = mini(pairs[1], pairs[2]);  
-    let max = maxi(pairs[1], pairs[2]); 
+    let min = pairs[2];  
+    let max = pairs[1];  
     let new_trees = join([slice(trees, 1, min), slice(trees, addi(min, 1), max), slice(trees, addi(max, 1), addi(n, 1)), [parent]]);
 
     // Recursive call to cluster for new_trees
@@ -143,7 +141,7 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
 
 // MODEL FUNCTION
 
-model function myModel(data: Int[][]) : () {
+model function myModel(data: Int[][]) : MsgTree[] {
     // Define the scaled rate matrix for Jukes-Cantor
     let q = mtxCreate(4,4,
         [     -1.0, (1.0/3.0), (1.0/3.0), (1.0/3.0),
@@ -159,6 +157,5 @@ model function myModel(data: Int[][]) : () {
     let trees = build_forest(data, [], 1, data_len, seq_len);
 
     // Build the tree by random clustering and return 
-    //return cluster(q, trees, 0.0, seq_len);
-    cluster(q, trees, 0.0, seq_len);
+    return cluster(q, trees, 0.0, seq_len);
 }
