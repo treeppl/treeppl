@@ -19,21 +19,22 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          repository: 'miking-lang/miking'
+          repository: 'vsenderov/miking'
           ref: 'develop'
           path: 'miking'
           # Clones the Miking repository's develop branch into 'miking' directory
+
+      - uses: actions/checkout@v3
+        with:
+          repository: 'vsenderov/miking-dppl'
+          ref: 'master'
+          path: 'miking-dppl'
+          # Clones the Miking DPPL repository's develop branch into 'miking-dppl' directory
 
       - name: Setup OCaml and OPAM for Miking
         uses: ocaml/setup-ocaml@v2
         with:
           ocaml-compiler: ocaml-base-compiler.5.0.0
-
-      - name: Install Java
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'temurin'
-          java-version: '17'
 
       - name: Cache opam packages
         uses: actions/cache@v3
