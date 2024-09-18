@@ -5,7 +5,7 @@
 // tpplc models/phylo/phylogeny/tree_inference_pruning.tppl -m 'smc-apf' --resample align --output phylo
 // Or if subsampling is desired, where n is the number of samples in putput:
 // tpplc models/phylo/phylogeny/tree_inference_pruning.tppl -m 'smc-apf' --resample align --subsample -n 1 --output phylo
-// And then execution 1000 particles 1 sweep, using for example toy dataset phylo_toydata.json:
+// And then execution 10000 particles 1 sweep, using for example toy dataset phylo_toydata.json:
 // ./phylo models/data/treeinference/phylo_toydata.json 10000 1 > phylo_pruning.json
 
 // Toy dataset as json file phylo_toydata2.json. 
