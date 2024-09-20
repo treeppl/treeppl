@@ -15,20 +15,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: 'treeppl/treeppl'
           path: 'treeppl'
           # Clones the TreePPL repository into 'treeppl' directory
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: 'vsenderov/miking'
           ref: 'develop'
           path: 'miking'
           # Clones the Miking repository's develop branch into 'miking' directory
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: 'vsenderov/miking-dppl'
           ref: 'master'
@@ -40,11 +40,15 @@ jobs:
         with:
           ocaml-compiler: ocaml-base-compiler.5.0.0
 
-      - name: Cache opam packages
-        uses: actions/cache@v3
-        with:
-          path: ~/.opam
-          key: ${{ runner.os }}-opam-${{ hashFiles('**/opam') }}
+      # skipping Java
+
+      - name: Install opam packages
+        run: |
+          # Install dependencies of owl
+          sudo apt-get install -y liblapacke-dev libopenblas-dev
+
+          # Install all opam packages used in make test-all
+          opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.24.1
 
       - name: Install system dependencies for Miking
         run: |
@@ -67,6 +71,11 @@ jobs:
           # Extend MCORE_LIBS with the coreppl path
           echo "MCORE_LIBS=${MCORE_LIBS}:coreppl=${{ github.workspace }}/miking-dppl/coreppl" >> $GITHUB_ENV
           echo "PATH=$PATH:${{ github.workspace }}/miking-dppl/.local/bin" >> $GITHUB_ENV  
+
+      - name: Check env vars
+        run: |
+          echo "MCORE_LIBS: $MCORE_LIBS"
+          echo "PATH: $PATH"
 
       - name: Build TreePPL
         run: |
