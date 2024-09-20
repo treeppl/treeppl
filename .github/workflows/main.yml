@@ -61,7 +61,8 @@ jobs:
           cd miking
           eval $(opam env)
           make install
-          echo "MCORE_LIBS=stdlib=${{ github.workspace }}/miking/stdlib" >> $GITHUB_ENV
+          # echo "MCORE_LIBS=stdlib=${{ github.workspace }}/miking/stdlib" >> $GITHUB_ENV
+          echo "MCORE_LIBS=stdlib=${HOME}/miking/stdlib" >> $GITHUB_ENV
 
       - name: Build and Install Miking-DPPL
         run: |
@@ -69,8 +70,10 @@ jobs:
           eval $(opam env)
           make install
           # Extend MCORE_LIBS with the coreppl path
-          echo "MCORE_LIBS=${MCORE_LIBS}:coreppl=${{ github.workspace }}/miking-dppl/coreppl" >> $GITHUB_ENV
-          echo "PATH=$PATH:${{ github.workspace }}/miking-dppl/.local/bin" >> $GITHUB_ENV  
+          #echo "MCORE_LIBS=${MCORE_LIBS}:coreppl=${{ github.workspace }}/miking-dppl/coreppl" >> $GITHUB_ENV
+          #echo "PATH=$PATH:${{ github.workspace }}/miking-dppl/.local/bin" >> $GITHUB_ENV  
+          echo "MCORE_LIBS=${MCORE_LIBS}:coreppl=${HOME}/miking-dppl/coreppl" >> $GITHUB_ENV
+          echo "PATH=$PATH:${HOME}/miking-dppl/.local/bin" >> $GITHUB_ENV  
 
       - name: Check env vars
         run: |
