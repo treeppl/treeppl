@@ -17,9 +17,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: 'treeppl/treeppl'
+          repository: ${{ github.repository }}  # This uses the repo that triggered the workflow
+          ref: ${{ github.ref }}  # This uses the branch/tag that triggered the workflow
           path: 'treeppl'
-          # Clones the TreePPL repository into 'treeppl' directory
 
       - uses: actions/checkout@v4
         with:
