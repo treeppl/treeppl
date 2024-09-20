@@ -71,9 +71,8 @@ jobs:
           echo `pwd`
           make install
           # Extend MCORE_LIBS with the coreppl path
-          echo "MCORE_LIBS=${MCORE_LIBS}:coreppl=${{ github.workspace }}/miking-dppl/coreppl" >> $GITHUB_ENV
+          echo "MCORE_LIBS=${MCORE_LIBS}:coreppl=${{ github.workspace }}/miking-dppl/coreppl/src" >> $GITHUB_ENV
           echo "PATH=$PATH:${HOME}/.local/bin" >> $GITHUB_ENV
-          ls -R
 
       - name: Check env vars
         run: |
