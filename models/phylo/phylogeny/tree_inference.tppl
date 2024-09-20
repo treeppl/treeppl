@@ -5,10 +5,12 @@
 
 // Run this by compiling: 
 // tpplc models/phylo/phylogeny/tree_inference.tppl -m 'smc-apf' --resample align --output basic_phylo
-// And then execution 10000 particles 1 sweep, using for example toy dataset phylo_toydata2_Ints.json.json:
-// ./basic_phylo models/data/treeinference/phylo_toydata2_Ints.json 10000 1 > basic_phylo.json
+// Or if subsampling is desired, where n is the number of samples in putput:
+// tpplc models/phylo/phylogeny/tree_inference.tppl -m 'smc-apf' --resample align --subsample -n 1 --output basic_phylo
+// And then execution 10000 particles 1 sweep, using for example toy dataset phylo_toydata.json.json:
+// ./basic_phylo models/data/treeinference/phylo_toydata.json 10000 1 > basic_phylo.json
 
-// Toy dataset as json file phylo_toydata2_Ints.json. Integers. 
+// Toy dataset as json file phylo_toydata.json. Integers. 
 // Data is a matrix, with each row
 // consisting of the aligned DNA sequence for a single
 // taxon. The nucleotide is specified as
@@ -16,6 +18,7 @@
 //   "C" for cytosine 1
 //   "G" for guanine 2
 //   "T" for thymine 3
+//   "-" currently not handled in this model
 
 // TYPES
 
@@ -38,15 +41,12 @@ function buildForest(data: Int[][], forest: SeqTree[], index: Int, dataLen: Int)
     }
 }
 
-// Randomly sample two indices in the trees vector, to be combined
-function pickpair(n: Int): Int[]
-{ 
-    assume i ~ Categorical(rep(n, 1./Real(n)));  
-    assume j ~ Categorical(rep(n, 1./Real(n)));  
-    if (eqi(j, i)) {
-        return pickpair(n); 
-    }
-    return [addi(i, 1), addi(j, 1)]; //adding 1 to avoid index 0
+// Randomly sample two indices in the trees vector, to be combined. Avoiding mirror cases. 
+function pickpair(n: Int): Int[] { 
+    assume i_1 ~ Categorical(rep(subi(n, 1), 1./Real(subi(n, 1))));  
+    let i = addi(i_1, 2); //Adding two, avoiding index zero for i and avoiding trouble picking j
+    assume j ~ Categorical(rep(subi(i, 1), 1./Real(subi(i, 1))));  // j is always smaller than i, avoiding mirror cases
+    return [i, addi(j, 1)]; //avoid index of zero for j
 }
 
 //Note: this is not optimal, in terms of repeated calculation of matrix exp
@@ -97,8 +97,8 @@ function cluster(q: Tensor[Real], trees: SeqTree[], maxAge: Real, seqLen: Int): 
     let parent = Node{age=age, seq=seq, left=leftChild, right=rightChild};  
 
     // Compute new_trees list
-    let min = mini(pairs[1], pairs[2]);  
-    let max = maxi(pairs[1], pairs[2]); 
+    let min = pairs[2];  
+    let max = pairs[1]; 
     let new_trees = join([slice(trees, 1, min), slice(trees, addi(min, 1), max), slice(trees, addi(max, 1), addi(n, 1)), [parent]]);
 
     // Recursive call to cluster for new_trees

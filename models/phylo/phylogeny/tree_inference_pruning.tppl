@@ -3,8 +3,10 @@
 
 // Run this by compiling: 
 // tpplc models/phylo/phylogeny/tree_inference_pruning.tppl -m 'smc-apf' --resample align --output phylo
-// And then execution 10000 particles 1 sweep, using for example toy dataset phylo_toydata2.json:
-// ./phylo models/data/treeinference/phylo_toydata2.json 10000 1 > phylo_pruning.json
+// Or if subsampling is desired, where n is the number of samples in putput:
+// tpplc models/phylo/phylogeny/tree_inference_pruning.tppl -m 'smc-apf' --resample align --subsample -n 1 --output phylo
+// And then execution 10000 particles 1 sweep, using for example toy dataset phylo_toydata.json:
+// ./phylo models/data/treeinference/phylo_toydata.json 10000 1 > phylo_pruning.json
 
 // Toy dataset as json file phylo_toydata2.json. 
 // Data is a matrix with each row
@@ -14,28 +16,27 @@
 //   "C" for cytosine  - 1
 //   "G" for guanine - 2
 //   "T" for thymine - 3
+//   "-" for gaps - 4 //To be extended
 
 // TYPES
 
-type Tree =
+type MsgTree =
   | Leaf {age: Real, index: Int, msg: Tensor[Real][]}
-  | Node {age: Real, msg: Tensor[Real][], left: Tree, right: Tree}
+  | Node {age: Real, msg: Tensor[Real][], left: MsgTree, right: MsgTree}
 
 
 // FUNCTIONS
 
-// Randomly sample two indices in the trees vector, to be combined
+// Randomly sample two indices in the trees vector, to be combined. Avoiding mirror cases. 
 function pickpair(n: Int): Int[] { 
-    assume i ~ Categorical(rep(n, 1./Real(n)));  
-    assume j ~ Categorical(rep(n, 1./Real(n)));  
-    if (eqi(j, i)) { 
-        return pickpair(n); 
-    }
-    return [addi(i, 1), addi(j, 1)]; //adding 1 to avoid index 0
+    assume i_1 ~ Categorical(rep(subi(n, 1), 1./Real(subi(n, 1))));  
+    let i = addi(i_1, 2); //Adding two, avoiding index zero for i and avoiding trouble picking j
+    assume j ~ Categorical(rep(subi(i, 1), 1./Real(subi(i, 1))));  // j is always smaller than i, avoiding mirror cases
+    return [i, addi(j, 1)]; //avoid index of zero for j
 }
 
 // Build forest of trees from leaves, recursively
-function build_forest(data: Int[][], forest: Tree[], index: Int, data_len: Int, seq_len: Int): Tree[] { 
+function build_forest(data: Int[][], forest: MsgTree[], index: Int, data_len: Int, seq_len: Int): MsgTree[] { 
     let new_message = sapply(data[index], get_leaf_message); 
     let new_leaf = Leaf{age = 0.0, index = index, msg =  new_message}; 
     let new_forest = join([forest, [new_leaf]]);
@@ -65,6 +66,10 @@ function get_leaf_message(seq: Int) : Tensor[Real] {
         let message = rvecCreate(4, [0.0, 0.0, 0.0, 1.0]);
         return message;
     } 
+    if (eqi(seq, 4)) {  // "-"
+        let message = rvecCreate(4, [1.0, 1.0, 1.0, 1.0]);
+        return message;
+    } 
     else {
         return error("Invalid state at leaf");
     }
@@ -79,7 +84,7 @@ function get_log_likes(msg: Tensor[Real]): Real {
 } 
 
 // KEY FUNCTION: CLUSTER
-function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tree[] {
+function cluster(q: Tensor[Real], trees: MsgTree[], maxAge: Real, seq_len: Int): MsgTree[] {
     
     let n = length(trees);
     
@@ -108,12 +113,8 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
     // Get the message of the new node. 
     let node_msg = messageElemMul(left_in_msg, right_in_msg);
 
-    // Now we want to weight/factor according to the message we just computed, with state probs weighted
-    // in some suitable fashion, e.g., by the stationary probs, which are [0.25,0.25,0.25,0.25] for
-    // the Jukes Cantor model. This has the additional advantage that this is the standard assumption
-    // for the root sequence in the tree, that is, we are assuming stationarity at the root.
+    // Weights
     let log_likes = sapply(node_msg, get_log_likes);  
-    
     logWeight (seqSumReal(log_likes)); 
 
     // Remove weights of previous internal nodes
@@ -130,8 +131,8 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
     let parent = Node{age=age, msg=node_msg, left=left_child, right=right_child};  
 
     // Compute new_trees list
-    let min = mini(pairs[1], pairs[2]);  
-    let max = maxi(pairs[1], pairs[2]); 
+    let min = pairs[2];  
+    let max = pairs[1];  
     let new_trees = join([slice(trees, 1, min), slice(trees, addi(min, 1), max), slice(trees, addi(max, 1), addi(n, 1)), [parent]]);
 
     // Recursive call to cluster for new_trees
@@ -140,7 +141,7 @@ function cluster(q: Tensor[Real], trees: Tree[], maxAge: Real, seq_len: Int): Tr
 
 // MODEL FUNCTION
 
-model function myModel(data: Int[][]) : Tree[] {
+model function myModel(data: Int[][]) : MsgTree[] {
     // Define the scaled rate matrix for Jukes-Cantor
     let q = mtxCreate(4,4,
         [     -1.0, (1.0/3.0), (1.0/3.0), (1.0/3.0),
