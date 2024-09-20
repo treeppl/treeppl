@@ -1339,7 +1339,6 @@ let testOptions =  {
     skipFinal = false,
     outputMc = false,
     output = sysTempFileMake (), -- absolute path
-    transform = false,
     printSamples = true,
     stackSize = 10000,
     cps = "partial",
@@ -1353,7 +1352,9 @@ let testOptions =  {
     odeSolverMethod = "rk4",
     stepSize = 1e-3,
     subsample = false,
-    subsampleSize = 1
+    subsampleSize = 1,
+    staticDelay = false,
+    prune = false
   } in
 
 -- test hello world

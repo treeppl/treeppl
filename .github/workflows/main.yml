@@ -1,0 +1,92 @@
+name: TreePPL CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - '**'
+    types: [opened, reopened, synchronize]
+  push:
+    branches:
+      - '**'
+
+jobs:
+  build-and-test-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}  # This uses the repo that triggered the workflow
+          ref: ${{ github.ref }}  # This uses the branch/tag that triggered the workflow
+          path: 'treeppl'
+
+      - uses: actions/checkout@v4
+        with:
+          repository: 'vsenderov/miking'
+          ref: 'develop'
+          path: 'miking'
+          # Clones the Miking repository's develop branch into 'miking' directory
+
+      - uses: actions/checkout@v4
+        with:
+          repository: 'vsenderov/miking-dppl'
+          ref: 'master'
+          path: 'miking-dppl'
+          # Clones the Miking DPPL repository's develop branch into 'miking-dppl' directory
+
+      - name: Setup OCaml and OPAM for Miking
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: ocaml-base-compiler.5.0.0
+
+      # skipping Java
+
+      - name: Install opam packages
+        run: |
+          # Install dependencies of owl
+          sudo apt-get install -y liblapacke-dev libopenblas-dev
+
+          # Install all opam packages used in make test-all
+          opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.24.1
+
+      - name: Install system dependencies for Miking
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y liblapacke-dev libopenblas-dev
+          # Adds system dependencies required by Miking
+
+      - name: Build and Install Miking
+        run: |
+          cd miking
+          eval $(opam env)
+          echo `pwd`
+          make install
+          echo "MCORE_LIBS=stdlib=${{ github.workspace }}/miking/stdlib" >> $GITHUB_ENV
+
+      - name: Build and Install Miking-DPPL
+        run: |
+          cd miking-dppl
+          eval $(opam env)
+          echo `pwd`
+          make install
+          # Extend MCORE_LIBS with the coreppl path
+          echo "MCORE_LIBS=${MCORE_LIBS}:coreppl=${{ github.workspace }}/miking-dppl/coreppl/src" >> $GITHUB_ENV
+          echo "PATH=$PATH:${HOME}/.local/bin" >> $GITHUB_ENV
+
+      - name: Check env vars
+        run: |
+          echo "MCORE_LIBS: $MCORE_LIBS"
+          echo "PATH: $PATH"
+
+      - name: Build TreePPL
+        run: |
+          cd treeppl
+          make install
+
+      - name: Run TreePPL tests
+        run: |
+          cd treeppl
+          make test
+
+  # Assuming similar setup is needed for macOS, replicate the steps with necessary adjustments for macOS environment
