@@ -51,6 +51,7 @@ match result with ParseOK r in
   else
     match r.strings with [filename] in
     compileTpplToExecutable filename options
+else argPrintError result
     
     -- let outName = sysTempFileMake () in
     -- writeFile outName (use MExpr in concat "mexpr\n" (mexprPPLToString prog));
