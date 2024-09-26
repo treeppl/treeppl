@@ -135,7 +135,7 @@ prod Sequence: ExprTppl = "[" (values:ExprTppl ("," values:ExprTppl)*)? "]"
 
 
 -- infix left Addition: Expr = "+"
-prod left Add: ExprTppl = left:ExprTppl "+" right:ExprTppl
+prod left Add: ExprTppl = left:ExprTppl op:"+" right:ExprTppl
 -- infix Multiplication: Expr = "*"
 prod left Mul: ExprTppl = left:ExprTppl "*" right:ExprTppl
 -- inflix Subtraction: Expr = "-"
@@ -156,7 +156,7 @@ prod left Less: ExprTppl = left:ExprTppl "<" right:ExprTppl
 prod left Greater: ExprTppl = left:ExprTppl ">" right:ExprTppl
 prod left LessEq: ExprTppl = left:ExprTppl "<=" right:ExprTppl
 prod left GreaterEq: ExprTppl = left:ExprTppl ">=" right:ExprTppl
-prod left Equal: ExprTppl = left:ExprTppl "==" right:ExprTppl -- currently implemented as floats which doesn't make much sense
+prod left Equal: ExprTppl = left:ExprTppl op:"==" right:ExprTppl -- currently implemented as floats which doesn't make much sense
 prod left Unequal: ExprTppl = left:ExprTppl "!=" right:ExprTppl
 -- Boolean operators
 infix left And: ExprTppl = "&&"
