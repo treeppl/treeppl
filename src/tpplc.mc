@@ -42,7 +42,7 @@ use CPPLLang in
 
 -- Use the arg.mc library to parse arguments
 let result = argParse default config in
-match result with ParseOK r in
+match result with ParseOK r then
   let options: Options = r.options in
   -- Print menu if not exactly one file argument
   if neqi (length r.strings) 1 then
