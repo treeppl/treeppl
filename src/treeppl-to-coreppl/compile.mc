@@ -1354,6 +1354,7 @@ let testOptions =  {
     subsample = false,
     subsampleSize = 1,
     staticDelay = false,
+    dynamicDelay = false,
     prune = false,
     driftKernel = false,
     driftScale = 0.1
