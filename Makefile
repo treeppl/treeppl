@@ -18,6 +18,7 @@ src/treeppl-ast.mc: src/treeppl.syn
 
 install: build/${tppl_name}
 	echo "Make sure you extend the MCORE_LIBS variable with"
+	mkdir -p ${bin_path} `dirname ${src_path}`
 	cp build/${tppl_name} ${bin_path}/${tppl_name}
 	chmod +x ${bin_path}/${tppl_name}
 	cp -rf $(tppl_src) $(src_path)
