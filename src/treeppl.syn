@@ -69,7 +69,9 @@ start FileTppl
 /-
 A TreePPL file consists of one more declarations.
 -/
-prod DeclSequence: FileTppl = decl:DeclTppl+
+prod DeclSequence: FileTppl =
+  ("import" imports:String)*
+  decls:DeclTppl+
 
 /-
 Type usage
@@ -83,11 +85,11 @@ prod TypeUsage: TypeTppl = name:UName
 prod TypeSequence: TypeTppl = ty:TypeTppl "[" "]"
 
 -- NOTE(vsenderov, 2023-09-15) all other syntaxes are inadmissible by current parser
-prod Tensor: TypeTppl = "Tensor" "[" ty:TypeTppl "]" 
+prod Tensor: TypeTppl = "Tensor" "[" ty:TypeTppl "]"
 
 --- Real[] -- sequence
 --- Real[ _ ] -- one dim tensor
---prod Tensor: TypeTppl = ty:TypeTppl "("  ")" 
+--prod Tensor: TypeTppl = ty:TypeTppl "("  ")"
 
 prod AtomicReal: TypeTppl = "Real"
 prod AtomicBool: TypeTppl = "Bool"
@@ -173,10 +175,10 @@ prod ConvIntToReal: ExprTppl = "Real" "(" val:ExprTppl ")"
 prod left MatrixMul: ExprTppl = left:ExprTppl "*@" right:ExprTppl -- owl standard
 
 -- addition should be just + in the owl standard
-prod left MatrixAdd: ExprTppl = left:ExprTppl "+@" right:ExprTppl 
+prod left MatrixAdd: ExprTppl = left:ExprTppl "+@" right:ExprTppl
 
 prod left MatrixLeftScalarMul: ExprTppl = left:ExprTppl "$*" right:ExprTppl  -- owl standard (I think)
-prod left MatrixRightScalarMul: ExprTppl = left:ExprTppl "*$" right:ExprTppl  -- 
+prod left MatrixRightScalarMul: ExprTppl = left:ExprTppl "*$" right:ExprTppl  --
 
 prod left MatrixPower: ExprTppl = left:ExprTppl "^$" right:ExprTppl -- imagined but analogous to *$
 

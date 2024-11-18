@@ -21,6 +21,10 @@ let neqi = lam x. neqi x
 let geqi = lam x. geqi x
 let gti = lam x. gti x
 
+let log = lam x. log x
+let exp = lam x. exp x
+let sqrt = lam x. sqrt x
+
 let slice = lam seq. lam beg. lam mend.
     subsequence seq (subi beg 1) (subi mend beg)
 
@@ -48,6 +52,8 @@ let print = lam s.
 let printLn = lam s.
   printError (join [s, "\n"]);
   flushStderr ()
+
+let int2string = lam x. int2string x
 
 let real2string = lam x. float2string x
 
@@ -184,7 +190,7 @@ let mtxCreate = lam row. lam col. lam seq.
 
 let mtxCreateId = lam dim.
   let isDiagonal = lam idx. eqi (divi idx dim) (modi idx dim) in
-  let seq = map (lam idx. if isDiagonal idx then 1.0 else 0.0) (iteratorToSeq (iteratorRange 0 (subi (muli dim dim) 1))) in
+  let seq = create (muli dim dim) (lam idx. if isDiagonal idx then 1.0 else 0.0) in
   mtxCreate dim dim seq
 
 utest tensorToSeqExn (tensorSliceExn (mtxCreateId 2) [0]) with [1., 0.] using (eqSeq eqf)
@@ -292,6 +298,9 @@ utest tensorToSeqExn (tensorSliceExn (tensorElemPow __test_tesnor1 2.) [1]) with
 let tensorNormalize = lam v.
   let sum = tensorFold addf 0. v in
   tensorCreateCArrayFloat (tensorShape v) (lam i. divf (tensorGetExn v i) sum)
+
+let rvecCreate = lam numElem. rvecCreate numElem
+let cvecCreate = lam numElem. cvecCreate numElem
 
 let __test_tensor2: Tensor[Float] = rvecCreate 5 [1., 1., 1., 1., 1.]
 
