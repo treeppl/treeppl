@@ -1,0 +1,3 @@
+model function main(): () {
+  let m = mtxCreateId(5);
+}

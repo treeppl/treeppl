@@ -19,7 +19,7 @@ type TensorRecord = TensorRecord {
 
 /*
  * Model function `tensors`
- * Parameters: 
+ * Parameters:
  *  magic: the Int[] sequences of the Melancolia 4x4 magic square
  * Returns: a tensor
  * Side-effect: prints things
@@ -27,18 +27,18 @@ type TensorRecord = TensorRecord {
  * This function illustrates how to create tensors and manipulate them.
  * Tensors can be over elementary types: Tensor[Real], Tensor[Int], Tensor[Bool],
  * but for linear algebra (matrix algebra) we use real tensors.
- * 
+ *
  */
 model function tensors(magic: Int[]): TensorRecord {
   // Convert a sequence of integers to a sequence of reals
-  let magicRealSequence = sapply(magic, int2real); 
+  let magicRealSequence = sapply(magic, int2real);
 
   // A matrix is created from a sequence of reals
-  let magicTensor = mtxCreate(4, 4, magicRealSequence); 
+  let magicTensor = mtxCreate(4, 4, magicRealSequence);
   printMtx(magicTensor); // outputs to standard error
 
   /*-------------------------------------*
-   * Constructing sequences and matrices * 
+   * Constructing sequences and matrices *
    *-------------------------------------*/
 
   // Use `to` to create a range
@@ -56,7 +56,7 @@ model function tensors(magic: Int[]): TensorRecord {
 
   // Use `sreal2string` to convert a real-sequence to a string
   // Use `paste` to concat the str sequence into a single string with a sep
-  printLn(paste(sreal2string(mseq), ", ")); 
+  printLn(paste(sreal2string(mseq), ", "));
 
   let m1 = mtxCreate(1, 5, mseq);
   printMtx(m1);
@@ -119,9 +119,9 @@ model function tensors(magic: Int[]): TensorRecord {
   // TODO matrix transpose
   let transpMagicTensor = mtxTrans(magicTensor);
   printMtx(transpMagicTensor);
-   
+
   // TODO matrix exponential
-  let expMagic = mtxExp(magicTensor); 
+  let expMagic = mtxExp(magicTensor);
   printMtx(expMagic);
 
   /*-----------------------------*
