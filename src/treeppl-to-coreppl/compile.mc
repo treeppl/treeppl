@@ -1354,7 +1354,9 @@ let testOptions =  {
     subsample = false,
     subsampleSize = 1,
     staticDelay = false,
-    prune = false
+    prune = false,
+    driftKernel = false,
+    driftScale = 0.1
   } in
 
 -- test hello world
