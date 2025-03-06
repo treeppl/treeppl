@@ -68,30 +68,6 @@ TEST_CONFIGURATIONS += -m_pmcmc-pimh_--cps_partial
 MODELS := $(shell find models -name "*.tppl")
 MODEL_CONFIGS := $(foreach model,$(MODELS),$(foreach config,$(TEST_CONFIGURATIONS),$(model)@$(config)))
 
-# NOTE(vipa, 2025-03-04): Some inference algorithms do not handle
-# higher order constants, which is currently only relevant when using
-# matrices (which are tensors underneath). We thus filter out the
-# model+inference combinations where the model uses matrices and the
-# inference cannot handle it.
-NO_HOC_INFER := -m_is-lw_--cps_full
-NO_HOC_INFER += -m_mcmc-lightweight_--align_--cps_full
-NO_HOC_INFER += -m_mcmc-lightweight_--cps_none
-NO_HOC_INFER += -m_pmcmc-pimh_--cps_full
-NO_HOC_INFER += -m_smc-apf_--cps_full
-NO_HOC_INFER += -m_smc-bpf_--cps_full
-USES_MATRICES := models/lang/mini-mat-test.tppl
-USES_MATRICES += models/lang/matrix-tests.tppl
-USES_MATRICES += models/lang/tensors.tppl
-USES_MATRICES += models/phylogeny/tree_inference_pruning_gtr.tppl
-USES_MATRICES += models/phylogeny/substmodel_belief_propagation.tppl
-USES_MATRICES += models/phylogeny/tree_inference.tppl
-USES_MATRICES += models/phylogeny/host_repertoire.tppl
-USES_MATRICES += models/phylogeny/tree_inference_pruning_scaled.tppl
-USES_MATRICES += models/phylogeny/tree_inference_pruning.tppl
-USES_MATRICES += models/pheno-mol/qt.tppl
-UNSUPPORTED := $(foreach model,$(USES_MATRICES),$(foreach config,$(NO_HOC_INFER),$(model)@$(config)))
-MODEL_CONFIGS := $(filter-out $(UNSUPPORTED),$(MODEL_CONFIGS))
-
 .PHONY: $(MODEL_CONFIGS)
 $(MODEL_CONFIGS):
 	@set -ue; \

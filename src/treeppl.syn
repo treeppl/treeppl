@@ -82,14 +82,7 @@ Real[]
 Int[10]
 -/
 prod TypeUsage: TypeTppl = name:UName
-prod TypeSequence: TypeTppl = ty:TypeTppl "[" "]"
-
--- NOTE(vsenderov, 2023-09-15) all other syntaxes are inadmissible by current parser
-prod Tensor: TypeTppl = "Tensor" "[" ty:TypeTppl "]"
-
---- Real[] -- sequence
---- Real[ _ ] -- one dim tensor
---prod Tensor: TypeTppl = ty:TypeTppl "("  ")"
+prod TypeAppOrSequence: TypeTppl = ty:TypeTppl "[" (args:TypeTppl ("," args:TypeTppl)*)? "]"
 
 prod AtomicReal: TypeTppl = "Real"
 prod AtomicBool: TypeTppl = "Bool"

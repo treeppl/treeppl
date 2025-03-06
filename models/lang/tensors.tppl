@@ -7,12 +7,12 @@
  */
 
 type TensorRecord = TensorRecord {
-    magic: Tensor[Real],
-    mul: Tensor[Real],
-    pow: Tensor[Real],
-    sclrMul: Tensor[Real],
-    transpose: Tensor[Real],
-    exponential: Tensor[Real]
+    magic: Matrix[Real],
+    mul: Matrix[Real],
+    pow: Matrix[Real],
+    sclrMul: Matrix[Real],
+    transpose: Matrix[Real],
+    exponential: Matrix[Real]
 }
 
 
@@ -25,7 +25,7 @@ type TensorRecord = TensorRecord {
  * Side-effect: prints things
  *
  * This function illustrates how to create tensors and manipulate them.
- * Tensors can be over elementary types: Tensor[Real], Tensor[Int], Tensor[Bool],
+ * Tensors can be over elementary types: Matrix[Real], Matrix[Int], Matrix[Bool],
  * but for linear algebra (matrix algebra) we use real tensors.
  *
  */

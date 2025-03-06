@@ -21,14 +21,14 @@
 // TYPES
 
 type MsgTree =
-  | Leaf {age: Real, index: Int, msg: Tensor[Real][]}
-  | Node {age: Real, msg: Tensor[Real][], left: MsgTree, right: MsgTree}
+  | Leaf {age: Real, index: Int, msg: Matrix[Real][]}
+  | Node {age: Real, msg: Matrix[Real][], left: MsgTree, right: MsgTree}
 
 
 // FUNCTIONS
 
 // A help function to compute the scaled rate matrix for GTR
-function gtr(pi: Real[], r: Real[]) : Tensor[Real] {
+function gtr(pi: Real[], r: Real[]) : Matrix[Real] {
     // Construct a matrix of exchangeability rates
     let unscaled_q = mtxCreate(4,4,
                      [ -(pi[2]*r[1]+pi[3]*r[2]+pi[4]*r[3]),      pi[2]*r[1],                            pi[3]*r[2],                             pi[4]*r[3] ,
@@ -68,7 +68,7 @@ function build_forest(data: Int[][], forest: MsgTree[], index: Int, data_len: In
 }
 
 // Get message from leaves for each site
-function get_leaf_message(seq: Int) : Tensor[Real] {
+function get_leaf_message(seq: Int) : Matrix[Real] {
     if (eqi(seq, 0)) { // "A"
        let message = rvecCreate(4, [1.0, 0.0, 0.0, 0.0]);
         return message;
@@ -95,7 +95,7 @@ function get_leaf_message(seq: Int) : Tensor[Real] {
 }
 
 //Compute log likelihood for each site
-function get_log_likes(msg: Tensor[Real], pi: Real[]): Real {
+function get_log_likes(msg: Matrix[Real], pi: Real[]): Real {
     let stationary_probs = cvecCreate(4, pi);
     let like = mtxMul(msg, stationary_probs);
     let log_like = log(mtxGet(1, 1, like));
@@ -103,7 +103,7 @@ function get_log_likes(msg: Tensor[Real], pi: Real[]): Real {
 }
 
 // KEY FUNCTION: CLUSTER
-function cluster(q: Tensor[Real], trees: MsgTree[], maxAge: Real, seq_len: Int, pi: Real[]): MsgTree[] {
+function cluster(q: Matrix[Real], trees: MsgTree[], maxAge: Real, seq_len: Int, pi: Real[]): MsgTree[] {
 
     let n = length(trees);
 

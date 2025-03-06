@@ -163,24 +163,23 @@ lang TreePPLCompile
       info = x.info
     }
 
-  | TypeSequenceTypeTppl x -> TySeq {
+  | TypeAppOrSequenceTypeTppl (x & {args = []}) -> TySeq {
     info = x.info,
     ty = compileTypeTppl x.ty
   }
--- TODO type matrix
+  | TypeAppOrSequenceTypeTppl x ->
+    let tyapp_ = lam lhs. lam rhs.
+      tyWithInfo x.info (tyapp_ lhs (compileTypeTppl rhs)) in
+    foldl tyapp_ (compileTypeTppl x.ty) x.args
+
   | TpplStrTypeTppl x -> TySeq {
     info = x.info,
     ty = TyChar {
-      info = NoInfo () -- I put the info up
+      info = x.info
     }
   }
 
   | NothingTypeTppl x -> tyunit_
-
-  | TensorTypeTppl x -> TyTensor {
-    info = x.info,
-    ty = compileTypeTppl x.ty
-  }
 
   sem compileModelInvocation : TpplCompileContext -> Loader -> DeclTppl -> Option (Loader, Expr)
   sem compileModelInvocation context loader =
@@ -192,12 +191,13 @@ lang TreePPLCompile
       map (lam param. (param.name.v, compileTypeTppl param.ty)) x.args in
 
     let symEnv = _getSymEnv loader in
+    let tcEnv = _getTCEnv loader in
     let inputType = tyrecord_ (map (lam x. (nameGetStr x.0, x.1)) params) in
-    let inputType = symbolizeType symEnv inputType in
+    let inputType = resolveType modelInfo tcEnv false (symbolizeType symEnv inputType) in
     let outputType = match x. returnTy with Some ty
       then compileTypeTppl ty
       else errorSingle [modelInfo] "A model function must have an explicit return type, even if it returns nothing, i.e., ()" in
-    let outputType = symbolizeType symEnv outputType in
+    let outputType = resolveType modelInfo tcEnv false (symbolizeType symEnv outputType) in
     match serializationPairsFor [inputType, outputType] loader with (loader, [inputSer, outputSer]) in
 
     let app_ = lam f. lam a. withInfo modelInfo (app_ f a) in
@@ -983,7 +983,7 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
     -- Compiler libraries (these should *not* be in scope in the program)
     match includeFileExn "." "stdlib::ext/dist-ext.mc" loader with (distEnv, loader) in
     match includeFileExn "." "stdlib::ext/math-ext.mc" loader with (mathEnv, loader) in
-    match includeFileExn "." "stdlib::ext/matrix-ext.mc" loader with (matrixEnv, loader) in
+    match includeFileExn "." "stdlib::ext/mat-ext.mc" loader with (matrixEnv, loader) in
     match includeFileExn "." "stdlib::json.mc" loader with (jsonEnv, loader) in
     match includeFileExn "." "stdlib::basic-types.mc" loader with (optionEnv, loader) in
     match includeFileExn "." "stdlib::common.mc" loader with (commonEnv, loader) in
@@ -1004,10 +1004,10 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
       , pow = _getVarExn "pow" mathEnv
       , printJsonLn = _getVarExn "printJsonLn" jsonEnv
       , some = _getConExn "Some" optionEnv
-      , matrixMul = _getVarExn "matrixMul" matrixEnv
+      , matrixMul = _getVarExn "matMulExn" matrixEnv
       , matrixPow = _getVarExn "mtxPow" stdlibMCEnv
-      , matrixAdd = _getVarExn "matrixElemAdd" matrixEnv
-      , matrixMulFloat = _getVarExn "matrixMulFloat" matrixEnv
+      , matrixAdd = _getVarExn "matAddExn" matrixEnv
+      , matrixMulFloat = _getVarExn "matScale" matrixEnv
       , repeat = _getVarExn "repeat" commonEnv
       } in
 
@@ -1040,6 +1040,29 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
 
     match loader with Loader x in
     (mapFindExn path x.includedFiles, loader)
+
+  sem registerMatrixFunctions : Loader -> Loader
+  sem registerMatrixFunctions = | loader ->
+    match includeFileExn "." "stdlib::ext/arr-ext.mc" loader with (arrEnv, loader) in
+    match includeFileExn "." "stdlib::json.mc" loader with (jsonEnv, loader) in
+    match includeFileExn "." "stdlib::basic-types.mc" loader with (basicEnv, loader) in
+    match includeFileExn "." "stdlib::option.mc" loader with (optionEnv, loader) in
+    let extArrName = _getTyConExn "ExtArr" arrEnv in
+    let jsonArrName = _getConExn "JsonArray" jsonEnv in
+    let optionMapM_ = appf2_ (nvar_ (_getVarExn "optionMapM" optionEnv)) in
+    let optionMap_ = appf2_ (nvar_ (_getVarExn "optionMap" optionEnv)) in
+    let extArrToSeq_ = app_ (nvar_ (_getVarExn "extArrToSeq" arrEnv)) in
+    let extArrOfSeq = app_
+      (nvar_ (_getVarExn "extArrOfSeq" arrEnv))
+      (nvar_ (_getVarExn "extArrKindFloat64" arrEnv)) in
+    let ser = ulam_ "serElem" (ulam_ "seq"
+      (nconapp_ jsonArrName
+        (map_ (var_ "serElem") (extArrToSeq_ (var_ "seq"))))) in
+    let deser = ulam_ "deserElem" (ulam_ "json"
+      (match_ (var_ "json") (npcon_ jsonArrName (pvar_ "arr"))
+        (optionMap_ extArrOfSeq (optionMapM_ (var_ "deserElem") (var_ "arr")))
+        (nconapp_ (_getConExn "None" basicEnv) unit_))) in
+    registerCustomJsonSerializer extArrName {serializer = ser, deserializer = deser} loader
 end
 
 
@@ -1051,6 +1074,7 @@ let compileTpplToExecutable = lam filename: String. lam options: Options.
   let loader = enableEqGeneration loader in
   let loader = enableDesugar loader in
   let loader = enableJsonSerialization loader in
+  let loader = registerMatrixFunctions loader in
   endPhaseStatsExpr log "mk-cppl-loader" unit_;
   let loader = (includeFileExn "." filename loader).1 in
   endPhaseStatsExpr log "include-file" unit_;

@@ -4,7 +4,7 @@
 // produce a state-of-the-art model with MCMC, using
 // suitable drift kernels, slice sampling, or with HMC.
 
-// Run this by compiling: 
+// Run this by compiling:
 // tpplc models/phylo/phylogeny/substmodel_belief_propagation.tppl -m 'smc-apf' --resample align  --subsample -n 1 --output substmodel
 // And then execution x particles x sweeps, using for example a toy dataset found in phylo_toydata_fixtree.json:
 // ./substmodel models/data/treeinference/phylo_toydata_fixtree.json 1000 1 > substmodel_output.json
@@ -34,39 +34,39 @@ type GTR_Tree =
 // MODEL FUNCTIONS
 
 // A help function to compute the scaled rate matrix for GTR
-function gtr(pi: Real[], r: Real[]) : Tensor[Real] {
+function gtr(pi: Real[], r: Real[]) : Matrix[Real] {
     // Construct a matrix of exchangeability rates
-    let unscaled_q = mtxCreate(4,4, 
+    let unscaled_q = mtxCreate(4,4,
                      [ -(pi[2]*r[1]+pi[3]*r[2]+pi[4]*r[3]),      pi[2]*r[1],                            pi[3]*r[2],                             pi[4]*r[3] ,
                         pi[1]*r[1],                             -(pi[1]*r[1]+pi[3]*r[4]+pi[4]*r[5]),    pi[3]*r[4],                             pi[4]*r[5] ,
                         pi[1]*r[2],                             pi[2]*r[4],                             -(pi[1]*r[2]+pi[2]*r[4]+pi[4]*r[6]),    pi[4]*r[6] ,
-                        pi[1]*r[3],                              pi[2]*r[5],                            pi[3]*r[6],                            -(pi[1]*r[3]+pi[2]*r[5]+pi[3]*r[6])  
-                    ]); 
+                        pi[1]*r[3],                              pi[2]*r[5],                            pi[3]*r[6],                            -(pi[1]*r[3]+pi[2]*r[5]+pi[3]*r[6])
+                    ]);
 
-    let scaler_1 = -(mtxGet(1, 1, unscaled_q) * pi[1]);    
+    let scaler_1 = -(mtxGet(1, 1, unscaled_q) * pi[1]);
     let scaler_2 = -(mtxGet(2, 2, unscaled_q) * pi[2]);
     let scaler_3 = -(mtxGet(3, 3, unscaled_q) * pi[3]);
     let scaler_4 = -(mtxGet(4, 4, unscaled_q) * pi[4]);
     let scaler = scaler_1 + scaler_2 + scaler_3 + scaler_4;
 
    return mtxSclrMul((1.0/scaler), unscaled_q);
-}   
+}
 
 // A simple help function to compute a message for a branch in the tree in a
 // postorder traversal towards the root. We assume standard conventions here
 // for the structure of q with respect to time (rows = from-states)
-function message(start_msg: Tensor[Real][], q: Tensor[Real], time: Real) : Tensor[Real][] {
-    let trans_matrix = mtxTrans(mtxExp(mtxSclrMul(time, q)));   
+function message(start_msg: Matrix[Real][], q: Matrix[Real], time: Real) : Matrix[Real][] {
+    let trans_matrix = mtxTrans(mtxExp(mtxSclrMul(time, q)));
     return sapply1(start_msg, mtxMul, trans_matrix);
 }
 
 // Compute postorder messages on the observed tree
-function compute_postorder_message(tree: GTR_Tree, data: Int[][], q: Tensor[Real]) : Tensor[Real][] {
+function compute_postorder_message(tree: GTR_Tree, data: Int[][], q: Matrix[Real]) : Matrix[Real][] {
     if (tree is Leaf) {
-        return sapply(data[tree.index], get_leaf_message); 
+        return sapply(data[tree.index], get_leaf_message);
     }
 
-    let left_msg  = message( compute_postorder_message(tree.left, data, q), q, (tree.age - tree.left.age) ); 
+    let left_msg  = message( compute_postorder_message(tree.left, data, q), q, (tree.age - tree.left.age) );
     let right_msg = message( compute_postorder_message(tree.right, data, q), q, (tree.age - tree.right.age) );
 
     return messageElemMul(left_msg, right_msg);
@@ -74,60 +74,59 @@ function compute_postorder_message(tree: GTR_Tree, data: Int[][], q: Tensor[Real
 
 
 // Get message from leaves for each site
-function get_leaf_message(seq: Int) : Tensor[Real] {
+function get_leaf_message(seq: Int) : Matrix[Real] {
     if (eqi(seq, 0)) { // "A"
        let message = rvecCreate(4, [1.0, 0.0, 0.0, 0.0]);
         return message;
-    } 
+    }
     if (eqi(seq, 1)) { // "C"
         let message = rvecCreate(4, [0.0, 1.0, 0.0, 0.0]);
         return message;
-    } 
+    }
     if (eqi(seq, 2)) { // "G"
         let message = rvecCreate(4, [0.0, 0.0, 1.0, 0.0]);
         return message;
-    } 
+    }
     if (eqi(seq, 3)) {  // "T"
         let message = rvecCreate(4, [0.0, 0.0, 0.0, 1.0]);
         return message;
-    } 
+    }
     if (eqi(seq, 4)) {  // "-" or "?"
         let message = rvecCreate(4, [1.0, 1.0, 1.0, 1.0]);
         return message;
-    } 
+    }
     else {
         return error("Invalid state at leaf");
     }
 }
 
 //Compute log likelihood for each site
-function get_log_likes(msg: Tensor[Real], pi_col: Tensor[Real]): Real {
-    let like = mtxMul(msg, pi_col); 
+function get_log_likes(msg: Matrix[Real], pi_col: Matrix[Real]): Real {
+    let like = mtxMul(msg, pi_col);
     let log_like = log(mtxGet(1, 1, like));
     return log_like;
-} 
+}
 
 // MODEL
 // clock_rate not needed in this version
-model function myModel(data: Int[][], tree: GTR_Tree) : TheReturn { 
+model function myModel(data: Int[][], tree: GTR_Tree) : TheReturn {
 
     // Sample stationary probs and exchangeability rates and
     // compute the scaled rate matrix for the GTR model.
     // We assume nucleotides (A, C, G, T) represented by ints (0, 1, 2, 3)
     assume pi ~ Dirichlet([1.0, 1.0, 1.0, 1.0]);
-    
+
     // We assume exchangeability rates being [r_AC, r_AG, r_AT, r_CG, r_CT, r_GT]
     // according to convention
     assume er ~ Dirichlet([1.0, 1.0, 1.0, 1.0, 1.0, 1.0]);
 
-    let q = gtr(pi, er); 
+    let q = gtr(pi, er);
 
     let msgs = compute_postorder_message(tree, data, q);
 
-    let log_likes = sapply1(msgs, get_log_likes, cvecCreate(4, pi));  
+    let log_likes = sapply1(msgs, get_log_likes, cvecCreate(4, pi));
 
-    logWeight (seqSumReal(log_likes)); 
+    logWeight (seqSumReal(log_likes));
 
-    return TheReturn{stationary_probs = pi, exchangeability_rates = er}; 
+    return TheReturn{stationary_probs = pi, exchangeability_rates = er};
 }
-

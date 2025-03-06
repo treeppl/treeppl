@@ -21,8 +21,8 @@
 // TYPES
 
 type MsgTree =
-  | Leaf {age: Real, index: Int, msg: Tensor[Real][]}
-  | Node {age: Real, msg: Tensor[Real][], left: MsgTree, right: MsgTree}
+  | Leaf {age: Real, index: Int, msg: Matrix[Real][]}
+  | Node {age: Real, msg: Matrix[Real][], left: MsgTree, right: MsgTree}
 
 
 // FUNCTIONS
@@ -49,7 +49,7 @@ function build_forest(data: Int[][], forest: MsgTree[], index: Int, data_len: In
 }
 
 // Get message from leaves for each site
-function get_leaf_message(seq: Int) : Tensor[Real] {
+function get_leaf_message(seq: Int) : Matrix[Real] {
     if (eqi(seq, 0)) { // "A"
        let message = rvecCreate(4, [1.0, 0.0, 0.0, 0.0]);
         return message;
@@ -76,7 +76,7 @@ function get_leaf_message(seq: Int) : Tensor[Real] {
 }
 
 //Compute log likelihood for each site
-function get_log_likes(msg: Tensor[Real]): Real {
+function get_log_likes(msg: Matrix[Real]): Real {
     let stationary_probs = cvecCreate(4, [0.25,0.25,0.25,0.25]);
     let like = mtxMul(msg, stationary_probs);
     let log_like = log(mtxGet(1, 1, like));
@@ -84,7 +84,7 @@ function get_log_likes(msg: Tensor[Real]): Real {
 }
 
 // KEY FUNCTION: CLUSTER
-function cluster(q: Tensor[Real], trees: MsgTree[], maxAge: Real, seq_len: Int): MsgTree[] {
+function cluster(q: Matrix[Real], trees: MsgTree[], maxAge: Real, seq_len: Int): MsgTree[] {
 
     let n = length(trees);
 
