@@ -24,6 +24,7 @@ include "sys.mc"
 
 include "coreppl::coreppl-to-mexpr/compile.mc"
 include "coreppl::coreppl.mc"
+include "coreppl::inference/mcmc.mc"
 include "coreppl::parser.mc"
 
 include "coreppl::coreppl-to-mexpr/is-lw/compile.mc"
@@ -253,20 +254,20 @@ lang TreePPLCompile
     lam cont. isemi_ (compileExprTppl context x.e) cont
 
   | AssumeStmtTppl a ->
-    lam cont. TmLet {
-      ident = a.randomVar.v,
-      tyBody = tyunknown_,
-      tyAnnot = optionMapOr tyunknown_ compileTypeTppl a.ty,
-      body = TmAssume {
-        dist = compileExprTppl context a.dist,
-        ty = tyunknown_,
-        driftKernel = None (),
-        info = a.info
-      },
-      inexpr = cont,
-      ty = tyunknown_,
-      info = a.info
-    }
+    lam cont.
+      let driftKernel =
+        match a.driftKernel with Some dk then
+          let dk = compileExprTppl context dk in
+          Some (withInfo (infoTm dk) (nulam_ a.randomVar.v dk))
+        else None () in
+      let body = TmAssume
+        { dist = compileExprTppl context a.dist
+        , ty = tyunknown_
+        , info = a.info
+        , driftKernel = driftKernel
+        } in
+      let tyAnnot = optionMapOr tyunknown_ compileTypeTppl a.ty in
+      bind_ (withInfo a.info (nlet_ a.randomVar.v (tyWithInfo a.info tyAnnot) (withInfo a.info body))) cont
 
   | ObserveStmtTppl x ->
     lam cont.
