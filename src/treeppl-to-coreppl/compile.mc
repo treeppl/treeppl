@@ -572,6 +572,16 @@ lang TreePPLCompile
       info = d.info
   }
 
+| ReciprocalExprTppl d ->
+    TmDist {
+      dist = DReciprocal {
+        a = compileExprTppl context d.a,
+        b = compileExprTppl context d.b
+      },
+      ty = tyunknown_,
+      info = d.info
+  }
+
   | VariableExprTppl v ->
     TmVar {
       ident = v.ident.v,
