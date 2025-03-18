@@ -1,0 +1,10 @@
+model function distributions() : Real[][] {
+  let dirAlphas = [2.0, 3.0, 5.0];
+
+  let myDirP = DirichletParam {alphas = dirAlphas};
+  let someDir = iid(dirichlet, myDirP, 10);
+
+  // dump(someDir);
+
+  return someDir;
+}

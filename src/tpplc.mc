@@ -15,15 +15,7 @@ include "mexpr/generate-json-serializers.mc"
 include "treeppl-to-coreppl/compile.mc"
 
 include "coreppl::dppl-arg.mc" -- inherit cmd-line opts from cppl
-include "coreppl::coreppl-to-rootppl/compile.mc"
 include "coreppl::parser.mc"
-
---lang CorePPLUsage =
---  CPPLBackcompat + LoadRuntime +
---  ImportanceSamplingMethod + BPFMethod + APFMethod +
---  LightweightMCMCMethod  + NaiveMCMCMethod + TraceMCMCMethod +
---	PIMHMethod + ProjMatchPprint
---end
 
 
 
@@ -38,10 +30,8 @@ let tpplMenu = lam. join [
 
 mexpr
 
-use CPPLLang in
-
 -- Use the arg.mc library to parse arguments
-let result = argParse default config in
+let result = argParse defaultArgs config in
 match result with ParseOK r then
   let options: Options = r.options in
   -- Print menu if not exactly one file argument
@@ -52,22 +42,3 @@ match result with ParseOK r then
     match r.strings with [filename] in
     compileTpplToExecutable filename options
 else argPrintError result
-    
-    -- let outName = sysTempFileMake () in
-    -- writeFile outName (use MExpr in concat "mexpr\n" (mexprPPLToString prog));
-
-    -- -- NOTE(2023-08-16,dlunde): Makes it possible to use the --output-mc cppl command line flag to output the compiled _CorePPL_ program
-    -- (if options.outputMc then
-    --   sysCopyFile outName (concat options.output ".mc"); ()
-    -- else ());
-
-    -- let msg = "Compilation from generated CorePPL code failed" in
-    -- runCommandWithError
-    --   ["cppl",
-    --    "--output", options.output,
-    --    outName] msg;
-
-    -- sysDeleteFile outName;
-
-    -- ()
-

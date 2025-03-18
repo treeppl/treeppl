@@ -16,24 +16,18 @@ include "mexpr/type-check.mc"
 include "mexpr/generate-json-serializers.mc"
 include "mexpr/utils.mc"
 include "mexpr/duplicate-code-elimination.mc"
+include "mexpr/generate-utest.mc"
+include "ocaml/mcore.mc"
+include "ocaml/compile.mc"
 
 include "sys.mc"
 
 include "coreppl::coreppl-to-mexpr/compile.mc"
 include "coreppl::coreppl-to-mexpr/runtimes.mc"
-include "coreppl::coreppl-to-rootppl/compile.mc"
 include "coreppl::coreppl.mc"
 include "coreppl::parser.mc"
-include "coreppl::build.mc"
 
 include "matrix.mc"
-
--- Version of parseMCoreFile needed to get input data into the program
-let parseMCoreFileNoDeadCodeElim = lam filename.
-  use BootParser in
-    parseMCoreFile
-      {defaultBootParserParseMCoreFileArg with eliminateDeadCode = false}
-        filename
 
 -- Pattern match over an algebraic type where each constructor carries
 -- a record, pulling out the field with the given name.
@@ -150,19 +144,31 @@ lang ProjMatchTypeCheck = TypeCheck + ProjMatchAst + FunTypeAst + RecordTypeAst 
         (foldl wrap errorMsg relevantConstructors))
 end
 
-lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Externals + MExprSym + FloatAst + ProjMatchAst + Resample + GenerateJsonSerializers + MExprEliminateDuplicateCode
+lang ProjMatchToJson = AstToJson + ProjMatchAst
+  sem exprToJson =
+  | TmProjMatch x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TmProjMatch")
+    , ("target", exprToJson x.target)
+    , ("field", JsonString (sidToString x.field))
+    , ("ty", typeToJson x.ty)
+    , ("info", infoToJson x.info)
+    ] )
+end
+
+lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Externals + MExprSym + FloatAst + ProjMatchAst + Resample + GenerateJsonSerializers + MExprEliminateDuplicateCode + MCoreLoader + JsonSerializationLoader
 
   -- a type with useful information passed down from compile
   type TpplCompileContext = {
     serializeResult: Name,
     logName: Name, expName: Name,
-    json2string: Name,
+    printJsonLn: Name,
     particles: Name, sweeps: Name, input: Name, some: Name,
     matrixMul: Name,
     matrixPow: Name,
     matrixAdd: Name,
     matrixMulFloat: Name,
-    pow: Name
+    pow: Name,
+    repeat: Name
   }
 
   sem isemi_: Expr -> Expr -> Expr
@@ -173,268 +179,40 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     let mergedInfo = mergeInfo infoL infoR in
     withInfo mergedInfo (semi_ l r)
 
-
-  sem compileFunctionsOnly: TpplCompileContext -> FileTppl -> [Expr]
-  sem compileFunctionsOnly (cc: TpplCompileContext) =
-  | DeclSequenceFileTppl x ->
-
-      -- Compile type definitions
-      let types = map (compileTpplTypeDecl cc) x.decl in
-
-      let typeNames = mapOption (lam x. x.0) types in
-      let constructors = join (map (lam x. x.1) types) in
-      let bindType = lam inexpr. lam name.
-        TmType {
-          ident = name.v,
-          params = [],
-          tyIdent = tyWithInfo name.i (tyvariant_ []),
-          inexpr = inexpr,
-          ty = tyunknown_,
-          info = name.i
-        }
-      in
-      let bindCon = lam inexpr. lam pair.
-        TmConDef {
-          ident = pair.0 .v,
-          tyIdent = pair.1,
-          inexpr = inexpr,
-          ty = tyunknown_,
-          info = pair.0 .i
-        }
-      in
-      let types = foldl bindCon unit_ constructors in
-      let types = foldl bindType types typeNames in
-
-      -- Compile TreePPL functions
-      let functions = TmRecLets {
-        bindings = mapOption (compileTpplFunction cc) x.decl,
-        inexpr = unit_,  -- No specific logic to execute, just a placeholder
-        ty = tyunknown_,
-        info = x.info
-      } in
-
-      -- Combine the compiled types and functions
-      --let complete = bindall_ [ types, functions ] in
-
-      -- Remove duplicate definitions
-      --let complete = eliminateDuplicateCode complete in
-
-      --complete
-      [types, functions]
-
-
-
-
-  sem compile: FileTppl -> Expr
-  sem compile =
-  | DeclSequenceFileTppl x ->
-
-    -- Retrieve standard library AST
-    let stdlib = parseMCorePPLFileLib false (concat tpplSrcLoc "/lib/standard.mc") in
-
-    -- Retrieve compiler library AST
-    let libCompile =
-      parseMCorePPLFileLib false
-        (concat tpplSrcLoc "/treeppl-to-coreppl/lib-compile.mc") in
-
-    -- Symbolize the compiler library AST: it is not visible in the compiled TreePPL program.
-    let libCompile = symbolize libCompile in
-
-    -- Extract names and use them to build the compile context
-    match findNamesOfStringsExn [
-      "serializeResult", "externalLog", "externalExp", "json2string",
-      "particles", "sweeps", "input", "Some", "matrixMul", "mtxPow", "matrixElemAdd",
-      "matrixMulFloat", "pow"
-    ] libCompile with [sr, el, ee, j2s, p, sw, i, s, mm, mp, ma, mmf, po] in
-    let cc: TpplCompileContext = {
-      serializeResult = sr,
-      logName = el, expName = ee,
-      json2string = j2s,
-      particles = p,
-      sweeps = sw,
-      input = i,
-      some = s,
-      matrixMul = mm,
-      matrixPow = mp,
-      matrixAdd = ma,
-      matrixMulFloat = mmf,
-      pow = po
-    } in
-
-    let tpplLibLoc = (concat tpplSrcLoc "/lib/standard.tppl") in
-    let tpplLibContent = readFile tpplLibLoc in
-    match parseTreePPLExn tpplLibLoc tpplLibContent with tpplLibFile in
-    match (compileFunctionsOnly cc tpplLibFile) with [libTypes, libFunctions] in
-
-    -- Compile the model function
-    let invocation = match findMap mInvocation x.decl with Some x
-      then x
-      else printLn "You need a model function!"; exit 1
-    in
-    match invocation with (invocation, argNameTypes, returnType) in
-
-    -- Compile type definitions and generate required JSON
-    -- serializers/deserializers
-    let types = map (compileTpplTypeDecl cc) x.decl in
-    let typeNames = mapOption (lam x. x.0) types in
-    let constructors = join (map (lam x. x.1) types) in
-    let bindType = lam inexpr. lam name.
-      TmType {
-        ident = name.v,
-        params = [],
-        tyIdent = tyWithInfo name.i (tyvariant_ []),
-        inexpr = inexpr,
-        ty = tyunknown_,
-        info = name.i  -- NOTE(vipa, 2022-12-22): This makes `type T in e` just point to `T`, which might not be desirable
-      }
-    in
-    let bindCon = lam inexpr. lam pair.
-      TmConDef {
-        ident = pair.0 .v,
-        tyIdent = pair.1,
-        inexpr = inexpr,
-        ty = tyunknown_,
-        info = pair.0 .i
-      }
-    in
-    let types = foldl bindCon unit_ constructors in
-    let types = foldl bindType types typeNames in
-    let types = bindall_ [libTypes, types] in
-    let inputType: Type = tyrecord_ (map (lam t. (nameGetStr t.0, t.1)) argNameTypes) in
-
-    let modelTypes: [Type] = [inputType, returnType] in
-    match addJsonSerializers modelTypes types with (result, types, _) in
-    match mapLookup returnType result with Some outputHandler in
-
-    -- Compile TreePPL functions
-    let functions = TmRecLets {
-      bindings = mapOption (compileTpplFunction cc) x.decl, --functionBindings,
-      --inexpr = infer_ (Default {}) (ulam_ "" invocation), -- need to serialize on top, otherwise the Dist excapes
-      inexpr = invocation, -- will be thrown away due to subsequent bind_
-      ty = tyunknown_,
-      info = x.info
-    } in
-
-    -- Generate code that deserializes input
-    match mapLookup inputType result with Some inputHandler in
-    let error = error_ (str_ "Could not deserialize data input!") in
-    let m = nameSym "m" in
-    let inputR = ulet_ "r" (
-      match_
-        (app_ inputHandler.deserializer (nvar_ cc.input))
-        (npcon_ cc.some (npvar_ m))
-        (nvar_ m)
-        error) in
-    let inputArgs = map
-      (lam t. nulet_ t.0 (recordproj_ (nameGetStr t.0) (var_ "r")))
-      argNameTypes in
-    -- (map (lam x. x.0) argNameTypes)
-    --  mapLookup argType result -- gives us the deserializer
-    -- 1. Define a function that deserializes
-    -- A sequence of let bindings, one for every model parameter
-
-    let inferCode = bindall_
-      [ ulet_ "res" (infer_ (Default { runs = (nvar_ cc.particles) }) (ulam_ "" invocation))
-      , ulet_ "resJson"
-        (appf2_ (nvar_ cc.serializeResult) outputHandler.serializer (var_ "res"))
-      , bindSemi_
-        (print_ (app_ (nvar_ cc.json2string) (var_ "resJson")))
-        (print_ (str_ "\n"))
-      ] in
-
-    -- Put everything together ...
-    let complete = bindall_ (join
-      [ [ stdlib
-        , libCompile
-        , types
-        , libFunctions
-        , functions
-        , inputR
-        ]
-      , inputArgs
-      , [ appf2_ (var_ "repeat") (ulam_ "" inferCode) (nvar_ cc.sweeps) ]
-      ]) in
-
-    -- ... and also make sure to remove duplicate definitions
-    let complete = eliminateDuplicateCode complete in
-
-    complete
-
-    -- NOTE(2023-08-11,dlunde): No need to symbolize here actually, the CorePPL compiler will symbolize everything anyway.
-    -- let env = symEnvEmpty in
-    -- symbolizeExpr ({env with varEnv = mapInsert "log" cc.logName (mapInsert "exp" cc.expName env.varEnv)}) complete
-
- sem mInvocation: DeclTppl -> Option (Expr, [(Name, Type)], Type)
- sem mInvocation =
-
-  | _ -> None ()
-
-  | FunDeclTppl (x & {model = Some _}) ->
-    let getNameType = lam arg.
-      let aName: Name = arg.name.v in
-      (aName, compileTypeTppl arg.ty)
-    in
-    let argNameTypes: [(Name, Type)] = map getNameType x.args in
-    let returnType =
-      match x.returnTy with Some ty
-        then compileTypeTppl ty
-        else
-          printError "Error: The model function must have a return type, even if it is void, i.e. `()`!\n";
-          flushStderr ();
-          exit 1
-    in
-    let invar = TmVar {
-        ident = x.name.v,
-        info = x.name.i,
-        ty = tyunknown_,
-        frozen = false
-      } in
-
-    let f = lam f. lam arg.
-      TmApp {
-        lhs = f,
-        rhs = parseArgument arg,
-        ty = tyunknown_,
-        info = x.info
-      }
-    in
-    -- (vsenderov, 2023-07-20) Check if the arguments list is empty.
-    -- If it is, don't wrap the invar in a lambda!
-    -- Only ensure that the function application happens
-    if null x.args then
-      Some ((app_ invar (int_ 0)), [], returnType)
-    else
-      Some ((foldl f invar x.args), argNameTypes, returnType)
-
-  sem parseArgument: {name:{v:Name, i:Info}, ty:TypeTppl} -> Expr
-  sem parseArgument =
-
-  | x -> TmVar {
-      ident = x.name.v,
-      ty = tyunknown_,
-      info = x.name.i,
-      frozen = false
-    }
-
-  sem compileTpplTypeDecl: TpplCompileContext -> DeclTppl -> (Option {v:Name, i:Info}, [({v:Name, i:Info}, Type)])
-  sem compileTpplTypeDecl context =
+  sem compileTpplTypeDecl : DeclTppl -> [Decl]
+  sem compileTpplTypeDecl =
   | TypeDeclTppl x ->
-    let f = lam c. match c with TypeCon c in
-      let mkField = lam x. (x.name.v, compileTypeTppl x.ty) in
-      let tycon = tyWithInfo x.name.i (ntycon_ x.name.v) in
-      let record = tyWithInfo x.info (tyrecord_ (map mkField c.fields)) in
-      (c.name, tyWithInfo x.info (tyarrow_ record tycon))
-    in
-    (Some x.name, map f x.cons)
-  | _ -> (None (), [])
+    [ DeclType
+      { ident = x.name.v
+      , params = []
+      , tyIdent = tyvariant_ []
+      , info = x.info
+      }
+    ]
+  | _ -> []
 
-  sem compileTpplFunction: TpplCompileContext -> DeclTppl -> Option RecLetBinding
+  sem compileTpplConDecl : DeclTppl -> [Decl]
+  sem compileTpplConDecl =
+  | TypeDeclTppl x ->
+    let f = lam constr.
+      match constr with TypeCon constr in DeclConDef
+      { ident = constr.name.v
+      , tyIdent =
+        let f = lam field. (field.name.v, compileTypeTppl field.ty) in
+        let lhs = tyrecord_ (map f constr.fields) in
+        let rhs = ntycon_ x.name.v in
+        tyarrow_ lhs rhs
+      , info = constr.name.i
+      } in
+    map f x.cons
+  | _ -> []
+
+  sem compileTpplFunction: TpplCompileContext -> DeclTppl -> [RecLetBinding]
   sem compileTpplFunction (context: TpplCompileContext) =
-
   | FunDeclTppl f ->
     let body = foldr (lam f. lam e. f e)
       (withInfo f.info unit_)
-      (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body))
+    (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body))
     in
     let argTypes = if null f.args
       then [tyint_] -- nullary functions are ints
@@ -444,7 +222,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
       else tyunknown_
     in
     let mType = foldr tyarrow_ returnType argTypes in
-    Some {
+    [{
       ident = f.name.v,
       tyBody = tyunknown_,
       tyAnnot = tyWithInfo f.name.i mType,
@@ -467,8 +245,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
         } else
           body,
       info = f.info
-    }
-  | TypeDeclTppl _ -> None ()
+    }]
+  | TypeDeclTppl _ -> []
 
   sem compileFunArg: {name:{v:Name, i:Info}, ty:TypeTppl} -> (Expr -> Expr)
 
@@ -524,12 +302,65 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
     ty = compileTypeTppl x.ty
   }
 
+  sem compileModelInvocation : TpplCompileContext -> Loader -> DeclTppl -> Option (Loader, Expr)
+  sem compileModelInvocation context loader =
+  | FunDeclTppl (x & {model = Some modelInfo}) ->
+    -- TODO(vipa, 2024-12-13): We could technically shadow a model
+    -- function, in which case the generated code will refer to the
+    -- wrong function, which is bad.
+    let params : [(Name, Type)] =
+      map (lam param. (param.name.v, compileTypeTppl param.ty)) x.args in
+
+    let symEnv = _getSymEnv loader in
+    let inputType = tyrecord_ (map (lam x. (nameGetStr x.0, x.1)) params) in
+    let inputType = symbolizeType symEnv inputType in
+    let outputType = match x. returnTy with Some ty
+      then compileTypeTppl ty
+      else errorSingle [modelInfo] "A model function must have an explicit return type, even if it returns nothing, i.e., ()" in
+    let outputType = symbolizeType symEnv outputType in
+    match serializationPairsFor [inputType, outputType] loader with (loader, [inputSer, outputSer]) in
+
+    let app_ = lam f. lam a. withInfo modelInfo (app_ f a) in
+
+    let parsedName = nameSym "input" in
+    let parsedDecl = DeclLet
+      { ident = parsedName
+      , body =
+        let m = nameSym "m" in
+        match_
+          (app_ inputSer.deserializer (nvar_ context.input))
+          (npcon_ context.some (npvar_ m))
+          (nvar_ m)
+          (error_ (str_ "Could not deserialize data input, malformed json"))
+      , tyAnnot = tyunknown_
+      , tyBody = tyunknown_
+      , info = modelInfo
+      } in
+    let loader = _addDeclExn loader parsedDecl in
+
+    let invocation =
+      -- Either apply to 0 (if nullary model function) or each
+      -- parameter in sequence
+      let f = withInfo modelInfo (nvar_ x.name.v) in
+      if null x.args
+      then app_ f (int_ 0)
+      else foldl (lam l. lam p. app_ l (recordproj_ (nameGetStr p.0) (nvar_ parsedName))) f params in
+
+      let inferCode = appf2_ (nvar_ context.repeat)
+        (ulam_ ""
+          (app_ (nvar_ context.printJsonLn)
+            (appf2_ (nvar_ context.serializeResult) outputSer.serializer
+              (infer_ (Default {runs = nvar_ context.particles})
+                (ulam_ "" invocation)))))
+        (nvar_ context.sweeps) in
+    Some (loader, inferCode)
+  | _ -> None ()
+
   sem compileStmtTppl: TpplCompileContext -> StmtTppl -> (Expr -> Expr)
 
   sem compileStmtTppl (context: TpplCompileContext) =
 
   | ExprStmtTppl x ->
-    -- TODO(vipa, 2022-12-22): Info field for the entire semi?
     lam cont. isemi_ (compileExprTppl context x.e) cont
 
   | AssumeStmtTppl a ->
@@ -1286,172 +1117,127 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Extern
 end
 
 
-lang CPPLLang =
-  MExprAst + MExprCompile + TransformDist + MExprEliminateDuplicateCode +
-  MExprSubstitute + MExprPPL + GenerateJsonSerializers
-
-  -- Check if a CorePPL program uses infer
-  sem hasInfer =
-  | expr -> hasInferH false expr
-
-  sem hasInferH acc =
-  | TmInfer _ -> true
-  | expr -> sfold_Expr_Expr hasInferH acc expr
-
-end
-
-
 lang TreePPLThings = TreePPLAst + TreePPLCompile
   + ProjMatchTypeCheck + ProjMatchPprint + MExprAst
+  + TransformDist + CPPLLoader
+  + ProjMatchToJson
+  + JsonSerializationLoader
+  + StripUtestLoader
+  + MExprLowerNestedPatterns + MCoreCompileLang
+  + PhaseStats
+
+  syn FileType =
+  | FTreePPL ()
+
+  sem _fileType = | _ ++ ".tppl" -> FTreePPL ()
+  sem _loadFile path = | (FTreePPL _, loader & Loader x) ->
+    -- NOTE(vipa, 2024-12-12): Return if we've already included this
+    -- file
+    match mapLookup path x.includedFiles with Some symEnv then (symEnv, loader) else
+    let loader = Loader {x with includedFiles = mapInsert path _symEnvEmpty x.includedFiles} in
+    -- For things referencing the entirety of the file, and no
+    -- particular part of it
+    let fileInfo = infoVal path 0 0 0 0 in
+
+    let content = readFile path in
+    match parseTreePPLExn path content with DeclSequenceFileTppl top in
+
+    -- Standard library (these should be in scope in the program)
+    match includeFileExn "." "treeppl::lib/standard.mc" loader with (stdlibMCEnv, loader) in
+    match includeFileExn "." "treeppl::lib/standard.tppl" loader with (stdlibTPPLEnv, loader) in
+    let fileEnv = mergeSymEnv stdlibMCEnv.env stdlibTPPLEnv.env in
+    -- Compiler libraries (these should *not* be in scope in the program)
+    match includeFileExn "." "stdlib::ext/dist-ext.mc" loader with (distEnv, loader) in
+    match includeFileExn "." "stdlib::ext/math-ext.mc" loader with (mathEnv, loader) in
+    match includeFileExn "." "stdlib::ext/matrix-ext.mc" loader with (matrixEnv, loader) in
+    match includeFileExn "." "stdlib::json.mc" loader with (jsonEnv, loader) in
+    match includeFileExn "." "stdlib::basic-types.mc" loader with (optionEnv, loader) in
+    match includeFileExn "." "stdlib::common.mc" loader with (commonEnv, loader) in
+    match includeFileExn "." "treeppl::treeppl-to-coreppl/lib-compile.mc" loader with (compileLibEnv, loader) in
+    -- Explicit imports (these should be in scope in the program)
+    let import = lam acc. lam imp.
+      match includeFileExn "." imp.v acc.1 with (newEnv, loader) in
+      (mergeSymEnv acc.0 newEnv.env, loader) in
+    match foldl import (fileEnv, loader) top.imports with (fileEnv, loader) in
+
+    let context =
+      { serializeResult = _getVarExn "serializeResult" compileLibEnv
+      , particles = _getVarExn "particles" compileLibEnv
+      , sweeps = _getVarExn "sweeps" compileLibEnv
+      , input = _getVarExn "input" compileLibEnv
+      , logName = _getVarExn "externalLog" mathEnv
+      , expName = _getVarExn "externalExp" mathEnv
+      , pow = _getVarExn "pow" mathEnv
+      , printJsonLn = _getVarExn "printJsonLn" jsonEnv
+      , some = _getConExn "Some" optionEnv
+      , matrixMul = _getVarExn "matrixMul" matrixEnv
+      , matrixPow = _getVarExn "mtxPow" stdlibMCEnv
+      , matrixAdd = _getVarExn "matrixElemAdd" matrixEnv
+      , matrixMulFloat = _getVarExn "matrixMulFloat" matrixEnv
+      , repeat = _getVarExn "repeat" commonEnv
+      } in
+
+    -- 1. Type and constructor definitions. *All* types are inserted
+    -- before *all* constructors, which lets constructors refer to
+    -- other types in mutually recursive ways.
+    let work = lam f. lam acc. lam decl.
+      foldl (lam acc. _addDeclWithEnvExn acc.0 acc.1) acc (f decl) in
+    match foldl (work compileTpplTypeDecl) (fileEnv, loader) top.decls with (fileEnv, loader) in
+    match foldl (work compileTpplConDecl) (fileEnv, loader) top.decls with (fileEnv, loader) in
+
+    -- 2. Functions. These are inserted into a single recursive let,
+    -- which enables mutual recursion.
+    let functions = DeclRecLets {bindings = joinMap (compileTpplFunction context) top.decls, info = fileInfo} in
+    match _addDeclWithEnvExn fileEnv loader functions with (fileEnv, loader) in
+
+    -- 3. Model invocations.
+    let work = lam loader. lam decl.
+      match compileModelInvocation context loader decl with Some (loader, invocation) then
+        let decl = DeclLet
+          { body = invocation
+          , ident = nameSym ""
+          , tyAnnot = tyunknown_
+          , tyBody = tyunknown_
+          , info = infoTm invocation
+          } in
+        (_addDeclWithEnvExn fileEnv loader decl).1
+      else loader in
+    let loader = foldl work loader top.decls in
+
+    match loader with Loader x in
+    (mapFindExn path x.includedFiles, loader)
 end
 
 
 let compileTpplToExecutable = lam filename: String. lam options: Options.
   use TreePPLThings in
-  let content = readFile filename in
-  match parseTreePPLExn filename content with file in
-  let corePplAst: Expr = compile file in
-  --printLn (mexprPPLToString corePplAst);
-  let prog: Expr = typeCheckExpr _tcEnvEmpty corePplAst in
-  use CPPLLang in
-  let prog =  mexprCpplCompile options false prog in
-  buildMExpr options prog
+  let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
+  let loader = mkLoader symEnvDefault typcheckEnvDefault [StripUtestHook ()] in
+  let loader = enableCPPLCompilation options loader in
+  let loader = enableJsonSerialization loader in
+  endPhaseStatsExpr log "mk-cppl-loader" unit_;
+  let loader = (includeFileExn "." filename loader).1 in
+  endPhaseStatsExpr log "include-file" unit_;
+  let ast = buildFullAst loader in
+  endPhaseStatsExpr log "build-full-ast" ast;
 
--- output needs to be an absolute path
-let runCompiledTpplProgram: Options -> String -> Int -> ExecResult =
-  lam options: Options. lam jsonData: String. lam sweeps: Int.
-  let cmd = [options.output, jsonData, int2string options.particles, int2string sweeps] in
-  let res: ExecResult = sysRunCommand cmd "" "." in -- one sweep
+  let ocamlCompile : [String] -> [String] -> String -> String = lam libs. lam clibs. lam prog.
+    let opts =
+      { defaultCompileOptions
+      with libraries = libs
+      , cLibraries = clibs
+      } in
+    (if options.outputMl then
+      writeFile "program.ml" prog
+     else ());
+    let res = ocamlCompileWithConfig opts prog in
+    sysMoveFile res.binaryPath options.output;
+    sysChmodWriteAccessFile options.output;
+    res.cleanup ();
+    options.output in
+  let hooks = mkEmptyHooks ocamlCompile in
+  let ast = lowerAll ast in
+  endPhaseStatsExpr log "lower-all" ast;
+  let res = compileMCore ast hooks in
+  endPhaseStatsExpr log "compile-mcore" ast;
   res
-
-mexpr
-
-let testOptions =  {
-    method = "is-lw",
-    target = "mexpr",
-    test = false,
-    particles = 1,
-    resample = "manual",
-    align = false,
-    printModel = false,
-    printMCore = false,
-    exitBefore = false,
-    skipFinal = false,
-    outputMc = false,
-    output = sysTempFileMake (), -- absolute path
-    printSamples = true,
-    stackSize = 10000,
-    cps = "partial",
-    earlyStop = true,
-    mcmcLightweightGlobalProb = 0.1,
-    mcmcLightweightReuseLocal = true,
-    printAcceptanceRate = false,
-    pmcmcParticles = 2,
-    seed = None (),
-    extractSimplification = "none",
-    odeSolverMethod = "rk4",
-    stepSize = 1e-3,
-    subsample = false,
-    subsampleSize = 1,
-    staticDelay = false,
-    prune = false,
-    driftKernel = false,
-    driftScale = 0.1
-  } in
-
--- test hello world
-let testTpplProgram = "models/lang/hello.tppl" in
-let testJsonInput = "models/data/coin.json" in
-compileTpplToExecutable testTpplProgram testOptions;
-let testProgramExecResult = runCompiledTpplProgram testOptions testJsonInput 1 in
-
-utest testProgramExecResult.returncode with 0 in
-utest testProgramExecResult.stderr with "Hello, world!\n" in
-sysDeleteFile testOptions.output;
-
--- test externals
-let testTpplProgram = "models/lang/externals.tppl" in
-let testJsonInput = "models/data/coin.json" in
-compileTpplToExecutable testTpplProgram testOptions;
-let testProgramExecResult = runCompiledTpplProgram testOptions testJsonInput 1 in
-
-utest testProgramExecResult.returncode with 0 in
-utest testProgramExecResult.stdout with "{\"samples\":[0.69314718056],\"weights\":[0.0],\"normConst\":0.0}\n" in
-sysDeleteFile testOptions.output;
-
--- test multiple print statements
-let testTpplProgram = "models/lang/blub.tppl" in
-let testJsonInput = "models/data/blub.json" in
-compileTpplToExecutable testTpplProgram testOptions;
-let testProgramExecResult = runCompiledTpplProgram testOptions testJsonInput 1 in
-
-utest testProgramExecResult.returncode with 0 in
-utest testProgramExecResult.stderr with
-"blab
-
-blab
-7
-3.14159265359
-True
-Trump was elected: False
-1
-2
-The length of the vector is 20
-TrueTrueTrueFalseTrueFalseFalseTrueTrueFalseFalseFalseTrueFalseTrueFalseFalseTrueFalseFalse
-5.
-6.
-0.666666666667
--1.
-True
-True
-False
-False
-False
-True
-False
-False
-False
-True
-True
-True
-False
-True
-False
-.....
-6 is more than 5.
-" in
-sysDeleteFile testOptions.output;
-
--- test sweep number
-
-let testTpplProgram = "models/lang/coin.tppl" in
-let testJsonInput = "models/data/coin.json" in
-compileTpplToExecutable testTpplProgram testOptions;
-let testProgramExecResult = runCompiledTpplProgram testOptions testJsonInput 3 in
-
-utest testProgramExecResult.returncode with 0 in
-let numberLines = length (strSplit "\n" testProgramExecResult.stdout) in
-utest numberLines with 4 in -- NOTE(vsenderov, 2023-09-11): for some reason it needs to be one more
-sysDeleteFile testOptions.output;
-
--- Test syntax for matrix multiplication
-let testTpplProgram = "models/lang/matrix-tests.tppl" in
-let testJsonInput = "models/data/empty.json" in
-compileTpplToExecutable testTpplProgram testOptions;
-let testProgramExecResult = runCompiledTpplProgram testOptions testJsonInput 1 in
-
-utest testProgramExecResult.returncode with 0 in
-utest testProgramExecResult.stderr with
-"[[ 1 x 5 matrix ]]:
-1.\t2.\t3.\t4.\t5.\t
-
-[[ 2 x 2 matrix ]]:
-81.\t0.\t
--580.\t2401.\t
-
-" in
-
-
--- TODO(2023-09-08, vsenderov): need to test probailistic stuff as well such as coin.tppl
-
-()

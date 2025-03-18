@@ -1,6 +1,6 @@
 /**
  * Qualitatitive Trait Evolution Model
- * 
+ *
  * Models the joint evolution of a gene and phenotype.
  */
 
@@ -29,16 +29,16 @@ type QTTree =
 
 function tree2string(tree: QTTree): String {
   if (tree is QTLeaf) {
-    return join(["QTLeaf(", int2string(tree.index), ")"]);
-  } 
-  if (tree is QTNode) {
-    return join(["QTNode(", tree2string(tree.left), ", ", tree2string(tree.right), ")"]);
-  } 
-  if (tree is QTWeightedNode) {
-    return join(["QTWeightedNode(", int2string(tree.index), ")"]);
+    return paste0(["QTLeaf(", int2string(tree.index), ")"]);
   }
   if (tree is QTNode) {
-    return join( ["QTLeaf(", int2string(tree.index), ")"] );
+    return paste0(["QTNode(", tree2string(tree.left), ", ", tree2string(tree.right), ")"]);
+  }
+  if (tree is QTWeightedNode) {
+    return paste0(["QTWeightedNode(", int2string(tree.index), ")"]);
+  }
+  if (tree is QTNode) {
+    return paste0( ["QTLeaf(", int2string(tree.index), ")"] );
   }
   printLn("Error (tree2string): unexpected tree structure");
   return "Error (tree2string): unexpected tree structure";
@@ -48,7 +48,7 @@ function gammaZeroMix(rho: Bool, a: Real, b: Real): Real {
   if (rho) {
     assume x ~ Gamma(a, b);
     return x;
-  } 
+  }
   return 0.0;
 }
 
@@ -69,7 +69,7 @@ type QTParm = QTParm  { lambda: Real // Rate of phenotypic evolution
 /**
 * Q-T-BIRDS model
 *
-* @param tree: QTTree            - Phylogenetic tree, the tips of which have 
+* @param tree: QTTree            - Phylogenetic tree, the tips of which have
 *                                  sequence and phenotype information
 * @param normQChar: Tensor[Real] - Normalized Q matrix for the phenotype
 * @param JChar: Tensor[Real]     - Jump matrix for the phenotype
@@ -89,7 +89,7 @@ type QTParm = QTParm  { lambda: Real // Rate of phenotypic evolution
 *                                  the joint transition rate
 * @param pa: Real                - Prob of correlation rho ~ Beta(pa, pb)
 * @param pb: Real                - Prob of correlation rho ~ Beta(pa, pb)
-*    
+*
 * @return [lam, mu, nu, p]
 */
 model function qtbirds( tree: QTTree
@@ -106,7 +106,7 @@ model function qtbirds( tree: QTTree
                       , nuScale: Real
                       , pa: Real
                       , pb: Real
-                      ): Real[] 
+                      ): Real[]
 {
   // printMtx(normQChar);
   // printMtx(jChar);
@@ -123,7 +123,7 @@ model function qtbirds( tree: QTTree
   assume mu ~ Gamma(muShape, muScale);
   assume nu ~ Gamma(nuShape, nuScale); // comment this ...
   let p = 0.0;                         // and this and ...
-  
+
   // and uncomment the following lines, if you want nu to be a mix between
   // 0 and gamma
   //assume p ~ Beta(pa, pb);
@@ -151,7 +151,7 @@ model function qtbirds( tree: QTTree
  * It traverses the nodes of tree and calls coalesceQTTwig
  * on subtrees that have just two children who are leafs.
  *
- * @param tree 
+ * @param tree
  * @param m
  * @param doresample - Whether to resample after processing the tree
  *                     the idea is that the first invocation of this
@@ -167,9 +167,9 @@ function coalesceQTTree(tree: QTTree, m: ModelDynamics, doresample: Bool) : QTTr
                                   , right = tree.right
                                   , age = tree.age
                                   , partialLogWeight = 0.0
-                                  }; 
+                                  };
     return coalesceQTTwig(newTree, m, doresample);
-  } 
+  }
   if (tree.left is QTLeaf) && (tree.right is QTNode) {
     let rightTree = coalesceQTTree(tree.right, m, true); // matches QTWeightedLeaf, resample in the inner calls
     let newTree = QTWeightedNode  { left = tree.left
@@ -187,7 +187,7 @@ function coalesceQTTree(tree: QTTree, m: ModelDynamics, doresample: Bool) : QTTr
                                   , partialLogWeight = leftTree.partialLogWeight
                                   };
     return coalesceQTTwig(newTree, m, doresample);
-  } 
+  }
   if (tree.left is QTNode) && (tree.right is QTNode) {
     let leftTree = coalesceQTTree(tree.left, m, true); // matches QTWeightedLeaf, resample in the inner calls
     let rightTree = coalesceQTTree(tree.right, m, true); // matches QTWeightedLeaf, resample in the inner calls
@@ -197,7 +197,7 @@ function coalesceQTTree(tree: QTTree, m: ModelDynamics, doresample: Bool) : QTTr
                                   , partialLogWeight = leftTree.partialLogWeight + rightTree.partialLogWeight
                                   };
     return coalesceQTTwig(newTree, m, doresample);
-  } 
+  }
   else {
     printLn("Error (coalesceQTTree): unexpected tree structure");
     weight 0.0;
@@ -214,7 +214,7 @@ function coalesceQTTree(tree: QTTree, m: ModelDynamics, doresample: Bool) : QTTr
 /*
  * coalesceQTTwig deals with a subtree that has two leafs as children
  * (they can be weighted or unweighted)
- */  
+ */
 function coalesceQTTwig(tree: QTTree, m: ModelDynamics, doresample: Bool): QTTree {
   let leftTime = getAgeDiff(tree, tree.left);
   let rightTime = getAgeDiff(tree, tree.right);
@@ -230,20 +230,20 @@ function coalesceQTTwig(tree: QTTree, m: ModelDynamics, doresample: Bool): QTTre
   // ... jumps leftMessageSequenceEvolution.characterJumps
   // if not, workaround below:
   ///let newLeftMessageSequence = sapply(leftMessageSequenceEvolution.messageSequence, idTensorReal);     // workaround
-  
-  
+
+
   let rightMessageSequenceEvolution = evolveMessageSequence(rightMessageSequence, m, rightTime);
   let newRightMessageSequence = rightMessageSequenceEvolution.messageSequence; // should work now
   // ... jumps rightMessageSequenceEvolution.characterJumps
   // if not, workaround
   //let newRightMessageSequence = sapply(rightMessageSequenceEvolution.messageSequence, idTensorReal);
-  
+
 
   // we need to zipWith left and right and element-wise multiply left and right
   // TODO one of the messages may be missing (-1.)
   let newMessageSequence = zipWith( mtxElemMulMissing
                                   , newLeftMessageSequence
-                                  , newRightMessageSequence 
+                                  , newRightMessageSequence
                                   ); // ~~TODO check zipWith and implement hadamardMul~~
 
   //  Still possible to have missing data after the previous operation
@@ -264,19 +264,19 @@ function coalesceQTTwig(tree: QTTree, m: ModelDynamics, doresample: Bool): QTTre
 
   let newCharMessage = mtxElemMul(newLeftCharMessage, newRightCharMessage); // characters are never missing :)
   let logWeightChar = computeMessageLogLikelihood(newCharMessage);
-  
+
   let partialLogWeight = seqSumReal(logWeightSequence) + logWeightChar;
 
   logWeight (partialLogWeight - tree.partialLogWeight);
-  
-  // printLn(join( [  "Merging "
+
+  // printLn(paste0( [  "Merging "
   //               , int2string(getIndex(tree.left))
   //               , " and "
-  //               ,  int2string(getIndex(tree.right)) 
+  //               ,  int2string(getIndex(tree.right))
   //               ]
   //             )
   //         ); //workaround for tree.left.index
-  // printLn(join( [  "Partial log weight: "
+  // printLn(paste0( [  "Partial log weight: "
   //               , real2string(partialLogWeight)
   //               , "Character contribution: "
   //               , real2string(logWeightChar)
@@ -304,7 +304,7 @@ function getMessageSequence(tree: QTTree): Tensor[Real][] {
   if (tree is QTWeightedLeaf) {
     let mesSeq = tree.messageSequence; // should work now
     // workaround reconstruct sequence
-    //let mesSeq = sapply(tree.messageSequence, idTensorReal);   
+    //let mesSeq = sapply(tree.messageSequence, idTensorReal);
     //let mesSeq = idSTensorReal(tree.messageSequence); // used to be a workaround
     return mesSeq;
   }
@@ -320,7 +320,7 @@ function getMessage(state: Int): Tensor[Real] {
   /* NOTE(vsenderov, 2023-11-01)
      - Messages hard-coded for now
      - see https://github.com/treeppl/treeppl/issues/30
-  */ 
+  */
   if (eqi(state, subi(0, 1))) {
     return rvecCreate(4, [-1., -1., -1., -1.]);  // for now this is how we encode missing data
   }
@@ -342,14 +342,14 @@ function getCharacterMessage(tree: QTTree, messages: Real[][]): Tensor[Real]
     let curState = idInt(tree.characterState); // workaround
     let rTensor = rvecCreate(l, messages[addi(1, curState)]);
     return rTensor;
-  } 
-  
+  }
+
   if (tree is QTWeightedLeaf)
   {
     return tree.characterMessage;
-  } 
-  
-  else 
+  }
+
+  else
   {
     error("Error: getCharacterMessage: unexpected tree structure");
     return rvecCreate(1, [0.0]);
@@ -376,7 +376,7 @@ function meGetJumps (mes: MessageEvolution): Int
 
 /**
 * Using the Q-T-BIRDS model, evolve a single message along a branch of length t
-* 
+*
 * @param dyn: ModelDynamics
 * @param t: Real  Time of evolution
 * @param mes: Tensor[Real]
@@ -415,8 +415,8 @@ function evolveCharacter(mes: Tensor[Real], m: ModelDynamics, t: Real, sJumps: I
 }
 
 
-type MessageSequenceEvolution = MessageSequenceEvolution { 
-  messageSequence: Tensor[Real][], 
+type MessageSequenceEvolution = MessageSequenceEvolution {
+  messageSequence: Tensor[Real][],
   characterJumps: Int
 }
 
@@ -443,7 +443,7 @@ function evolveMessageSequence( messages: Tensor[Real][]
 /**
  * NOTE(vsenderov, 2023-11-08) This function proved very easy to introduce bugs
  * into.  Makes the necesseity for writing tests even more apparent.
- * 
+ *
 */
 function computeMessageLogLikelihood(mes: Tensor[Real]): Real
 {

@@ -10,16 +10,20 @@ include "iterator.mc"
 include "ext/dist-ext.mc"
 include "seq.mc"
 
-let error = error
+let error = lam x. error x
 
-let subf = subf
-let muli = muli
-let addi = addi
-let subi = subi
-let eqi = eqi
-let neqi = neqi
-let geqi = geqi
-let gti = gti
+let subf = lam x. subf x
+let muli = lam x. muli x
+let addi = lam x. addi x
+let subi = lam x. subi x
+let eqi = lam x. eqi x
+let neqi = lam x. neqi x
+let geqi = lam x. geqi x
+let gti = lam x. gti x
+
+let log = lam x. log x
+let exp = lam x. exp x
+let sqrt = lam x. sqrt x
 
 let slice = lam seq. lam beg. lam mend.
     subsequence seq (subi beg 1) (subi mend beg)
@@ -29,9 +33,9 @@ let slice = lam seq. lam beg. lam mend.
 --- Printing and strings ---
 ----------------------------
 
-let concat = concat
+let concat = lam x. concat x
 
-let paste0 = join
+let paste0 = lam x. join x
 
 let paste = lam seq. lam sep.
   strJoin sep seq
@@ -40,7 +44,7 @@ utest paste0 ["a", "b", "c"] with "abc" using eqString
 utest paste ["a", "b", "c"] " " with "a b c" using eqString
 utest paste ["a", "b", "c"] ", " with "a, b, c" using eqString
 
--- In TreePPL "printing" is only for debugging purposes 
+-- In TreePPL "printing" is only for debugging purposes
 let print = lam s.
   printError s;
   flushStderr ()
@@ -49,7 +53,9 @@ let printLn = lam s.
   printError (join [s, "\n"]);
   flushStderr ()
 
-let real2string = float2string
+let int2string = lam x. int2string x
+
+let real2string = lam x. float2string x
 
 let bool2string: Bool -> String  = lam b.
   if b then
@@ -64,7 +70,7 @@ let bool2string: Bool -> String  = lam b.
 let length = lam x.
   length x
 
-let zipWith = zipWith
+let zipWith = lam x. zipWith x
 
 let fold = lam x.
   foldl x
@@ -81,7 +87,7 @@ let sapply1 = lam x. lam f. lam a.
   map (lam e. f e a) x
 
 -- switching the order of map to make it more R-like
--- the "etymology" should be understood as 
+-- the "etymology" should be understood as
 -- "sequence" apply, even though in R it is something slightly different
 -- sapply == for sequences, tapply == for tensors
 let sapply = lam x. lam f.
@@ -119,10 +125,10 @@ let sbool2string = lam seq.
   sapply seq bool2string
 
 -- remap make to rep to make it more R-like
-let rep = make
+let rep = lam x. make x
 
 -- WebPPL inspired
-let repApply = create
+let repApply = lam x. create x
 
 -- Sequence normalization
 let seqNormalize = lam seq.
@@ -132,7 +138,7 @@ let seqNormalize = lam seq.
 utest seqNormalize [1.0, 1.0] with [0.5, 0.5] using (eqSeq eqf)
 
 -- Find elements of a sequence that are true
-let whichTrue = lam elems. 
+let whichTrue = lam elems.
   foldli (lam acc. lam i. lam x. if x then snoc acc (addi i 1) else acc) [] elems
 
 -- Test cases
@@ -157,21 +163,21 @@ utest seqSumInt [1, 2, 3, 4, 5] with 15 using eqi
 --- Tensors ---
 ---------------
 
-let int2real = int2float -- we can also use the compiler built-in Real(x)
+let int2real = lam x. int2float x -- we can also use the compiler built-in Real(x)
 
-let dim = tensorShape
+let dim = lam x. tensorShape x
 
-let mtxMul = matrixMul
+let mtxMul = lam x. matrixMul x
 
-let mtxSclrMul = matrixMulFloat
+let mtxSclrMul = lam x. matrixMulFloat x
 
-let mtxAdd = matrixElemAdd
+let mtxAdd = lam x. matrixElemAdd x
 
-let mtxElemMul = matrixElemMul
+let mtxElemMul = lam x. matrixElemMul x
 
-let mtxTrans = matrixTranspose
+let mtxTrans = lam x. matrixTranspose x
 
-let mtxExp = matrixExponential
+let mtxExp = lam x. matrixExponential x
 
 let mtxGetRow = lam row. lam tensor.
   let r = subi row 1 in
@@ -184,7 +190,7 @@ let mtxCreate = lam row. lam col. lam seq.
 
 let mtxCreateId = lam dim.
   let isDiagonal = lam idx. eqi (divi idx dim) (modi idx dim) in
-  let seq = map (lam idx. if isDiagonal idx then 1.0 else 0.0) (iteratorToSeq (iteratorRange 0 (subi (muli dim dim) 1))) in
+  let seq = create (muli dim dim) (lam idx. if isDiagonal idx then 1.0 else 0.0) in
   mtxCreate dim dim seq
 
 utest tensorToSeqExn (tensorSliceExn (mtxCreateId 2) [0]) with [1., 0.] using (eqSeq eqf)
@@ -262,7 +268,7 @@ let iid = lam f. lam p. lam n.
 
 -- Retrieve a row vector with the columns in cols
 -- OPT(mariana/vipa, 2023-10-09): the idea is to have mtxRowCols, mtxRowsCol, and mtxRowsCols
--- if we get the appropriate form of overloading we could make indexing (a[idxs]) 
+-- if we get the appropriate form of overloading we could make indexing (a[idxs])
 -- call the correct one of those later on
 let mtxRowCols = lam matrix. lam row. lam cols.
   tensorSubSeqExn tensorCreateCArrayFloat matrix [[subi row 1], map (lam v. subi v 1) cols]
@@ -293,6 +299,9 @@ let tensorNormalize = lam v.
   let sum = tensorFold addf 0. v in
   tensorCreateCArrayFloat (tensorShape v) (lam i. divf (tensorGetExn v i) sum)
 
+let rvecCreate = lam numElem. rvecCreate numElem
+let cvecCreate = lam numElem. cvecCreate numElem
+
 let __test_tensor2: Tensor[Float] = rvecCreate 5 [1., 1., 1., 1., 1.]
 
 utest tensorToSeqExn (tensorSliceExn (tensorNormalize __test_tensor2) [0]) with [0.2, 0.2, 0.2, 0.2, 0.2] using (eqSeq eqf)
@@ -313,7 +322,7 @@ utest tensorToSeqExn (tensorSliceExn (tensorNormalize __test_tensor2) [0]) with 
 --- Messages ---
 ----------------
 
--- NOTE(mariana, 2023-10-05): attempt to use functions Daniel wrote 
+-- NOTE(mariana, 2023-10-05): attempt to use functions Daniel wrote
 -- to handle Messages, which are Tensor[Real][]
 
 -- Vector normalization
@@ -321,15 +330,15 @@ let normalizeVector = lam v.
   let sum = tensorFold addf 0. v in
   tensorCreateCArrayFloat (tensorShape v) (lam i. divf (tensorGetExn v i) sum)
 
--- Message normalization 
-let normalizeMessage = lam m. 
+-- Message normalization
+let normalizeMessage = lam m.
   map normalizeVector m
 
 -- Elementwise multiplication of state likelihoods/probabilities
 let mulMessage = zipWith matrixElemMul
 
 -- Raises each element to the power of the float argument
-let messageElementPower = lam m. lam f. 
+let messageElementPower = lam m. lam f.
     map (lam v.
       tensorCreateCArrayFloat (tensorShape v) (lam i. pow (tensorGetExn v i) f)
   ) m
@@ -347,21 +356,21 @@ let messageElementPower = lam m. lam f.
 --- Messages ---
 ----------------
 
--- NOTE(mariana, 2023-10-05): attempt to use functions Daniel wrote 
+-- NOTE(mariana, 2023-10-05): attempt to use functions Daniel wrote
 -- to handle Messages, which are Tensor[Real][]
 
--- Message normalization 
-let messageNormalize = lam m. 
+-- Message normalization
+let messageNormalize = lam m.
   map tensorNormalize m
 
 -- Elementwise multiplication of state likelihoods/probabilities
 let messageElemMul = zipWith matrixElemMul
 
 -- Raise each element of each sequence element to the Real power
-let messageElemPow = lam m. lam f. 
+let messageElemPow = lam m. lam f.
     map (lam v. tensorElemPow v f) m
 
-let __test_message = [rvecCreate 2 [2., 3.], rvecCreate 2 [4., 5.]] 
+let __test_message = [rvecCreate 2 [2., 3.], rvecCreate 2 [4., 5.]]
 let __test_messageElemPow = messageElemPow __test_message 2.
 
 -- this test doesn't quite work -- we need to see how how do [0]

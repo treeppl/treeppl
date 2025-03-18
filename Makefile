@@ -9,13 +9,12 @@ src_path=${HOME}/.local/src/treeppl/
 tppl_src=src/.
 tppl_models=models
 
-tppl_tmp_file := $(shell mktemp)
-build/${tppl_name}: $(shell find src -path 'src/lib' -prune -o \( -name "*.mc" -o -name "*.syn" \) -print)
-	mi syn src/treeppl.syn src/treeppl-ast.mc
-	time mi compile src/${tppl_name}.mc --output ${tppl_tmp_file}
+build/${tppl_name}: src/treeppl-ast.mc $(shell find src -path 'src/lib' -prune -o \( -name "*.mc" -o -name "*.syn" \) -print)
 	mkdir -p build
-	cp ${tppl_tmp_file} build/${tppl_name}
-	rm ${tppl_tmp_file}
+	time mi compile src/tpplc.mc --output $@
+
+src/treeppl-ast.mc: src/treeppl.syn
+	mi syn $< $@
 
 install: build/${tppl_name}
 	echo "Make sure you extend the MCORE_LIBS variable with"
@@ -34,23 +33,90 @@ uninstall:
 	rm ${bin_path}/${tppl_name}
 	rm -rf $(src_path)
 
-libtest:
-	mi compile src/lib/standard.mc --test
-	./standard
-	@echo 
-	rm -f standard
+.PHONY: test-standard
+test-standard:
+	mi compile src/lib/standard.mc --test --output build/standard
+	build/standard
 
-# Filtering successful tests
-test: src/treeppl-to-coreppl/compile.mc
-	mi compile src/treeppl-to-coreppl/compile.mc --test
-	./compile | sed 's/\.\{10,\}//g'
-	mi compile src/lib/standard.mc --test
-	./standard | sed 's/\.\{10,\}//g'
-	@echo 
-	rm -f compile standard
+.PHONY: test-compile
+test-compile:
+	mi compile src/treeppl-to-coreppl/compile.mc --test --output build/compile
+	build/compile
 
+# Configurations to run tests with, as flags with spaces replaced with
+# "_", because we want a list of lists here, and that's not actually
+# available. It's possible we should also include variations on the
+# resample flag later, but it's already a large set of configurations
+# to test. The methods that consider the resample flag are marked with
+# "resample" below.
+TEST_CONFIGURATIONS := -m_is-lw_--cps_none
+TEST_CONFIGURATIONS += -m_is-lw_--cps_partial
+TEST_CONFIGURATIONS += -m_is-lw_--cps_full
+TEST_CONFIGURATIONS += -m_smc-bpf_--cps_full  #resample
+TEST_CONFIGURATIONS += -m_smc-bpf_--cps_partial  #resample
+TEST_CONFIGURATIONS += -m_smc-apf_--cps_full  #resample
+TEST_CONFIGURATIONS += -m_smc-apf_--cps_partial  #resample
+TEST_CONFIGURATIONS += -m_mcmc-lightweight_--cps_none #resample
+TEST_CONFIGURATIONS += -m_mcmc-lightweight_--align_--cps_none #resample
+TEST_CONFIGURATIONS += -m_mcmc-lightweight_--align_--cps_full #resample
+TEST_CONFIGURATIONS += -m_mcmc-lightweight_--align_--cps_partial #resample
+TEST_CONFIGURATIONS += -m_mcmc-trace_--cps_none
+TEST_CONFIGURATIONS += -m_mcmc-naive_--cps_none
+TEST_CONFIGURATIONS += -m_pmcmc-pimh_--cps_full
+TEST_CONFIGURATIONS += -m_pmcmc-pimh_--cps_partial
+
+MODELS := $(shell find models -name "*.tppl")
+MODEL_CONFIGS := $(foreach model,$(MODELS),$(foreach config,$(TEST_CONFIGURATIONS),$(model)@$(config)))
+
+# NOTE(vipa, 2025-03-04): Some inference algorithms do not handle
+# higher order constants, which is currently only relevant when using
+# matrices (which are tensors underneath). We thus filter out the
+# model+inference combinations where the model uses matrices and the
+# inference cannot handle it.
+NO_HOC_INFER := -m_is-lw_--cps_full
+NO_HOC_INFER += -m_mcmc-lightweight_--align_--cps_full
+NO_HOC_INFER += -m_mcmc-lightweight_--cps_none
+NO_HOC_INFER += -m_pmcmc-pimh_--cps_full
+NO_HOC_INFER += -m_smc-apf_--cps_full
+NO_HOC_INFER += -m_smc-bpf_--cps_full
+USES_MATRICES := models/lang/mini-mat-test.tppl
+USES_MATRICES += models/lang/matrix-tests.tppl
+USES_MATRICES += models/lang/tensors.tppl
+USES_MATRICES += models/phylogeny/tree_inference_pruning_gtr.tppl
+USES_MATRICES += models/phylogeny/substmodel_belief_propagation.tppl
+USES_MATRICES += models/phylogeny/tree_inference.tppl
+USES_MATRICES += models/phylogeny/host_repertoire.tppl
+USES_MATRICES += models/phylogeny/tree_inference_pruning_scaled.tppl
+USES_MATRICES += models/phylogeny/tree_inference_pruning.tppl
+USES_MATRICES += models/pheno-mol/qt.tppl
+UNSUPPORTED := $(foreach model,$(USES_MATRICES),$(foreach config,$(NO_HOC_INFER),$(model)@$(config)))
+MODEL_CONFIGS := $(filter-out $(UNSUPPORTED),$(MODEL_CONFIGS))
+
+.PHONY: $(MODEL_CONFIGS)
+$(MODEL_CONFIGS):
+	@set -ue; \
+	path=$(firstword $(subst @, ,$@)); \
+	conf="$(subst _, ,$(lastword $(subst @, ,$@)))"; \
+	mkdir -p build/$$(dirname $$path); \
+	build/${tppl_name} $$conf $$path -p 2 --debug-phases --output build/$@ > build/$@.c.out 2> build/$@.c.err || { st=$$?; echo "$$path,$$conf,compile failure,$$st"; exit $$st; }; \
+	build/$@ "$${path%.tppl}.json" > build/$@.r.out 2> build/$@.r.err || { st=$$?; echo "$$path,$$conf,run failure,$$st"; exit $$st; }; \
+	echo "$$path,$$conf,success,0"
+
+.PHONY: test-models
+test-models: $(MODEL_CONFIGS)
+
+.PHONY: print-model-targets
+print-model-targets:
+	@echo $(MODEL_CONFIGS)
+
+.PHONY: print-models
+print-models:
+	@echo $(MODELS)
+
+.PHONY: test
+test: test-compile test-standard test-models
 
 clean:
 	rm -f src/treeppl-ast.mc
-	rm -f build/*
+	rm -rf build/*
 	rm -f out compile

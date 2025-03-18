@@ -1,3 +1,6 @@
+import "stdlib::ext/dist-ext.mc"
+import "stdlib::seq.mc"
+import "stdlib::string.mc"
 
 type Tree =
   | Leaf {age: Real}
@@ -85,7 +88,7 @@ function poissonScore(x: Int, param: PoissonParam) {
   return poissonPmf(param.rate, x);
 }
 
-// Beta 
+// Beta
 type BetaParam = BetaParam {
   a: Real,
   b: Real
@@ -104,7 +107,7 @@ function betaScore(x: Real, param: BetaParam) {
   return betaPdf(x, param.a, param.b);
 }
 
-// Gamma 
+// Gamma
 type GammaParam = GammaParam {
   shape: Real,
   scale: Real
@@ -141,7 +144,7 @@ function categoricalScore(x: Int, param: CategoricalParam) {
   return categoricalPmf(param.probs, x);
 }
 
-// Multinomial 
+// Multinomial
 type MultinomialParam = MultinomialParam {
   n: Int,
   probs: Real[]
@@ -222,9 +225,9 @@ function binomialScore(x: Int, param: BinomialParam) {
 
 
 /**
- * 
+ *
  * Pretty prints a two-dimensional tensor
- * 
+ *
  * @param m matrix
  * @return void
  */
@@ -234,7 +237,7 @@ function printMtx(m: Tensor[Real]): () {
                  , int2string( dimensions[1] )
                  , " x "
                  , int2string( dimensions[2] )
-                 , " matrix ]]:" 
+                 , " matrix ]]:"
                  ]
                )
          );
@@ -252,17 +255,17 @@ function printMtx(m: Tensor[Real]): () {
 
 
 /**
- * NOTE(vsenderov, 23-10-01): Commented out because we can't use mtxSet 
+ * NOTE(vsenderov, 23-10-01): Commented out because we can't use mtxSet
    as it leads to 0-CFA to fail
  * Adds two matrices element by element.
- * 
+ *
  * TODO(vsenderov, 2023-09-28): Is that the best way to implement the
  * addition function?
- * NOTE(vsenderov, 2023-09-29): I've become even more convinced that this is 
+ * NOTE(vsenderov, 2023-09-29): I've become even more convinced that this is
  * a hack.  Creating a syntax for this becomes a very hard proposition as
  * the compiler needs to compile this function first, and to compile it, it
  * needs to have it already as we need to be able to interpret all syntaxes...
- * 
+ *
  * @param mtx1 First matrix
  * @param mtx2 Second matrix
  * @return Resultant matrix after addition
@@ -270,11 +273,11 @@ function printMtx(m: Tensor[Real]): () {
 // function mtxAdd(mtx1: Tensor[Real], mtx2: Tensor[Real]): Tensor[Real] {
 //   let dimensions1 = dim(mtx1);
 //   let dimensions2 = dim(mtx2);
-  
+
 //   // Check if dimensions of both matrices are the same
 //   if !eqi(dimensions1[1], dimensions2[1]) && !eqi(dimensions1[2], dimensions2[2]) {
 //     printLn("ERROR: Linear algebra problem -- matrix dimensions do not match!");
-//     printMtx(mtx1); 
+//     printMtx(mtx1);
 //     printMtx(mtx2);
 //     weight(0.); /* TODO(vsenderov, 2023-09-28): investigate if we need to do more
 //                    to stop the execution */

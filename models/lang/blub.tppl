@@ -33,7 +33,7 @@ model function blub(n: Int, pi: Real, trump: Bool, coinflips: Bool[], text: Stri
 
   let coinFlipStr = sapply(coinflips, bool2string);
   printLn(concat("The length of the vector is ", int2string(length(coinflips))));
-  let y = join(coinFlipStr); //cannot use concat on more than two argumnets
+  let y = paste0(coinFlipStr); //cannot use concat on more than two argumnets
   printLn(y);
 
   printLn(real2string(2.0 + 3.0));
@@ -63,7 +63,7 @@ model function blub(n: Int, pi: Real, trump: Bool, coinflips: Bool[], text: Stri
   for i in 1 to 10 {
     if Real(i) > 5.0 {
       print("\n"); // cannot use printLn() as a nullary function
-      printLn(join([int2string(i), " is more than ", real2string(5.0)]));
+      printLn(paste0([int2string(i), " is more than ", real2string(5.0)]));
       return;
     } else {
       print(".");
