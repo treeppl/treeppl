@@ -36,33 +36,58 @@ model function blub(n: Int, pi: Real, trump: Bool, coinflips: Bool[], text: Stri
   let y = paste0(coinFlipStr); //cannot use concat on more than two argumnets
   printLn(y);
 
+  printLn("Arithmetic");
   printLn(real2string(2.0 + 3.0));
+  printLn(int2string(2 + 3));
   printLn(real2string(2.0 * 3.0));
+  printLn(int2string(2 * 3));
   printLn(real2string(2.0 / 3.0));
+  printLn(int2string(2 / 3));
   printLn(real2string(2.0 - 3.0));
+  printLn(int2string(2 - 3));
+  printLn(real2string(2.0 ^ 3.0));
 
+  printLn("Lt");
   printLn(bool2string(2.0 < 3.0));
   printLn(bool2string(2.0 <= 3.0));
+  printLn(bool2string(2 < 3.0));
+  printLn(bool2string(2 <= 3.0));
+  printLn(bool2string(2.0 < 3));
+  printLn(bool2string(2.0 <= 3));
+  printLn(bool2string(2 < 3));
+  printLn(bool2string(2 <= 3));
+  printLn("Eq");
   printLn(bool2string(2.0 == 3.0));
+  printLn(bool2string(2 == 3));
+  printLn("Gt");
   printLn(bool2string(2.0 >= 3.0));
   printLn(bool2string(2.0 > 3.0));
+  printLn(bool2string(2 >= 3.0));
+  printLn(bool2string(2 > 3.0));
+  printLn(bool2string(2.0 >= 3));
+  printLn(bool2string(2.0 > 3));
+  printLn(bool2string(2 >= 3));
+  printLn(bool2string(2 > 3));
 
+  printLn("And");
   printLn(bool2string(true && true));
   printLn(bool2string(true && false));
   printLn(bool2string(false && true));
   printLn(bool2string(false && false));
 
+  printLn("Or");
   printLn(bool2string(true || true));
   printLn(bool2string(true || false));
   printLn(bool2string(false || true));
   printLn(bool2string(false || false));
 
+  printLn("Not");
   printLn(bool2string(!false));
   printLn(bool2string(!true));
 
   for i in 1 to 10 {
-    if Real(i) > 5.0 {
-      print("\n"); // cannot use printLn() as a nullary function
+    if i > 5.0 {
+      print("\n");
       printLn(paste0([int2string(i), " is more than ", real2string(5.0)]));
       return;
     } else {
