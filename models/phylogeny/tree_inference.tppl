@@ -50,7 +50,7 @@ function pickpair(n: Int): Int[] {
 }
 
 //Note: this is not optimal, in terms of repeated calculation of matrix exp
-function ctmc(initialstate: Int, q: Tensor[Real], t: Real): Real[]
+function ctmc(initialstate: Int, q: Matrix[Real], t: Real): Real[]
 {
     let choices = [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]];
     let state = rvecCreate(4, choices[addi(initialstate, 1)]);
@@ -58,7 +58,7 @@ function ctmc(initialstate: Int, q: Tensor[Real], t: Real): Real[]
     return[mtxGet(1, 1, p), mtxGet(1, 2, p), mtxGet(1, 3, p), mtxGet(1, 4, p)];
 }
 
-function cluster(q: Tensor[Real], trees: SeqTree[], maxAge: Real, seqLen: Int): SeqTree[]
+function cluster(q: Matrix[Real], trees: SeqTree[], maxAge: Real, seqLen: Int): SeqTree[]
 {
     let n = length(trees);
 

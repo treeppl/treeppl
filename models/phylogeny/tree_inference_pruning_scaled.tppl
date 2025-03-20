@@ -22,8 +22,8 @@
 // TYPES
 
 type MsgTree =
-  | Leaf {age: Real, index: Int, msg: Tensor[Real][]}
-  | Node {age: Real, msg: Tensor[Real][], left: MsgTree, right: MsgTree}
+  | Leaf {age: Real, index: Int, msg: Matrix[Real][]}
+  | Node {age: Real, msg: Matrix[Real][], left: MsgTree, right: MsgTree}
 
 // FUNCTIONS
 
@@ -49,7 +49,7 @@ function build_forest(data: Int[][], forest: MsgTree[], index: Int, data_len: In
 }
 
 // Get message from leaves for each site
-function get_leaf_message(seq: Int) : Tensor[Real] {
+function get_leaf_message(seq: Int) : Matrix[Real] {
     if (eqi(seq, 0)) { // "A"
        let message = rvecCreate(4, [1.0, 0.0, 0.0, 0.0]);
         return message;
@@ -76,19 +76,19 @@ function get_leaf_message(seq: Int) : Tensor[Real] {
 }
 
 // Get factor for each message
-function get_factor(msg: Tensor[Real]): Real {
+function get_factor(msg: Matrix[Real]): Real {
     let factor = mtxGet(1, 1, msg) + mtxGet(1, 2, msg) + mtxGet(1, 3, msg) + mtxGet(1, 4, msg);
     return factor;
 }
 
 // Normalise message for each site
-function norm_mess(msg: Tensor[Real], factor: Real): Tensor[Real] {
+function norm_mess(msg: Matrix[Real], factor: Real): Matrix[Real] {
     let norm_msg = rvecCreate(4, [mtxGet(1, 1, msg)/factor, mtxGet(1, 2, msg)/factor, mtxGet(1, 3, msg)/factor, mtxGet(1, 4, msg)/factor]);
     return norm_msg;
 }
 
 // KEY FUNCTION: CLUSTER
-function cluster(q: Tensor[Real], trees: MsgTree[], maxAge: Real, seq_len: Int): MsgTree[] {
+function cluster(q: Matrix[Real], trees: MsgTree[], maxAge: Real, seq_len: Int): MsgTree[] {
 
     let n = length(trees);
 

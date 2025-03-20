@@ -23,20 +23,20 @@ type TreeLabeled =
 /*-------------------- Model-specific types -------------------------*/
 
 type ModelParams =
-  ModelParams{qMatrix: Tensor[Real], dMatrix: Tensor[Real], dMean: Real, beta: Real}
+  ModelParams{qMatrix: Matrix[Real], dMatrix: Matrix[Real], dMean: Real, beta: Real}
 
 // Tree decorated with postorder messages from belief propagation.
 // Postorder = backwards in time
 type MsgTree =
- | MsgLeaf{age: Real, label: Int, out_msg: Tensor[Real][]}
+ | MsgLeaf{age: Real, label: Int, out_msg: Matrix[Real][]}
  | MsgNode{age: Real, label: Int, left: MsgTree, right: MsgTree,
-           left_in_msg: Tensor[Real][], right_in_msg: Tensor[Real][], out_msg: Tensor[Real][]}
+           left_in_msg: Matrix[Real][], right_in_msg: Matrix[Real][], out_msg: Matrix[Real][]}
 
 // Tree decorated with final probabilities from belief propagation,
 // tuned so that they are useful for proposals.
 type ProbsTree =
- | ProbsLeaf{age: Real, label: Int, probs: Tensor[Real][]}
- | ProbsNode{age: Real, label: Int, probs: Tensor[Real][],
+ | ProbsLeaf{age: Real, label: Int, probs: Matrix[Real][]}
+ | ProbsNode{age: Real, label: Int, probs: Matrix[Real][],
              left: ProbsTree, right: ProbsTree}
 
 // Event type used to store information about one host-repertoire change
@@ -169,8 +169,8 @@ model function mymodel(symbiont_tree: TreeLabeled, ntips: Int, nhosts: Int, inte
  *   A ProbsTree containing the final repertoire state proposal
  *   probabilities for all nodes in the symbiont tree.
  */
-function get_proposal_params(symbiont_tree: TreeLabeled, iMatrix: Tensor[Real], qMatrix: Tensor[Real],
-  stationary_probs: Tensor[Real], tune: Real): ProbsTree {
+function get_proposal_params(symbiont_tree: TreeLabeled, iMatrix: Matrix[Real], qMatrix: Matrix[Real],
+  stationary_probs: Matrix[Real], tune: Real): ProbsTree {
 
   let msgTree = postorder_msgs(symbiont_tree, iMatrix, qMatrix);
   let n = length(getMsgTreeMsg(msgTree));
@@ -180,7 +180,7 @@ function get_proposal_params(symbiont_tree: TreeLabeled, iMatrix: Tensor[Real], 
 }
 
 // Compute postorder messages on the observed tree
-function postorder_msgs(tree: TreeLabeled, iMatrix: Tensor[Real], qMatrix: Tensor[Real]) : MsgTree {
+function postorder_msgs(tree: TreeLabeled, iMatrix: Matrix[Real], qMatrix: Matrix[Real]) : MsgTree {
 
   if tree is Leaf {
     return MsgLeaf{age = 0.0, label = tree.label, out_msg = observationMessage(mtxGetRow(tree.label, iMatrix))};
@@ -195,7 +195,7 @@ function postorder_msgs(tree: TreeLabeled, iMatrix: Tensor[Real], qMatrix: Tenso
   let left_in_msg  = sapply1(left.out_msg, mtxMul, tMatrixLeft);
   let right_in_msg = sapply1(right.out_msg, mtxMul, tMatrixRight);
 
-  let out_msg = normalizeMessage(mulMessage(left_in_msg, right_in_msg));
+  let out_msg = messageNormalize(messageElemMul(left_in_msg, right_in_msg));
 
   return MsgNode{age= tree.age, label= tree.label, left= left, right= right,
     left_in_msg = left_in_msg, right_in_msg = right_in_msg, out_msg = out_msg};
@@ -203,13 +203,13 @@ function postorder_msgs(tree: TreeLabeled, iMatrix: Tensor[Real], qMatrix: Tenso
 }
 
 // Compute leaf message from observed interactions
-function observationMessage(obs_repertoire: Tensor[Real]) : Tensor[Real][] {
+function observationMessage(obs_repertoire: Matrix[Real]) : Matrix[Real][] {
   return tapply(obs_repertoire, makeStateMessage);
 }
 
 // Takes a single interaction and creates the message
 // Interactions are of type Real because of limitations in boolean comparisons
-function makeStateMessage(interaction: Real): Tensor[Real] {
+function makeStateMessage(interaction: Real): Matrix[Real] {
   // NOTE: we do not have a switch statement, perhaps we need in the future?
 
   if (interaction == 0.0) {
@@ -228,10 +228,10 @@ function makeStateMessage(interaction: Real): Tensor[Real] {
 }
 
 // Compute final probabilities from belief propagation on the observed symbiont tree
-function final_probs(tree: MsgTree, parent_msg: Tensor[Real][], qMatrix: Tensor[Real], tune: Real) : ProbsTree {
+function final_probs(tree: MsgTree, parent_msg: Matrix[Real][], qMatrix: Matrix[Real], tune: Real) : ProbsTree {
 
-  let probs = normalizeMessage(
-		messageElementPower(mulMessage(tree.out_msg, parent_msg), tune)
+  let probs = messageNormalize(
+		messageElemPow(messageElemMul(tree.out_msg, parent_msg), tune)
   );
 
   if tree is MsgLeaf {
@@ -244,8 +244,8 @@ function final_probs(tree: MsgTree, parent_msg: Tensor[Real][], qMatrix: Tensor[
   let tMatrixLeft = mtxExp(mtxSclrMul(left_branch, qMatrix));
   let tMatrixRight = mtxExp(mtxSclrMul(right_branch, qMatrix));
 
-  let left_parent_msg  = sapply1(mulMessage(parent_msg,tree.left_in_msg), mtxMul, tMatrixLeft);
-  let right_parent_msg = sapply1(mulMessage(parent_msg,tree.right_in_msg), mtxMul, tMatrixRight);
+  let left_parent_msg  = sapply1(messageElemMul(parent_msg,tree.left_in_msg), mtxMul, tMatrixLeft);
+  let right_parent_msg = sapply1(messageElemMul(parent_msg,tree.right_in_msg), mtxMul, tMatrixRight);
 
   let left  =  final_probs(tree.left,  left_parent_msg, qMatrix, tune);
   let right =  final_probs(tree.right, right_parent_msg, qMatrix, tune);
@@ -257,7 +257,7 @@ function final_probs(tree: MsgTree, parent_msg: Tensor[Real][], qMatrix: Tensor[
 /*---------------- Model functions -------------------------*/
 
 // Simulate an evolutionary history for the host repertoires, from root to leaves
-function simulate (tree: ProbsTree, start: HistoryPoint, mp: ModelParams, iMatrix: Tensor[Real]) : HistoryTree {
+function simulate (tree: ProbsTree, start: HistoryPoint, mp: ModelParams, iMatrix: Matrix[Real]) : HistoryTree {
 
   // Propose a repertoire. The propose mechanism means that the simulation
   // should be "penalized" for the probability associated with the draw.
@@ -317,7 +317,7 @@ function simulate_history (from_rep: HistoryPoint, to_rep: HistoryPoint, mp: Mod
 }
 
 // Propose events from independence model
-function propose_events (host_index: Int, from_rep: HistoryPoint, to_rep: HistoryPoint, qMatrix: Tensor[Real]) : ProposedHistory {
+function propose_events (host_index: Int, from_rep: HistoryPoint, to_rep: HistoryPoint, qMatrix: Matrix[Real]) : ProposedHistory {
 
   // End case, have already done all hosts ins the repertoire
   if (gti(host_index, length(from_rep.repertoire))) {
@@ -335,7 +335,7 @@ function propose_events (host_index: Int, from_rep: HistoryPoint, to_rep: Histor
 
 // Propose events for one host
 function propose_events_for_host (host_index: Int, from_age: Real, end_age: Real,
-	from_state: Int, end_state: Int, qMatrix: Tensor[Real]) : ProposedHistory {
+	from_state: Int, end_state: Int, qMatrix: Matrix[Real]) : ProposedHistory {
 
 	let rate = -(mtxGet(addi(from_state,1), addi(from_state,1), qMatrix));
 
@@ -494,12 +494,12 @@ function getRate (repertoire: Int[], host_index: Int, to_state: Int, mp: ModelPa
     // We have a gain rate, so we need to factor in beta-dependent cross-repertoire effect
     if (eqi(from_state, 0)) {
       let current_hosts = whichTrue(sapply(repertoire, is1or2));
-      let dist = tensorMean(mtxRowCols(mp.dMatrix, host_index, current_hosts));
+      let dist = mtxMean(mtxRowCols(mp.dMatrix, host_index, current_hosts));
       return base_rate * (exp(-(mp.beta*(dist/mp.dMean))));
 
     } else {
       let current_hosts = whichTrue(sapply(repertoire, is2));
-      let dist = tensorMean(mtxRowCols(mp.dMatrix, host_index, current_hosts));
+      let dist = mtxMean(mtxRowCols(mp.dMatrix, host_index, current_hosts));
       return base_rate * (exp(-(mp.beta*(dist/mp.dMean))));
     }
   }
@@ -553,7 +553,7 @@ function get_rep_debt (tree: HistoryTree): Real {
 /*---------------- Help functions --------------------------*/
 
 
-function createProbRecord(p: Tensor[Real]): CategoricalParam {
+function createProbRecord(p: Matrix[Real]): CategoricalParam {
   // This version works on tests, but not here
   // let ncol = dim(p)[2];
 	// let ps = rep(ncol, p);
@@ -567,12 +567,12 @@ function createProbRecord(p: Tensor[Real]): CategoricalParam {
   return CategoricalParam {probs = p_seq};
 }
 
-function getRowVecElem(t: Tensor[Real], i: Int): Real {
+function getRowVecElem(t: Matrix[Real], i: Int): Real {
   return mtxGet(1, i, t);
 }
 
 // Calculate stationary probabilities from lambda values
-function stationaryProbs(lambda: Real[]): Tensor[Real] {
+function stationaryProbs(lambda: Real[]): Matrix[Real] {
   let pi_1 = 1.0 / (1.0 + (lambda[2]/lambda[1]) + (lambda[3]/lambda[4]));
   let pi_0 = pi_1 * (lambda[2]/lambda[1]);
   let pi_2 = 1.0 - pi_0 - pi_1;
@@ -583,7 +583,7 @@ function getMsgTreeAge(tree: MsgTree) : Real {
 	return tree.age;
 }
 
-function getMsgTreeMsg(tree: MsgTree) : Tensor[Real][] {
+function getMsgTreeMsg(tree: MsgTree) : Matrix[Real][] {
 	return tree.out_msg;
 }
 
@@ -591,7 +591,7 @@ function getProbsTreeAge(tree: ProbsTree) : Real {
 	return tree.age;
 }
 
-function getProbs(tree: ProbsTree): Tensor[Real][]{
+function getProbs(tree: ProbsTree): Matrix[Real][]{
 	return tree.probs;
 }
 

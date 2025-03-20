@@ -1,8 +1,8 @@
 /** Test file for matrix syntaxes  -- DON'T CHANGE */
 
 type TestType = TestType {
-  multiplication: Tensor[Real],
-  power: Tensor[Real]
+  multiplication: Matrix[Real],
+  power: Matrix[Real]
 }
 
 

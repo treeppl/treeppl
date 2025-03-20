@@ -17,8 +17,8 @@ type QTTree =
             , age: Real
             }
   | QTWeightedLeaf  { age: Real
-                    , messageSequence: Tensor[Real][]
-                    , characterMessage: Tensor[Real]
+                    , messageSequence: Matrix[Real][]
+                    , characterMessage: Matrix[Real]
                     , partialLogWeight: Real
                     }
   | QTWeightedNode  { left: QTTree
@@ -52,10 +52,10 @@ function gammaZeroMix(rho: Bool, a: Real, b: Real): Real {
   return 0.0;
 }
 
-type ModelDynamics = ModelDynamics  { qChar: Tensor[Real]
-                                    , jChar: Tensor[Real]
-                                    , qMol: Tensor[Real]
-                                    , jMol: Tensor[Real]
+type ModelDynamics = ModelDynamics  { qChar: Matrix[Real]
+                                    , jChar: Matrix[Real]
+                                    , qMol: Matrix[Real]
+                                    , jMol: Matrix[Real]
                                     , nu: Real
                                     , charMessages: Real[][]
 //                                 , molMessages: Real[][]
@@ -71,10 +71,10 @@ type QTParm = QTParm  { lambda: Real // Rate of phenotypic evolution
 *
 * @param tree: QTTree            - Phylogenetic tree, the tips of which have
 *                                  sequence and phenotype information
-* @param normQChar: Tensor[Real] - Normalized Q matrix for the phenotype
-* @param JChar: Tensor[Real]     - Jump matrix for the phenotype
-* @param normQMol: Tensor[Real]  - Normalized Q matrix for the gene
-* @param JMol: Tensor[Real]      - Jump matrix for the gene
+* @param normQChar: Matrix[Real] - Normalized Q matrix for the phenotype
+* @param JChar: Matrix[Real]     - Jump matrix for the phenotype
+* @param normQMol: Matrix[Real]  - Normalized Q matrix for the gene
+* @param JMol: Matrix[Real]      - Jump matrix for the gene
 * @param lamShape: Real          - Hyperparameter of the Gamma distribution for
 *                                  the phenotype transition rate
 * @param lamScale: Real          - Hyperparameter of the Gamma distribution for
@@ -93,11 +93,11 @@ type QTParm = QTParm  { lambda: Real // Rate of phenotypic evolution
 * @return [lam, mu, nu, p]
 */
 model function qtbirds( tree: QTTree
-                      , normQChar: Tensor[Real]
-                      , jChar: Tensor[Real]
+                      , normQChar: Matrix[Real]
+                      , jChar: Matrix[Real]
                       , charMessages: Real[][]
-                      , normQMol: Tensor[Real]
-                      , jMol: Tensor[Real]
+                      , normQMol: Matrix[Real]
+                      , jMol: Matrix[Real]
                       , lamShape: Real
                       , lamScale: Real
                       , muShape: Real
@@ -297,7 +297,7 @@ function coalesceQTTwig(tree: QTTree, m: ModelDynamics, doresample: Bool): QTTre
 }
 
 
-function getMessageSequence(tree: QTTree): Tensor[Real][] {
+function getMessageSequence(tree: QTTree): Matrix[Real][] {
   if (tree is QTLeaf) {
     return sapply(tree.stateSequence, getMessage);
   }
@@ -316,7 +316,7 @@ function getMessageSequence(tree: QTTree): Tensor[Real][] {
 }
 
 // TODO/ WIP: What if the state is missing??
-function getMessage(state: Int): Tensor[Real] {
+function getMessage(state: Int): Matrix[Real] {
   /* NOTE(vsenderov, 2023-11-01)
      - Messages hard-coded for now
      - see https://github.com/treeppl/treeppl/issues/30
@@ -334,7 +334,7 @@ function getMessage(state: Int): Tensor[Real] {
 }
 
 
-function getCharacterMessage(tree: QTTree, messages: Real[][]): Tensor[Real]
+function getCharacterMessage(tree: QTTree, messages: Real[][]): Matrix[Real]
 {
   if (tree is QTLeaf)
   {
@@ -357,12 +357,12 @@ function getCharacterMessage(tree: QTTree, messages: Real[][]): Tensor[Real]
 }
 
 
-type MessageEvolution = MessageEvolution  { message: Tensor[Real]
+type MessageEvolution = MessageEvolution  { message: Matrix[Real]
                                           , sJumps: Int
                                           }
 
 // workaround not elegant, otherwise name clash
-function meGetMessage (mes: MessageEvolution): Tensor[Real]
+function meGetMessage (mes: MessageEvolution): Matrix[Real]
 {
   return mes.message;
 }
@@ -379,14 +379,14 @@ function meGetJumps (mes: MessageEvolution): Int
 *
 * @param dyn: ModelDynamics
 * @param t: Real  Time of evolution
-* @param mes: Tensor[Real]
+* @param mes: Matrix[Real]
 *   The initial likelihood as a row vector
 *   If the mes has negative values, it is considered missing data
 */
 function evolveMessageClosure ( dyn: ModelDynamics
                               , t: Real
                               , u: Real
-                              , mes: Tensor[Real]
+                              , mes: Matrix[Real]
                               ): MessageEvolution
 {
   assume sJumps ~ Poisson(dyn.nu * t * u); // divided by number of nucleotides
@@ -407,7 +407,7 @@ function evolveMessageClosure ( dyn: ModelDynamics
 }
 
 
-function evolveCharacter(mes: Tensor[Real], m: ModelDynamics, t: Real, sJumps: Int): Tensor[Real]
+function evolveCharacter(mes: Matrix[Real], m: ModelDynamics, t: Real, sJumps: Int): Matrix[Real]
 {
   // TODO on top of that we need to add the s-jumps
   let res = mes *@ ( (m.jChar ^$ sJumps) *@ (mtxExp(m.qChar *$ t)) );
@@ -416,7 +416,7 @@ function evolveCharacter(mes: Tensor[Real], m: ModelDynamics, t: Real, sJumps: I
 
 
 type MessageSequenceEvolution = MessageSequenceEvolution {
-  messageSequence: Tensor[Real][],
+  messageSequence: Matrix[Real][],
   characterJumps: Int
 }
 
@@ -424,7 +424,7 @@ type MessageSequenceEvolution = MessageSequenceEvolution {
 /**
 * Using the Q-T-BIRDS model, evolve the messages along a branch of length t
 */
-function evolveMessageSequence( messages: Tensor[Real][]
+function evolveMessageSequence( messages: Matrix[Real][]
                               , m: ModelDynamics
                               , t: Real
                               ) : MessageSequenceEvolution
@@ -445,7 +445,7 @@ function evolveMessageSequence( messages: Tensor[Real][]
  * into.  Makes the necesseity for writing tests even more apparent.
  *
 */
-function computeMessageLogLikelihood(mes: Tensor[Real]): Real
+function computeMessageLogLikelihood(mes: Matrix[Real]): Real
 {
   if (isMissing(mes)) {
     return 0.;
@@ -475,13 +475,13 @@ function getAgeDiff(parent: QTTree, child: QTTree)
 }
 
 
-function idTensorReal(t: Tensor[Real])
+function idTensorReal(t: Matrix[Real])
 {
   return t;
 }
 
 
-function idSTensorReal(t: Tensor[Real][])
+function idSTensorReal(t: Matrix[Real][])
 {
   return t;
 }
@@ -511,7 +511,7 @@ function getIndex(tree: QTTree): Int
  * Multiplies two tensors, ignores if missing data is encoded as -1.
  * Hack!
  */
-function mtxElemMulMissing(a: Tensor[Real], b: Tensor[Real]): Tensor[Real] {
+function mtxElemMulMissing(a: Matrix[Real], b: Matrix[Real]): Matrix[Real] {
   if (isMissing(a)) {
     if (isMissing(b)) {
       return a; // doesn't matter which one we return, both are missing
@@ -527,7 +527,7 @@ function mtxElemMulMissing(a: Tensor[Real], b: Tensor[Real]): Tensor[Real] {
   return mtxElemMul(a, b);
 }
 
-function isMissing(x: Tensor[Real]): Bool {
+function isMissing(x: Matrix[Real]): Bool {
   if (mtxGet(1, 1, x) < 0.) {
     return true;
   }
