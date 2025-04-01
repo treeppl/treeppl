@@ -60,8 +60,8 @@ TEST_CONFIGURATIONS += -m_mcmc-lightweight_--cps_none #resample
 TEST_CONFIGURATIONS += -m_mcmc-lightweight_--align_--cps_none #resample
 TEST_CONFIGURATIONS += -m_mcmc-lightweight_--align_--cps_full #resample
 TEST_CONFIGURATIONS += -m_mcmc-lightweight_--align_--cps_partial #resample
-TEST_CONFIGURATIONS += -m_mcmc-trace_--cps_none
-TEST_CONFIGURATIONS += -m_mcmc-naive_--cps_none
+TEST_CONFIGURATIONS += -m_mcmc-trace
+TEST_CONFIGURATIONS += -m_mcmc-naive
 TEST_CONFIGURATIONS += -m_pmcmc-pimh_--cps_full
 TEST_CONFIGURATIONS += -m_pmcmc-pimh_--cps_partial
 

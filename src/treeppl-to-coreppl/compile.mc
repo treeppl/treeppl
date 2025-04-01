@@ -23,9 +23,16 @@ include "ocaml/compile.mc"
 include "sys.mc"
 
 include "coreppl::coreppl-to-mexpr/compile.mc"
-include "coreppl::coreppl-to-mexpr/runtimes.mc"
 include "coreppl::coreppl.mc"
 include "coreppl::parser.mc"
+
+include "coreppl::coreppl-to-mexpr/is-lw/compile.mc"
+include "coreppl::coreppl-to-mexpr/smc-bpf/compile.mc"
+include "coreppl::coreppl-to-mexpr/smc-apf/compile.mc"
+include "coreppl::coreppl-to-mexpr/mcmc-naive/compile.mc"
+include "coreppl::coreppl-to-mexpr/mcmc-trace/compile.mc"
+include "coreppl::coreppl-to-mexpr/mcmc-lightweight/compile.mc"
+include "coreppl::coreppl-to-mexpr/pmcmc-pimh/compile.mc"
 
 include "matrix.mc"
 
@@ -181,8 +188,8 @@ lang TreePPLCompile
 
   | NothingTypeTppl x -> tyunit_
 
-  sem compileModelInvocation : TpplCompileContext -> Loader -> DeclTppl -> Option (Loader, Expr)
-  sem compileModelInvocation context loader =
+  sem compileModelInvocation : TpplCompileContext -> (Type -> Loader -> (Loader, InferMethod)) -> Loader -> DeclTppl -> Option (Loader, Expr)
+  sem compileModelInvocation context mkInferenceMethod loader =
   | FunDeclTppl (x & {model = Some modelInfo}) ->
     -- TODO(vipa, 2024-12-13): We could technically shadow a model
     -- function, in which case the generated code will refer to the
@@ -218,6 +225,8 @@ lang TreePPLCompile
       } in
     let loader = _addDeclExn loader parsedDecl in
 
+    match mkInferenceMethod outputType loader with (loader, inferenceMethod) in
+
     let invocation =
       -- Either apply to 0 (if nullary model function) or each
       -- parameter in sequence
@@ -230,7 +239,7 @@ lang TreePPLCompile
         (ulam_ ""
           (app_ (nvar_ context.printJsonLn)
             (appf2_ (nvar_ context.serializeResult) outputSer.serializer
-              (infer_ (Default {runs = nvar_ context.particles})
+              (infer_ inferenceMethod
                 (ulam_ "" invocation)))))
         (nvar_ context.sweeps) in
     Some (loader, inferCode)
@@ -251,6 +260,7 @@ lang TreePPLCompile
       body = TmAssume {
         dist = compileExprTppl context a.dist,
         ty = tyunknown_,
+        driftKernel = None (),
         info = a.info
       },
       inexpr = cont,
@@ -959,9 +969,15 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
   + StripUtestLoader
   + MExprLowerNestedPatterns + MCoreCompileLang
   + PhaseStats
+  + BPFCompilerPicker + APFCompilerPicker + ImportanceCompilerPicker
+  + NaiveMCMCCompilerPicker + TraceMCMCCompilerPicker + PIMHCompilerPicker
+  + LightweightMCMCCompilerPicker
 
   syn FileType =
   | FTreePPL ()
+
+  syn Hook =
+  | TreePPLHook { mkInferenceMethod : Type -> Loader -> (Loader, InferMethod) }
 
   sem _fileType = | _ ++ ".tppl" -> FTreePPL ()
   sem _loadFile path = | (FTreePPL _, loader & Loader x) ->
@@ -969,6 +985,7 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
     -- file
     match mapLookup path x.includedFiles with Some symEnv then (symEnv, loader) else
     let loader = Loader {x with includedFiles = mapInsert path _symEnvEmpty x.includedFiles} in
+    match getHookOpt (lam x. match x with TreePPLHook x then Some x else None ()) loader with Some hook in
     -- For things referencing the entirety of the file, and no
     -- particular part of it
     let fileInfo = infoVal path 0 0 0 0 in
@@ -1026,7 +1043,7 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
 
     -- 3. Model invocations.
     let work = lam loader. lam decl.
-      match compileModelInvocation context loader decl with Some (loader, invocation) then
+      match compileModelInvocation context hook.mkInferenceMethod loader decl with Some (loader, invocation) then
         let decl = DeclLet
           { body = invocation
           , ident = nameSym ""
@@ -1065,18 +1082,48 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
     registerCustomJsonSerializer extArrName {serializer = ser, deserializer = deser} loader
 end
 
+type TpplFrontendOptions =
+  { input : String
+  , output : String
+  , outputMl : Option String
+  }
 
-let compileTpplToExecutable = lam filename: String. lam options: Options.
+let tpplFrontendOptions : OptParser TpplFrontendOptions =
+  let mk = lam input. lam output. lam outputMl.
+    { input = input
+    , output = output
+    , outputMl = outputMl
+    } in
+  let input = optPos
+    { optPosDefString with arg = "<program>"
+    , description = "The TreePPL program to compile."
+    } in
+  let output =
+    let default = "out" in
+    let opt = optArg
+      { optArgDefString with long = "output"
+      , description = concat "The name of the final compiled executable. Default: " default
+      , arg = "<file>"
+      } in
+    optOr opt (optPure default) in
+  let outputMl = optOptional (optArg
+    { optArgDefString with long = "output-ml"
+    , description = "Output the intermediate .ml file to this path."
+    }) in
+  optMap3 mk input output outputMl
+
+let compileTpplToExecutable = lam frontend. lam transformations. lam mkInferenceMethod.
   use TreePPLThings in
-  let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
+  let log = mkPhaseLogState transformations.debugDumpPhases transformations.debugPhases in
   let loader = mkLoader symEnvDefault typcheckEnvDefault [StripUtestHook ()] in
-  let loader = enableCPPLCompilation options loader in
+  let loader = enableCPPLCompilation transformations loader in
   let loader = enableEqGeneration loader in
   let loader = enableDesugar loader in
   let loader = enableJsonSerialization loader in
   let loader = registerMatrixFunctions loader in
+  let loader = addHook loader (TreePPLHook {mkInferenceMethod = mkInferenceMethod}) in
   endPhaseStatsExpr log "mk-cppl-loader" unit_;
-  let loader = (includeFileExn "." filename loader).1 in
+  let loader = (includeFileExn "." frontend.input loader).1 in
   endPhaseStatsExpr log "include-file" unit_;
   let ast = buildFullAst loader in
   endPhaseStatsExpr log "build-full-ast" ast;
@@ -1087,14 +1134,14 @@ let compileTpplToExecutable = lam filename: String. lam options: Options.
       with libraries = libs
       , cLibraries = clibs
       } in
-    (if options.outputMl then
-      writeFile "program.ml" prog
+    (match frontend.outputMl with Some path
+     then writeFile path prog
      else ());
     let res = ocamlCompileWithConfig opts prog in
-    sysMoveFile res.binaryPath options.output;
-    sysChmodWriteAccessFile options.output;
+    sysMoveFile res.binaryPath frontend.output;
+    sysChmodWriteAccessFile frontend.output;
     res.cleanup ();
-    options.output in
+    frontend.output in
   let hooks = mkEmptyHooks ocamlCompile in
   let ast = lowerAll ast in
   endPhaseStatsExpr log "lower-all" ast;
