@@ -25,7 +25,7 @@ mexpr
 use TreePPLThings in
 
 let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod)) =
-  let mk = lam debugIterations. lam samplingPeriod. lam incrementalPrinting. lam iterations. lam globalProb. lam driftKernel. lam driftScale. lam cps. lam align. lam outputType. lam loader.
+  let mk = lam debugIterations. lam samplingPeriod. lam incrementalPrinting. lam iterations. lam globalProb. lam driftKernel. lam driftScale. lam cps. lam align. lam debugAlignment. lam outputType. lam loader.
     match includeFileExn "." "stdlib::json.mc" loader with (jsonEnv, loader) in
     match includeFileExn "." "coreppl::coreppl-to-mexpr/mcmc-lightweight/config.mc" loader with (configEnv, loader) in
     let debugTypeFields = switch mapLookup (_getTyConExn "DebugInfo" configEnv) (_getTCEnv loader).tyConEnv
@@ -82,6 +82,7 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
       , driftScale = driftScale
       , cps = cps
       , align = align
+      , debugAlignment = debugAlignment
       } in
     (loader, method) in
   let debugIterations = optFlag
@@ -100,7 +101,7 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
     { optFlagDef with long = "incremental-printing"
     , description = "Print each sample as it is produced instead of at the end."
     } in
-  let res = optApply (optApply (optApply (optApply (optMap5 mk debugIterations samplingPeriod incrementalPrinting _particles _mcmcLightweightGlobalProb) _driftKernel) _driftScale) _cps) _align in
+  let res = optApply (optApply (optApply (optApply (optApply (optMap5 mk debugIterations samplingPeriod incrementalPrinting _particles _mcmcLightweightGlobalProb) _driftKernel) _driftScale) _cps) _align) _debugAlignment in
   optMap2 (lam. lam x. x) (_methodFlag false "mcmc-lightweight") res in
 
 let wrapSimpleInferenceMethod
