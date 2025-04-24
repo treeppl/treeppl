@@ -221,7 +221,7 @@ prod Constructor: ExprTppl =
 
 /----- Statements -----/
 prod ExprStmtTppl: StmtTppl = e:ExprTppl ";" -- Epxressions as statements
-prod Assume: StmtTppl = "assume" randomVar:LName (":" ty:TypeTppl)? "~" dist:ExprTppl ";"
+prod Assume: StmtTppl = "assume" randomVar:LName (":" ty:TypeTppl)? "~" dist:ExprTppl ("drift" driftKernel:ExprTppl)? ";"
 prod Assign: StmtTppl = "let" var:LName (":" ty:TypeTppl)? "=" val:ExprTppl ";"
 --prod Observe: StmtTppl = "observe" value:ExprTppl "~" distribution:UName "(" (args:ExprTppl ("," args:ExprTppl)*)? ")"
 prod Observe: StmtTppl = "observe" value:ExprTppl "~" dist:ExprTppl ";"
