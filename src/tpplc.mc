@@ -25,9 +25,17 @@ mexpr
 use TreePPLThings in
 
 let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod)) =
-  let mk = lam samplingPeriod. lam incrementalPrinting. lam iterations. lam globalProb. lam driftKernel. lam driftScale. lam cps. lam align. lam outputType. lam loader.
+  let mk = lam debugIterations. lam samplingPeriod. lam incrementalPrinting. lam iterations. lam globalProb. lam driftKernel. lam driftScale. lam cps. lam align. lam outputType. lam loader.
     match includeFileExn "." "stdlib::json.mc" loader with (jsonEnv, loader) in
-    match serializationPairsFor [outputType] loader with (loader, [outputSer]) in
+    match includeFileExn "." "coreppl::coreppl-to-mexpr/mcmc-lightweight/config.mc" loader with (configEnv, loader) in
+    let debugTypeFields = switch mapLookup (_getTyConExn "DebugInfo" configEnv) (_getTCEnv loader).tyConEnv
+      case Some (_, [], TyRecord x) then x
+      case Some (_, _, _) then error "Compiler error: unexpected shape of DebugInfo"
+      case None _ then error "Compiler error: no info about DebugInfo in TCEnv"
+      end in
+    let fullDebugType = TyRecord
+      { debugTypeFields with fields = mapInsert (stringToSid "durationMs") tyfloat_ debugTypeFields.fields } in
+    match serializationPairsFor [outputType, fullDebugType] loader with (loader, [outputSer, debugSer]) in
     let keepSample = if incrementalPrinting
       then ulam_ "" false_
       else if eqi 1 samplingPeriod
@@ -44,16 +52,42 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
           semi_ print ret
         else ret in
       utuple_ [int_ 0, ulam_ "idx" (ulam_ "sample" ret)] in
+    let debug =
+      if debugIterations then
+        utuple_
+          [ wallTimeMs_ unit_
+          , ulam_ "start" (ulam_ "debug"
+            (bindall_
+              [ ulet_ "end" (wallTimeMs_ unit_)
+              , ulet_ "output" (TmRecord
+                { bindings = mapInsert (stringToSid "durationMs") (subf_ (var_ "end") (var_ "start"))
+                  (mapMapWithKey (lam k. lam. recordproj_ (sidToString k) (var_ "debug")) debugTypeFields.fields)
+                , ty = tyunknown_
+                , info = NoInfo ()
+                })
+              , ulet_ "output" (app_ debugSer.serializer (var_ "output"))
+              , ulet_ "" (printError_ (app_ (nvar_ (_getVarExn "json2string" jsonEnv)) (var_ "output")))
+              , ulet_ "" (printError_ (str_ "\n"))
+              , ulet_ "" (flushStderr_ unit_)
+              , wallTimeMs_ unit_
+              ]))
+          ]
+      else utuple_ [unit_, ulam_ "" (ulam_ "" unit_)] in
     let method = LightweightMCMC
       { keepSample = keepSample
       , continue = continue
       , globalProb = float_ globalProb
+      , debug = debug
       , driftKernel = driftKernel
       , driftScale = driftScale
       , cps = cps
       , align = align
       } in
     (loader, method) in
+  let debugIterations = optFlag
+    { optFlagDef with long = "debug-iterations"
+    , description = "Output various debug information each iteration."
+    } in
   let samplingPeriod =
     let default = 1 in
     let opt = optArg
@@ -66,7 +100,7 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
     { optFlagDef with long = "incremental-printing"
     , description = "Print each sample as it is produced instead of at the end."
     } in
-  let res = optApply (optApply (optApply (optMap5 mk samplingPeriod incrementalPrinting _particles _mcmcLightweightGlobalProb _driftKernel) _driftScale) _cps) _align in
+  let res = optApply (optApply (optApply (optApply (optMap5 mk debugIterations samplingPeriod incrementalPrinting _particles _mcmcLightweightGlobalProb) _driftKernel) _driftScale) _cps) _align in
   optMap2 (lam. lam x. x) (_methodFlag false "mcmc-lightweight") res in
 
 let wrapSimpleInferenceMethod
