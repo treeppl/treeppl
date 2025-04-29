@@ -321,7 +321,7 @@ function getMessage(state: Int): Matrix[Real] {
      - Messages hard-coded for now
      - see https://github.com/treeppl/treeppl/issues/30
   */
-  if (eqi(state, subi(0, 1))) {
+  if (state == 0 - 1) {
     return rvecCreate(4, [-1., -1., -1., -1.]);  // for now this is how we encode missing data
   }
 
@@ -330,7 +330,7 @@ function getMessage(state: Int): Matrix[Real] {
                   [0., 0., 1., 0.],    // 2
                   [0., 0., 0., 1.]];   // 3
 
-  return rvecCreate(4, messages[addi(state, 1)]); // one-indexing of arrays, but zero-indexing of states
+  return rvecCreate(4, messages[state + 1]); // one-indexing of arrays, but zero-indexing of states
 }
 
 
@@ -340,7 +340,7 @@ function getCharacterMessage(tree: QTTree, messages: Real[][]): Matrix[Real]
   {
     let l = length(messages);
     let curState = idInt(tree.characterState); // workaround
-    let rTensor = rvecCreate(l, messages[addi(1, curState)]);
+    let rTensor = rvecCreate(l, messages[1 + curState]);
     return rTensor;
   }
 
@@ -398,7 +398,7 @@ function evolveMessageClosure ( dyn: ModelDynamics
       sJumps = sJumps
     };
   }
-  let res = mes *@ ( ( dyn.jMol ^$ sJumps ) *@ (mtxExp(dyn.qMol *$ t)));
+  let res = mes *@ ( mtxPow(dyn.jMol, sJumps) *@ (mtxExp(dyn.qMol *$ t)));
   // TODO do something for operator precedence to avoid so many parens
   return MessageEvolution {
     message = res,
@@ -410,7 +410,7 @@ function evolveMessageClosure ( dyn: ModelDynamics
 function evolveCharacter(mes: Matrix[Real], m: ModelDynamics, t: Real, sJumps: Int): Matrix[Real]
 {
   // TODO on top of that we need to add the s-jumps
-  let res = mes *@ ( (m.jChar ^$ sJumps) *@ (mtxExp(m.qChar *$ t)) );
+  let res = mes *@ (mtxPow(m.jChar, sJumps) *@ mtxExp(m.qChar *$ t) );
   return res;
 }
 
@@ -430,7 +430,7 @@ function evolveMessageSequence( messages: Matrix[Real][]
                               ) : MessageSequenceEvolution
 {
   let u = 1.0/Real(length(messages));
-  let evolveMessage = evolveMessageClosure(m, t, u); // partial application
+  let evolveMessage = function(x : Matrix[Real]) {return evolveMessageClosure(m, t, u, x);}; // partial application
   let ret = sapply(messages, evolveMessage);
 
   return MessageSequenceEvolution {

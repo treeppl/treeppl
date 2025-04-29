@@ -1,6 +1,6 @@
 model function example():() {
   let c = 10;
   let x = sapply(1 to 5, function (i: Int) {
-    return addi(c, i);
+    return c + i;
   });
 }
