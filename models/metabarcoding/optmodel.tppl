@@ -16,7 +16,7 @@
  * Posterior:
  *   returning k at the moment
  */
-model function myModel(dataset: Real[][]) : Real  {
+model function myModel(dataset: Real[][]) => Real  {
   assume k ~ Gamma(1.0, 10.0);
   assume logTheta ~ Gaussian(0.0, 2.0); 
   let theta = exp(logTheta);

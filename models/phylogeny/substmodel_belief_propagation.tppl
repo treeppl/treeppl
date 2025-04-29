@@ -34,7 +34,7 @@ type GTR_Tree =
 // MODEL FUNCTIONS
 
 // A help function to compute the scaled rate matrix for GTR
-function gtr(pi: Real[], r: Real[]) : Matrix[Real] {
+function gtr(pi: Real[], r: Real[]) => Matrix[Real] {
     // Construct a matrix of exchangeability rates
     let unscaled_q = mtxCreate(4,4,
                      [ -(pi[2]*r[1]+pi[3]*r[2]+pi[4]*r[3]),      pi[2]*r[1],                            pi[3]*r[2],                             pi[4]*r[3] ,
@@ -55,13 +55,13 @@ function gtr(pi: Real[], r: Real[]) : Matrix[Real] {
 // A simple help function to compute a message for a branch in the tree in a
 // postorder traversal towards the root. We assume standard conventions here
 // for the structure of q with respect to time (rows = from-states)
-function message(start_msg: Matrix[Real][], q: Matrix[Real], time: Real) : Matrix[Real][] {
+function message(start_msg: Matrix[Real][], q: Matrix[Real], time: Real) => Matrix[Real][] {
     let trans_matrix = mtxTrans(mtxExp(mtxSclrMul(time, q)));
     return sapply1(start_msg, mtxMul, trans_matrix);
 }
 
 // Compute postorder messages on the observed tree
-function compute_postorder_message(tree: GTR_Tree, data: Int[][], q: Matrix[Real]) : Matrix[Real][] {
+function compute_postorder_message(tree: GTR_Tree, data: Int[][], q: Matrix[Real]) => Matrix[Real][] {
     if (tree is Leaf) {
         return sapply(data[tree.index], get_leaf_message);
     }
@@ -74,24 +74,24 @@ function compute_postorder_message(tree: GTR_Tree, data: Int[][], q: Matrix[Real
 
 
 // Get message from leaves for each site
-function get_leaf_message(seq: Int) : Matrix[Real] {
-    if (eqi(seq, 0)) { // "A"
+function get_leaf_message(seq: Int) => Matrix[Real] {
+    if (seq == 0) { // "A"
        let message = rvecCreate(4, [1.0, 0.0, 0.0, 0.0]);
         return message;
     }
-    if (eqi(seq, 1)) { // "C"
+    if (seq == 1) { // "C"
         let message = rvecCreate(4, [0.0, 1.0, 0.0, 0.0]);
         return message;
     }
-    if (eqi(seq, 2)) { // "G"
+    if (seq == 2) { // "G"
         let message = rvecCreate(4, [0.0, 0.0, 1.0, 0.0]);
         return message;
     }
-    if (eqi(seq, 3)) {  // "T"
+    if (seq == 3) {  // "T"
         let message = rvecCreate(4, [0.0, 0.0, 0.0, 1.0]);
         return message;
     }
-    if (eqi(seq, 4)) {  // "-" or "?"
+    if (seq == 4) {  // "-" or "?"
         let message = rvecCreate(4, [1.0, 1.0, 1.0, 1.0]);
         return message;
     }
@@ -101,7 +101,7 @@ function get_leaf_message(seq: Int) : Matrix[Real] {
 }
 
 //Compute log likelihood for each site
-function get_log_likes(msg: Matrix[Real], pi_col: Matrix[Real]): Real {
+function get_log_likes(msg: Matrix[Real], pi_col: Matrix[Real]) => Real {
     let like = mtxMul(msg, pi_col);
     let log_like = log(mtxGet(1, 1, like));
     return log_like;
@@ -109,7 +109,7 @@ function get_log_likes(msg: Matrix[Real], pi_col: Matrix[Real]): Real {
 
 // MODEL
 // clock_rate not needed in this version
-model function myModel(data: Int[][], tree: GTR_Tree) : TheReturn {
+model function myModel(data: Int[][], tree: GTR_Tree) => TheReturn {
 
     // Sample stationary probs and exchangeability rates and
     // compute the scaled rate matrix for the GTR model.

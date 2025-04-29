@@ -17,7 +17,7 @@
  * Returns: nothing
  * Side-effect: prints things
  */
-model function blub(n: Int, pi: Real, trump: Bool, coinflips: Bool[], text: String) : () {
+model function blub(n: Int, pi: Real, trump: Bool, coinflips: Bool[], text: String) => () {
   printLn(text);
   print(text);
 

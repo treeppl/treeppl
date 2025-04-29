@@ -28,7 +28,7 @@ function flip(datapoint: Bool, probability: Real) {
  * Posterior:
  *   p | coinflips
  */
-model function coinModel(coinflips: Bool[]) : Real  {
+model function coinModel(coinflips: Bool[]) => Real  {
   // Uncomment if you want to test the input
   //printLn("Input:");
   //let coinStr = apply(bool2string, coinflips);

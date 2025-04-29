@@ -10,26 +10,26 @@ type SpecTree =
   | Node {left : SpecTree, right : SpecTree, age : Real}
   | Leaf {age : Real}
 
-function new_rate(g: Globals, logSplitRate: Real): Real {
+function new_rate(g: Globals, logSplitRate: Real) => Real {
   assume newRate ~ Gaussian(logSplitRate, g.rateVariance);
   return g.logActivity + newRate;
 }
 
-function min(a: Real, b: Real): Real {
+function min(a: Real, b: Real) => Real {
   if a <= b {
     return a;
   }
   return b;
 }
 
-function max(a: Real, b: Real): Real {
+function max(a: Real, b: Real) => Real {
   if a <= b {
     return b;
   }
   return a;
 }
 
-function survives(g: Globals, age: Real, logSplitRate: Real): Bool {
+function survives(g: Globals, age: Real, logSplitRate: Real) => Bool {
   if log(100000.0) <= logSplitRate - g.logInitSplitRate {
     // We have a really high splitrate, which makes us blow the stack,
     // so abort this execution, assuming we'll survive
@@ -61,7 +61,7 @@ function survives(g: Globals, age: Real, logSplitRate: Real): Bool {
   return false;
 }
 
-function observeExtinct(g: Globals, age: Real, logSplitRate: Real): Bool {
+function observeExtinct(g: Globals, age: Real, logSplitRate: Real) => Bool {
   if survives(g, age, logSplitRate) {
     // We survived, but we wanted to be extinct
     weight 0.0;
@@ -135,21 +135,21 @@ function observeTree(g: Globals, age: Real, logSplitRate: Real, tree: SpecTree) 
   }
 }
 
-function countLeaves(tree: SpecTree): Real {
+function countLeaves(tree: SpecTree) => Real {
   if tree is Node {
     return 1.0 + countLeaves(tree.left) + countLeaves(tree.right);
   }
   return 1.0;
 }
 
-function logFactorial(n: Real): Real {
+function logFactorial(n: Real) => Real {
   if n <= 0.0 {
     return 0.0;
   }
   return log(n) + logFactorial(n - 1.0);
 }
 
-model function top(tree: SpecTree, rho: Real): Real {
+model function top(tree: SpecTree, rho: Real) => Real {
   assume lambda ~ Gamma(1.0, 1.0);
   assume mu ~ Gamma(1.0, 0.5);
   assume sigma ~ Gamma(1.0, 1.0);

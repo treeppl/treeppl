@@ -2,21 +2,21 @@ type Tree =
   | Node {left: Tree, right: Tree, age: Real}
   | Leaf {age: Real}
 
-function countLeaves(tree: Tree): Real {
+function countLeaves(tree: Tree) => Real {
   if tree is Node {
     return countLeaves(tree.left) + countLeaves(tree.right);
   }
   return 1.0;
 }
 
-function logFactorial(n: Real): Real {
+function logFactorial(n: Real) => Real {
   if n <= 1.0 {
     return 0.0;
   }
   return log(n) + logFactorial(n - 1.0);
 }
 
-function simulateSubtree(time: Real, lambda: Real, mu: Real, rho: Real): Bool {
+function simulateSubtree(time: Real, lambda: Real, mu: Real, rho: Real) => Bool {
   assume waitingTime ~ Exponential(lambda + mu);
   if waitingTime > time {
     assume undetected ~ Bernoulli(1.0 - rho);
@@ -32,7 +32,7 @@ function simulateSubtree(time: Real, lambda: Real, mu: Real, rho: Real): Bool {
   return true;
 }
 
-function walk(node: Tree, time:Real, lambda: Real, mu: Real, rho: Real): Bool {
+function walk(node: Tree, time:Real, lambda: Real, mu: Real, rho: Real) => Bool {
   assume waitingTime ~ Exponential(lambda);
   if time - waitingTime > node.age {
     if simulateSubtree(time - waitingTime, lambda, mu, rho) {
@@ -58,7 +58,7 @@ function walk(node: Tree, time:Real, lambda: Real, mu: Real, rho: Real): Bool {
   return true;
 }
 
-model function crbd(tree: Tree, rho: Real): Real {
+model function crbd(tree: Tree, rho: Real) => Real {
   assume lambda ~ Gamma(1.0, 1.0);
   assume mu ~ Gamma(1.0, 0.5);
   let leaves = countLeaves(tree);

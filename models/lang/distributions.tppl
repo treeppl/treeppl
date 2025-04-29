@@ -60,7 +60,7 @@ type TestDistributions = TestDistributions {
 }
 
 
-model function distributions() : TestDistributions {
+model function distributions() => TestDistributions {
 
   // Uniform
   assume aU ~ Uniform(0., 1.0);
