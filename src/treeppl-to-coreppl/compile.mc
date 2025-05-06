@@ -1008,7 +1008,7 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
     match includeFileExn "." "treeppl::treeppl-to-coreppl/lib-compile.mc" loader with (compileLibEnv, loader) in
     -- Explicit imports (these should be in scope in the program)
     let import = lam acc. lam imp.
-      match includeFileExn "." imp.v acc.1 with (newEnv, loader) in
+      match includeFileExn (dirname path) imp.v acc.1 with (newEnv, loader) in
       (mergeSymEnv acc.0 newEnv.env, loader) in
     match foldl import (fileEnv, loader) top.imports with (fileEnv, loader) in
 
