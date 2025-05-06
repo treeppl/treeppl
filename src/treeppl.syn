@@ -73,16 +73,10 @@ prod DeclSequence: FileTppl =
   ("import" imports:String)*
   decls:DeclTppl+
 
-/-
-Type usage
-For now the type is only an Uppercase identifier, but in may
-be something else in the future (like with type parameters, etc.)
-Real
-Real[]
-Int[10]
--/
 prod TypeUsage: TypeTppl = name:UName
+prod TypeVariable: TypeTppl = name:LName
 prod TypeAppOrSequence: TypeTppl = ty:TypeTppl "[" (args:TypeTppl ("," args:TypeTppl)*)? "]"
+prod FunTypeTppl: TypeTppl = "function" "(" (params:TypeTppl ("," params:TypeTppl)*)? ")" ":" ret:TypeTppl
 
 prod AtomicReal: TypeTppl = "Real"
 prod AtomicBool: TypeTppl = "Bool"
@@ -97,6 +91,7 @@ optional return type, and the body is given in { }. It consists of statements.
 -/
 prod Fun: DeclTppl =
   model:"model"? "function" name:LName
+  ("[" tyParams:LName ("," tyParams:LName)* "]")?
   "(" (args:{name:LName ":" ty:TypeTppl} args:{"," name:LName ":" ty:TypeTppl}*)? ")"
   (":" returnTy:TypeTppl)?
   "{" body:StmtTppl* "}"
@@ -110,11 +105,20 @@ prod TypeCon: Con =
 
 /- Here is how you declare a type -/
 prod Type: DeclTppl =
-  "type" name:UName "="
-  ("|"? cons:Con)
-  ("|" cons:Con)*
-
-
+  "type"
+  ( constructor:
+    { name:UName
+      ("[" params:LName ("," params:LName)* "]")?
+      "="
+      ("|"? cons:Con)
+      ("|" cons:Con)*
+    }
+  | alias:
+    { "alias" name:UName
+      ("[" params:LName ("," params:LName)* "]")?
+      "=" ty:TypeTppl
+    }
+  )
 
 
 /-
@@ -151,7 +155,7 @@ prod left Less: ExprTppl = left:ExprTppl "<" right:ExprTppl
 prod left Greater: ExprTppl = left:ExprTppl ">" right:ExprTppl
 prod left LessEq: ExprTppl = left:ExprTppl "<=" right:ExprTppl
 prod left GreaterEq: ExprTppl = left:ExprTppl ">=" right:ExprTppl
-prod left Equal: ExprTppl = left:ExprTppl "==" right:ExprTppl -- currently implemented as floats which doesn't make much sense
+prod left Equal: ExprTppl = left:ExprTppl "==" right:ExprTppl
 prod left Unequal: ExprTppl = left:ExprTppl "!=" right:ExprTppl
 -- Boolean operators
 infix left And: ExprTppl = "&&"
@@ -198,6 +202,11 @@ precedence {
   ~And Or;
 }
 
+precedence {
+  Projection FunCall Subscript;
+  ~MatrixMul MatrixAdd MatrixLeftScalarMul MatrixRightScalarMul;
+}
+
 -- Built-in distro keywords
 prod Uniform: ExprTppl = "Uniform" "(" a:ExprTppl "," b:ExprTppl ")"
 prod Bernoulli: ExprTppl = "Bernoulli" "(" prob:ExprTppl ")"
@@ -226,10 +235,13 @@ prod Assign: StmtTppl = "let" var:LName (":" ty:TypeTppl)? "=" val:ExprTppl ";"
 --prod Observe: StmtTppl = "observe" value:ExprTppl "~" distribution:UName "(" (args:ExprTppl ("," args:ExprTppl)*)? ")"
 prod Observe: StmtTppl = "observe" value:ExprTppl "~" dist:ExprTppl ";"
 prod Resample: StmtTppl = "resample" ";"
-prod If: StmtTppl = "if" condition:ExprTppl "{" ifTrueStmts:StmtTppl* "}" ("else" "{" ifFalseStmts:StmtTppl* "}")?
+prod If: StmtTppl =
+  "if" condition:ExprTppl
+  "{" ifTrueStmts:StmtTppl* "}"
+  ("else" "{" ifFalseStmts:StmtTppl* "}")?
 prod Weight: StmtTppl = "weight" value:ExprTppl ";"
 prod LogWeight: StmtTppl = "logWeight" value:ExprTppl ";"
 prod ForLoop: StmtTppl = "for" iterator:LName "in" range:ExprTppl "{" forStmts:StmtTppl* "}"
 prod Return: StmtTppl = "return" return:ExprTppl? ";"
 
-prod Print: StmtTppl = "dump" "(" printable:ExprTppl ")" ";"
+prod Print: StmtTppl = "debug" "(" printable:ExprTppl ")" ";"

@@ -17,6 +17,7 @@ include "mexpr/generate-json-serializers.mc"
 include "mexpr/utils.mc"
 include "mexpr/duplicate-code-elimination.mc"
 include "mexpr/generate-utest.mc"
+include "mexpr/uncurried.mc"
 include "ocaml/mcore.mc"
 include "ocaml/compile.mc"
 
@@ -44,6 +45,7 @@ lang TreePPLCompile
   + FloatAst + Resample + GenerateJsonSerializers + MExprEliminateDuplicateCode
   + MCoreLoader + JsonSerializationLoader
   + ProjMatchAst + TreePPLOperators
+  + UncurriedAst
 
   -- a type with useful information passed down from compile
   type TpplCompileContext = {
@@ -69,11 +71,19 @@ lang TreePPLCompile
 
   sem compileTpplTypeDecl : DeclTppl -> [Decl]
   sem compileTpplTypeDecl =
-  | TypeDeclTppl x ->
+  | TypeDeclTppl (x & {constructor = Some c, alias = None _}) ->
     [ DeclType
-      { ident = x.name.v
-      , params = []
+      { ident = c.name.v
+      , params = map (lam x. x.v) c.params
       , tyIdent = tyvariant_ []
+      , info = x.info
+      }
+    ]
+  | TypeDeclTppl (x & {alias = Some a, constructor = None _}) ->
+    [ DeclType
+      { ident = a.name.v
+      , params = map (lam x. x.v) a.params
+      , tyIdent = compileTypeTppl a.ty
       , info = x.info
       }
     ]
@@ -81,74 +91,55 @@ lang TreePPLCompile
 
   sem compileTpplConDecl : DeclTppl -> [Decl]
   sem compileTpplConDecl =
-  | TypeDeclTppl x ->
+  | TypeDeclTppl (x & {constructor = Some c}) ->
     let f = lam constr.
       match constr with TypeCon constr in DeclConDef
       { ident = constr.name.v
       , tyIdent =
         let f = lam field. (field.name.v, compileTypeTppl field.ty) in
         let lhs = tyrecord_ (map f constr.fields) in
-        let rhs = ntycon_ x.name.v in
+        let rhs = ntycon_ c.name.v in
         tyarrow_ lhs rhs
       , info = constr.name.i
       } in
-    map f x.cons
+    map f c.cons
   | _ -> []
 
   sem compileTpplFunction: TpplCompileContext -> DeclTppl -> [RecLetBinding]
   sem compileTpplFunction (context: TpplCompileContext) =
   | FunDeclTppl f ->
+    let positional =
+      let g = lam x.
+        { ident = x.name.v
+        , tyAnnot = compileTypeTppl x.ty
+        , tyParam = tyunknown_
+        , info = x.name.i
+        } in
+      map g f.args in
+    let ret = optionMapOr tyunknown_ compileTypeTppl f.returnTy in
     let body = foldr (lam f. lam e. f e)
       (withInfo f.info unit_)
-    (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body))
-    in
-    let argTypes = if null f.args
-      then [tyint_] -- nullary functions are ints
-      else map (lam a. compileTypeTppl a.ty) f.args in
-    let returnType = match f.returnTy with Some ty
-      then compileTypeTppl ty
-      else tyunknown_
-    in
-    let mType = foldr tyarrow_ returnType argTypes in
-    [{
-      ident = f.name.v,
-      tyBody = tyunknown_,
-      tyAnnot = tyWithInfo f.name.i mType,
-      body = if null f.args then
-        -- vsenderov 2023-08-04 Taking care of nullary functions by wrapping them in a lambda
-        printError (join [ "NOTE: Zero-argument function, `"
-                         , f.name.v.0
-                         , "`, converted to Int. "
-                         , "Potential type errors might refer to Int type."
-                         , "\n"
-                         ]);
-        flushStderr () ;
-        TmLam {
-          ident =  nameNoSym "_",
-          tyAnnot = TyInt { info = f.info },
-          tyParam = tyunknown_,
-          body = body,
-          ty = tyunknown_,
-          info = f.info
-        } else
-          body,
-      info = f.info
-    }]
+      (map (compileStmtTppl context) f.body) in
+    let function = TmUncurriedLam
+      { positional = positional
+      , body = body
+      , info = f.info
+      , ty = tyunknown_
+      } in
+    let fullTy = TyUncurriedArrow
+      { positional = map (lam x. x.tyAnnot) positional
+      , ret = ret
+      , info = f.info
+      } in
+    let fullTy = foldr (lam p. lam ty. ntyall_ p.v ty) fullTy f.tyParams in
+    [ { ident = f.name.v
+      , tyBody = tyunknown_
+      , tyAnnot = fullTy
+      , body = function
+      , info = f.info
+      }
+    ]
   | TypeDeclTppl _ -> []
-
-  sem compileFunArg: {name:{v:Name, i:Info}, ty:TypeTppl} -> (Expr -> Expr)
-
-  sem compileFunArg =
-  | arg ->
-    lam cont.
-    TmLam {
-      ident = arg.name.v,
-      tyAnnot = compileTypeTppl arg.ty,
-      tyParam = tyunknown_,
-      body = cont,
-      ty = tyunknown_,
-      info = arg.name.i
-    }
 
   sem compileTypeTppl: TypeTppl -> Type
 
@@ -157,6 +148,17 @@ lang TreePPLCompile
       data = tyunknown_,
       ident = x.name.v,
       info = x.name.i
+    }
+
+  | TypeVariableTypeTppl x -> TyVar {
+      ident = x.name.v,
+      info = x.name.i
+    }
+
+  | FunTypeTppl x -> TyUncurriedArrow
+    { positional = map compileTypeTppl x.params
+    , ret = compileTypeTppl x.ret
+    , info = x.info
     }
 
   | AtomicRealTypeTppl x -> TyFloat {
@@ -232,9 +234,13 @@ lang TreePPLCompile
       -- Either apply to 0 (if nullary model function) or each
       -- parameter in sequence
       let f = withInfo modelInfo (nvar_ x.name.v) in
-      if null x.args
-      then app_ f (int_ 0)
-      else foldl (lam l. lam p. app_ l (recordproj_ (nameGetStr p.0) (nvar_ parsedName))) f params in
+      let positional = map (lam p. recordproj_ (nameGetStr p.0) (nvar_ parsedName)) params in
+      TmUncurriedApp
+        { f = f
+        , positional = positional
+        , info = NoInfo ()
+        , ty = tyunknown_
+        } in
 
       let inferCode = appf2_ (nvar_ context.repeat)
         (ulam_ ""
@@ -422,15 +428,23 @@ lang TreePPLCompile
   sem compileExprTppl (context: TpplCompileContext) =
 
   | AnonFunExprTppl x ->
-    let args = if null x.args
-      then [(nameNoSym "", tyint_)]
-      else map (lam a. (a.name.v, compileTypeTppl a.ty)) x.args in
+    let mkArg = lam a.
+      { ident = a.name.v
+      , tyAnnot = compileTypeTppl a.ty
+      , tyParam = tyunknown_
+      , info = a.name.i
+      } in
+    let positional = map mkArg x.args in
     let body = foldr (lam f. lam e. f e)
       (withInfo x.info unit_)
       (map (compileStmtTppl context) x.stmts) in
-    let wrap = lam pair. lam body.
-      withInfo x.info (nlam_ pair.0 pair.1 body) in
-    foldr wrap body args
+    let fun = TmUncurriedLam
+      { positional = positional
+      , body = body
+      , info = x.info
+      , ty = tyunknown_
+      } in
+    fun
 
   | ProjectionExprTppl x ->
     TmProjMatch {
@@ -440,26 +454,12 @@ lang TreePPLCompile
       ty = tyunknown_
     }
 
-  | FunCallExprTppl x ->
-    let f = compileExprTppl context x.f in
-    let app = lam f. lam arg.
-      TmApp {
-        info = x.info,
-        lhs = f,
-        rhs = compileExprTppl context arg,
-        ty = tyunknown_
-      } in
-    -- (vsenderov, 2023-08-04): If we are calling a nullary function,
-    -- in reailty the function is a function of int
-    if null x.args then
-      TmApp {
-        info = x.info,
-        lhs = f,
-        rhs = int_ 0,
-        ty = tyunknown_
-      }
-    else
-      foldl app f x.args
+  | FunCallExprTppl x -> TmUncurriedApp
+    { f = compileExprTppl context x.f
+    , positional = map (compileExprTppl context) x.args
+    , info = x.info
+    , ty = tyunknown_
+    }
 
   | BernoulliExprTppl d ->
     TmDist {
@@ -966,8 +966,10 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
   + TransformDist + CPPLLoader
   + ProjMatchToJson
   + JsonSerializationLoader
+  + DPrintViaPprintLoader + MExprGeneratePprint + GeneratePprintMissingCase
   + TreePPLOperators
-  + StripUtestLoader
+  + StripUtestLoader + PprintUnifyErrorNumArguments + UncurriedTypeCheck + SymUncurried + UncurriedPrettyPrint + LowerUncurryLoader
+  + UnifyUncurriedMixed
   + MExprLowerNestedPatterns + MCoreCompileLang
   + PhaseStats
   + BPFCompilerPicker + APFCompilerPicker + ImportanceCompilerPicker
@@ -1073,6 +1075,8 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
     let extArrOfSeq = app_
       (nvar_ (_getVarExn "extArrOfSeq" arrEnv))
       (nvar_ (_getVarExn "extArrKindFloat64" arrEnv)) in
+
+    -- NOTE(vipa, 2025-04-30): Json serialization
     let ser = ulam_ "serElem" (ulam_ "seq"
       (nconapp_ jsonArrName
         (map_ (var_ "serElem") (extArrToSeq_ (var_ "seq"))))) in
@@ -1080,7 +1084,9 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
       (match_ (var_ "json") (npcon_ jsonArrName (pvar_ "arr"))
         (optionMap_ extArrOfSeq (optionMapM_ (var_ "deserElem") (var_ "arr")))
         (nconapp_ (_getConExn "None" basicEnv) unit_))) in
-    registerCustomJsonSerializer extArrName {serializer = ser, deserializer = deser} loader
+    let loader = registerCustomJsonSerializer extArrName {serializer = ser, deserializer = deser} loader in
+
+    loader
 end
 
 type TpplFrontendOptions =
@@ -1121,8 +1127,10 @@ let compileTpplToExecutable = lam frontend. lam transformations. lam mkInference
   let loader = enableEqGeneration loader in
   let loader = enableDesugar loader in
   let loader = enableJsonSerialization loader in
+  let loader = enableDPrintViaPprint loader in
   let loader = registerMatrixFunctions loader in
   let loader = addHook loader (TreePPLHook {mkInferenceMethod = mkInferenceMethod}) in
+  let loader = addHook loader (LowerUncurryHook ()) in
   endPhaseStatsExpr log "mk-cppl-loader" unit_;
   let loader = (includeFileExn "." frontend.input loader).1 in
   endPhaseStatsExpr log "include-file" unit_;
