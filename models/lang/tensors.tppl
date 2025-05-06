@@ -101,9 +101,6 @@ model function tensors(magic: Int[]): TensorRecord {
   let m4 = mtxPow(m, 4);
   printMtx(m4);
 
-  // we can also use a syntax     ^$ -- matrix to integer ppower
-  printMtx( m ^$ 4 );
-
   // Matrix addition
   // we have no matrix addition right now
   let magicPMagic = mtxAdd(magicTensor, magicTensor);

@@ -29,10 +29,10 @@ type MsgTree =
 
 // Randomly sample two indices in the trees vector, to be combined. Avoiding mirror cases.
 function pickpair(n: Int): Int[] {
-    assume i_1 ~ Categorical(rep(subi(n, 1), 1./Real(subi(n, 1))));
-    let i = addi(i_1, 2); //Adding two, avoiding index zero for i and avoiding trouble picking j
-    assume j ~ Categorical(rep(subi(i, 1), 1./Real(subi(i, 1))));  // j is always smaller than i, avoiding mirror cases
-    return [i, addi(j, 1)]; //avoid index of zero for j
+    assume i_1 ~ Categorical(rep(n - 1, 1./Real(n - 1)));
+    let i = i_1 + 2; //Adding two, avoiding index zero for i and avoiding trouble picking j
+    assume j ~ Categorical(rep(i - 1, 1./Real(i - 1)));  // j is always smaller than i, avoiding mirror cases
+    return [i, j + 1]; //avoid index of zero for j
 }
 
 // Build forest of trees from leaves, recursively
@@ -40,33 +40,33 @@ function build_forest(data: Int[][], forest: MsgTree[], index: Int, data_len: In
     let new_message = sapply(data[index], get_leaf_message);
     let new_leaf = Leaf{age = 0.0, index = index, msg =  new_message};
     let new_forest = paste0([forest, [new_leaf]]);
-    if (eqi(data_len, index)) {
+    if (data_len == index) {
         return new_forest;
     }
     else {
-        return build_forest(data, new_forest, addi(index, 1), data_len, seq_len);
+        return build_forest(data, new_forest, index + 1, data_len, seq_len);
     }
 }
 
 // Get message from leaves for each site
 function get_leaf_message(seq: Int) : Matrix[Real] {
-    if (eqi(seq, 0)) { // "A"
+    if (seq == 0) { // "A"
        let message = rvecCreate(4, [1.0, 0.0, 0.0, 0.0]);
         return message;
     }
-    if (eqi(seq, 1)) { // "C"
+    if (seq == 1) { // "C"
         let message = rvecCreate(4, [0.0, 1.0, 0.0, 0.0]);
         return message;
     }
-    if (eqi(seq, 2)) { // "G"
+    if (seq == 2) { // "G"
         let message = rvecCreate(4, [0.0, 0.0, 1.0, 0.0]);
         return message;
     }
-    if (eqi(seq, 3)) {  // "T"
+    if (seq == 3) {  // "T"
         let message = rvecCreate(4, [0.0, 0.0, 0.0, 1.0]);
         return message;
     }
-    if (eqi(seq, 4)) {  // "-"
+    if (seq == 4) {  // "-"
         let message = rvecCreate(4, [1.0, 1.0, 1.0, 1.0]);
         return message;
     }
@@ -93,7 +93,7 @@ function cluster(q: Matrix[Real], trees: MsgTree[], maxAge: Real, seq_len: Int):
     let n = length(trees);
 
     // Check if we have reached the root of the tree
-    if (eqi(n, 1)) {
+    if (n == 1) {
 
         // Stationarity at root
         let stationary = rep(seq_len, 0.25);
@@ -135,7 +135,7 @@ function cluster(q: Matrix[Real], trees: MsgTree[], maxAge: Real, seq_len: Int):
     // Compute new_trees list
     let min = pairs[2];
     let max = pairs[1];
-    let new_trees = paste0([slice(trees, 1, min), slice(trees, addi(min, 1), max), slice(trees, addi(max, 1), addi(n, 1)), [parent]]);
+    let new_trees = paste0([slice(trees, 1, min), slice(trees, min + 1, max), slice(trees, max + 1, n + 1), [parent]]);
 
     // Recursive call to cluster for new_trees
     return cluster(q, new_trees, age, seq_len);

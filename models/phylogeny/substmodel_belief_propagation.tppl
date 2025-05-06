@@ -75,23 +75,23 @@ function compute_postorder_message(tree: GTR_Tree, data: Int[][], q: Matrix[Real
 
 // Get message from leaves for each site
 function get_leaf_message(seq: Int) : Matrix[Real] {
-    if (eqi(seq, 0)) { // "A"
+    if (seq == 0) { // "A"
        let message = rvecCreate(4, [1.0, 0.0, 0.0, 0.0]);
         return message;
     }
-    if (eqi(seq, 1)) { // "C"
+    if (seq == 1) { // "C"
         let message = rvecCreate(4, [0.0, 1.0, 0.0, 0.0]);
         return message;
     }
-    if (eqi(seq, 2)) { // "G"
+    if (seq == 2) { // "G"
         let message = rvecCreate(4, [0.0, 0.0, 1.0, 0.0]);
         return message;
     }
-    if (eqi(seq, 3)) {  // "T"
+    if (seq == 3) {  // "T"
         let message = rvecCreate(4, [0.0, 0.0, 0.0, 1.0]);
         return message;
     }
-    if (eqi(seq, 4)) {  // "-" or "?"
+    if (seq == 4) {  // "-" or "?"
         let message = rvecCreate(4, [1.0, 1.0, 1.0, 1.0]);
         return message;
     }

@@ -1,10 +1,344 @@
 import "stdlib::ext/dist-ext.mc"
 import "stdlib::seq.mc"
 import "stdlib::string.mc"
+import "stdlib::common.mc"
+import "stdlib::ext/arr-ext.mc"
+import "stdlib::ext/mat-ext.mc"
+import "./standard.mc"
 
 type Tree =
   | Leaf {age: Real}
   | Node {left: Tree, right: Tree, age: Real}
+
+
+/* -----------------------
+   Mathematical operations
+   ----------------------- */
+
+function exp(x : Real) : Real {
+  return mathExp(x);
+}
+
+function log(x : Real) : Real {
+  return mathLog(x);
+}
+
+function sqrt(x : Real) : Real {
+  return mathSqrt(x);
+}
+
+
+/* -------------------
+   Sequence operations
+   ------------------- */
+
+function rep[x](count : Int, elem : x) : x[] {
+  return make(count)(elem);
+}
+
+function repApply[x](count : Int, f : function(Int): x) : x[] {
+  return seqCreate(count)(function(idx:Int) { return f(idx + 1); });
+}
+
+function iid[a, b](f : function(a):b, a : a, count : Int) : b[] {
+  return seqCreate(count)(function(idx:Int) { return f(a); });
+}
+
+function concat[x](l : x[], r : x[]) : x[] {
+  return seqConcat(l)(r);
+}
+
+function paste0[x](l : x[][]) : x[] {
+  return join(l);
+}
+
+function paste[x](l : x[][], sep : x[]) : x[] {
+  return seqJoin(sep)(l);
+}
+
+function slice[x](l : x[], first : Int, last : Int) : x[] {
+  return seqSubsequence(l)(first - 1)(last - first);
+}
+
+function length[x](l : x[]) : Int {
+  return seqLength(l);
+}
+
+function sapply[a, b](s : a[], f : function(a):b) : b[] {
+  return seqMap(f)(s);
+}
+
+function sapplyi[a, b](s : a[], f : function(Int, a):b) : b[] {
+  return seqMapi(function(i : Int) {return function(x : a) {return f(i+1, x);};})(s);
+}
+
+function fold[a, b](f : function(a, b):a, init : a, seq : b[]) : a {
+  return seqFoldl(function(a : a) {return function(b : b) {return f(a, b);};})(init)(seq);
+}
+
+function foldi[a, b](f : function(a, Int, b):a, init : a, seq : b[]) : a {
+  return seqFoldli(function(a : a) {return function(idx : Int) {return function(b : b) {return f(a, idx+1, b);};};})(init)(seq);
+}
+
+// TODO(vipa, 2025-04-30): This can be replaced with `sapply(xs, f(_, b))` with partial application
+function sapply1[a, b, c](s : a[], f : function(a, b):c, b : b) : c[] {
+  return sapply(s, function(e : a) { return f(e, b); });
+}
+
+// TODO(vipa, 2025-04-30): This can be replaced with `sapplyi(xs, f(_, _, b))` with partial application
+function sapplyi1[a, b, c](s : a[], f : function(Int, a, b):c, b : b) : c[] {
+  return sapplyi(s, function(i : Int, a : a) {return f(i, a, b);});
+}
+
+// TODO(vipa, 2025-04-30): This can be replaced with `sapplyi(xs, f(_, _, b, c))` with partial application
+function sapplyi2[a, b, c, d](s : a[], f : function(Int, a, b, c):d, b : b, c : c) : d[] {
+  return sapplyi(s, function(i : Int, a : a) {return f(i, a, b, c);});
+}
+
+function zipWith[a, b, c](f : function(a, b): c, a : a[], b : b[]) : c[] {
+  return seqZipWith(function(a : a) {return function(b : b) {return f(a, b);};})(a)(b);
+}
+
+function seqSumReal(s : Real[]) : Real {
+  return fold(function(a : Real, b : Real) {return a + b;}, 0.0, s);
+}
+
+function seqSumInt(s : Int[]) : Int {
+  return fold(function(a : Int, b : Int) {return a + b;}, 0, s);
+}
+
+function seqNormalize(s : Real[]) : Real[] {
+  let sum = seqSumReal(s);
+  return sapply(s, function(x : Real) {return x / sum;});
+}
+
+function any[x](f : function(x) : Bool, l : x[]) : Bool {
+  return seqAny(f)(l);
+}
+
+function qSort[x](cmp : function(x, x):Int, l : x[]) : x[] {
+  return quickSort(function(a : x) {return function(b : x) {return cmp(a, b);};})(l);
+}
+
+function whichTrue(s : Bool[]) : Int[] {
+  return foldi(function(acc : Int[], idx : Int, elem : Bool) {
+    if elem {
+      return seqSnoc(acc)(idx);
+    }
+    return acc;
+  }, [], s);
+}
+
+
+/* -----------
+   Conversions
+   ----------- */
+
+function real2string(v : Real) : String {
+  return float2string(v);
+}
+
+function sreal2string(v : Real[]) : String[] {
+  return sapply(v, float2string);
+}
+
+function int2string(v : Int) : String {
+  return const_int2string(v);
+}
+
+function sint2string(v : Int[]) : String[] {
+  return sapply(v, int2string);
+}
+
+function int2real(v : Int) : Real {
+  return Real(v);
+}
+
+function sint2real(v : Int[]) : Real[] {
+  return sapply(v, int2real);
+}
+
+function bool2real(v : Bool) : Real {
+  if (v) {
+    return 1.0;
+  }
+  return 0.0;
+}
+
+function sbool2real(v : Bool[]) : Real[] {
+  return sapply(v, bool2real);
+}
+
+function bool2string(v: Bool) : String {
+  if (v) {
+     return "true";
+  }
+  return "false";
+}
+
+function sbool2string(v : Bool[]) : String[] {
+  return sapply(v, bool2string);
+}
+
+
+/* -----------------------------
+   Matrices and their operations
+   ----------------------------- */
+
+type alias Matrix[x] = Mat[x]
+
+function mtxCreate(rows : Int, cols : Int, data : Real[]) : Matrix[Real] {
+  return matFromArrExn(rows)(cols)(extArrOfSeq(extArrKindFloat64)(data));
+}
+
+function mtxCreateId(sideLength : Int) : Matrix[Real] {
+  let mat = matMake(extArrKindFloat64)(sideLength)(sideLength)(0.0);
+  repeati(function(i : Int) {return matSetExn(mat)(i)(i)(1.0);})(sideLength);
+  return mat;
+}
+
+function rvecCreate(cols : Int, seq : Real[]) : Matrix[Real] {
+  return matFromArrExn(1)(cols)(extArrOfSeq(extArrKindFloat64)(seq));
+}
+
+function cvecCreate(rows : Int, seq : Real[]) : Matrix[Real] {
+  return matFromArrExn(rows)(1)(extArrOfSeq(extArrKindFloat64)(seq));
+}
+
+function dim[x](mtx : Matrix[x]) : Int[] {
+  return [matNumRows(mtx), matNumCols(mtx)];
+}
+
+function mtxGet[x](row : Int, col : Int, mtx : Matrix[x]) : x {
+  return matGetExn(mtx)(row - 1)(col - 1);
+}
+
+function mtxRowCols[x](mtx : Matrix[x], row : Int, cols : Int[]) : Matrix[x] {
+  return matRowCols(mtx)(row)(cols);
+}
+
+function mtxSclrMul(scalar : Real, mtx : Matrix[Real]) : Matrix[Real] {
+  return matScale(scalar)(mtx);
+}
+
+function mtxAdd(a : Matrix[Real], b : Matrix[Real]) : Matrix[Real] {
+  return matAddExn(a)(b);
+}
+
+function mtxTrans(mtx : Matrix[Real]) : Matrix[Real] {
+  return matTranspose(mtx);
+}
+
+function mtxExp(mtx : Matrix[Real]) : Matrix[Real] {
+  return matExpExn(mtx);
+}
+
+function mtxMul(a : Matrix[Real], b : Matrix[Real]) : Matrix[Real] {
+  return matMulExn(a)(b);
+}
+
+function mtxElemMul(a : Matrix[Real], b : Matrix[Real]) : Matrix[Real] {
+  return matElemMulExn(a)(b);
+}
+
+function mtxElemPow(mtx : Matrix[Real], pow : Real) : Matrix[Real] {
+  return matElemPow(mtx)(pow);
+}
+
+function mtxNormalize(mtx : Matrix[Real]) : Matrix[Real] {
+  return matNormalize(mtx);
+}
+
+function mtxGetRow[x](row : Int, mtx : Matrix[x]) : Matrix[x] {
+  return matGetRow(row)(mtx);
+}
+
+function _mtxPow(mtx : Matrix[Real], pow : Int) : Matrix[Real] {
+  if pow == 1 {
+     return mtx;
+  }
+  if mathModi(pow)(2) == 0 {
+     let halfPow = _mtxPow(mtx, pow/2);
+     return mtxMul(halfPow, halfPow);
+  }
+  return mtxMul(mtx, _mtxPow(mtx, pow-1));
+}
+
+function mtxPow(mtx : Matrix[Real], pow : Int) : Matrix[Real] {
+  if !matIsSquare(mtx) {
+     return error("Matrix must be square");
+  }
+  if pow < 0 {
+     return error("Powers must be non-negative");
+  }
+  if pow == 0 {
+     return mtxCreateId(matNumRows(mtx));
+  }
+  return _mtxPow(mtx, pow);
+}
+
+function mtxMean(mtx : Matrix[Real]) : Real {
+  return matMean(mtx);
+}
+
+function tapply[a, b](mtx : Matrix[a], f : function(a):b) : b[] {
+  return matApplyToSeq(mtx)(f);
+}
+
+/* ---------------------
+   Phylogenetic messages
+   --------------------- */
+
+type alias Message = Matrix[Real][]
+
+function messageElemMul(a : Message, b : Message) : Message {
+  return zipWith(mtxElemMul, a, b);
+}
+
+function messageElemPow(a : Message, pow : Real) : Message {
+  // return sapply(a, mtxElemPow(_, pow));
+  return sapply(a, function(v : Matrix[Real]) {return mtxElemPow(v, pow);});
+}
+
+function messageNormalize(m : Message) : Message {
+  return sapply(m, mtxNormalize);
+}
+
+
+/* --------------
+   Debug printing
+   -------------- */
+
+function error[a](msg : String) : a {
+  return crash(msg);
+}
+
+function print(msg : String) {
+  printErr(msg);
+}
+
+function printLn(msg : String) {
+  printErrorLn(msg);
+}
+
+function printMtx(m: Matrix[Real]) {
+  let dimensions = dim(m);
+  printErrorLn( join( [ "[[ "
+                 , int2string( dimensions[1] )
+                 , " x "
+                 , int2string( dimensions[2] )
+                 , " matrix ]]:"
+                 ]
+               )
+         );
+  for i in 1 to (dimensions[1]) {
+    for j in 1 to (dimensions[2]) {
+      printErr(concat(real2string(mtxGet(i, j, m)), "\t"));
+    }
+    printErrorLn("");
+  }
+  printErrorLn("");
+}
 
 
 /* -----------------------------------------------------------
@@ -25,11 +359,11 @@ function uniform(param: UniformParam): Real {
 
 // log-score
 function uniformLogScore(x:Real, param: UniformParam): Real {
-  return uniformContinuousLogPdf(param.a, param.b, x);
+  return uniformContinuousLogPdf(param.a)(param.b)(x);
 }
 
 function uniformScore(x:Real, param: UniformParam): Real {
-  return uniformContinuousPdf(param.a, param.b, x);
+  return uniformContinuousPdf(param.a)(param.b)(x);
 }
 
 
@@ -44,11 +378,11 @@ function bernoulli(param: BernoulliParam): Bool {
 }
 
 function bernoulliLogScore(x: Bool, param: BernoulliParam): Real {
-  return bernoulliLogPmf(param.prob, x);
+  return bernoulliLogPmf(param.prob)(x);
 }
 
 function bernoulliScore(x: Bool, param: BernoulliParam): Real {
-  return bernoulliPmf(param.prob, x);
+  return bernoulliPmf(param.prob)(x);
 }
 
 
@@ -63,11 +397,11 @@ function exponential(param: ExponentialParam): Real {
 }
 
 function exponentialLogScore(x: Real, param: ExponentialParam) {
-  return exponentialLogPdf(param.rate, x);
+  return exponentialLogPdf(param.rate)(x);
 }
 
 function exponentialScore(x: Real, param: ExponentialParam) {
-  return exponentialPdf(param.rate, x);
+  return exponentialPdf(param.rate)(x);
 }
 
 // Poisson
@@ -81,11 +415,11 @@ function poisson(param: PoissonParam): Int {
 }
 
 function poissonLogScore(x: Int, param: PoissonParam) {
-  return poissonLogPmf(param.rate, x);
+  return poissonLogPmf(param.rate)(x);
 }
 
 function poissonScore(x: Int, param: PoissonParam) {
-  return poissonPmf(param.rate, x);
+  return poissonPmf(param.rate)(x);
 }
 
 // Beta
@@ -100,11 +434,11 @@ function beta(param: BetaParam): Real {
 }
 
 function betaLogScore(x: Real, param: BetaParam) {
-  return betaLogPdf(x, param.a, param.b);
+  return betaLogPdf(x)(param.a)(param.b);
 }
 
 function betaScore(x: Real, param: BetaParam) {
-  return betaPdf(x, param.a, param.b);
+  return betaPdf(x)(param.a)(param.b);
 }
 
 // Gamma
@@ -119,11 +453,11 @@ function gamma(param: GammaParam): Real {
 }
 
 function gammaLogScore(x: Real, param: GammaParam) {
-  return gammaLogPdf(param.shape, param.scale, x);
+  return gammaLogPdf(param.shape)(param.scale)(x);
 }
 
 function gammaScore(x: Real, param: GammaParam) {
-  return gammaPdf(param.shape, param.scale, x);
+  return gammaPdf(param.shape)(param.scale)(x);
 }
 
 // Categorical
@@ -137,11 +471,11 @@ function categorical(param: CategoricalParam) {
 }
 
 function categoricalLogScore(x: Int, param: CategoricalParam) {
-  return categoricalLogPmf(param.probs, x);
+  return categoricalLogPmf(param.probs)(x);
 }
 
 function categoricalScore(x: Int, param: CategoricalParam) {
-  return categoricalPmf(param.probs, x);
+  return categoricalPmf(param.probs)(x);
 }
 
 // Multinomial
@@ -156,11 +490,11 @@ function multinomial(param: MultinomialParam) {
 }
 
 function multinomialLogScore(x: Int[], param: MultinomialParam) {
-  return multinomialLogPmf(param.probs, x);
+  return multinomialLogPmf(param.probs)(x);
 }
 
 function multinomialScore(x: Int[], param: MultinomialParam) {
-  return multinomialPmf(param.probs, x);
+  return multinomialPmf(param.probs)(x);
 }
 
 // Dirichlet
@@ -174,11 +508,11 @@ function dirichlet(param: DirichletParam) {
 }
 
 function dirichletLogScore(x: Real[], param: DirichletParam) {
-  return dirichletLogPdf(param.alphas, x);
+  return dirichletLogPdf(param.alphas)(x);
 }
 
 function dirichletScore(x: Real[], param: DirichletParam) {
-  return dirichletPdf(param.alphas, x);
+  return dirichletPdf(param.alphas)(x);
 }
 
 // Empiricial
@@ -197,11 +531,11 @@ function gaussian(param: GaussianParam) {
 }
 
 function gaussianLogScore(x: Real, param: GaussianParam) {
-  return gaussianLogPdf(param.mean, param.dev, x);
+  return gaussianLogPdf(param.mean)(param.dev)(x);
 }
 
 function gaussianScore(x: Real, param: GaussianParam) {
-  return gaussianPdf(param.mean, param.dev, x);
+  return gaussianPdf(param.mean)(param.dev)(x);
 }
 
 // Binomial
@@ -216,43 +550,9 @@ function binomial(param: BinomialParam) {
 }
 
 function binomialLogScore(x: Int, param: BinomialParam) {
-  return binomialLogPmf(param.prob, param.n, x);
+  return binomialLogPmf(param.prob)(param.n)(x);
 }
 
 function binomialScore(x: Int, param: BinomialParam) {
-  return binomialPmf(param.prob, param.n, x);
-}
-
-
-/**
- *
- * Pretty prints a two-dimensional tensor
- *
- * @param m matrix
- * @return void
- */
-function printMtx(m: Matrix[Real]): () {
-  let dimensions = dim(m);
-  printLn( join( [ "[[ "
-                 , int2string( dimensions[1] )
-                 , " x "
-                 , int2string( dimensions[2] )
-                 , " matrix ]]:"
-                 ]
-               )
-         );
-  for i in 1 to (dimensions[1]) {
-    for j in 1 to (dimensions[2]) {
-      print(concat(real2string(mtxGet(i, j, m)), "\t"));
-    }
-    printLn("");
-  }
-  printLn("");
-}
-
-function bool2real(b: Bool): Real {
-  if (b) {
-    return 1.0;
-  }
-  return 0.0;
+  return binomialPmf(param.prob)(param.n)(x);
 }
