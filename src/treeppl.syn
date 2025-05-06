@@ -177,8 +177,6 @@ prod left MatrixAdd: ExprTppl = left:ExprTppl "+@" right:ExprTppl
 prod left MatrixLeftScalarMul: ExprTppl = left:ExprTppl "$*" right:ExprTppl  -- owl standard (I think)
 prod left MatrixRightScalarMul: ExprTppl = left:ExprTppl "*$" right:ExprTppl  --
 
-prod left MatrixPower: ExprTppl = left:ExprTppl "^$" right:ExprTppl -- imagined but analogous to *$
-
 
   -- because the right has to be an integer not another matrix
 

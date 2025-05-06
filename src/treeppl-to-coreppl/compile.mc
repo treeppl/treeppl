@@ -54,7 +54,6 @@ lang TreePPLCompile
     printJsonLn: Name,
     particles: Name, sweeps: Name, input: Name, some: Name,
     matrixMul: Name,
-    matrixPow: Name,
     matrixAdd: Name,
     matrixMulFloat: Name,
     pow: Name,
@@ -191,8 +190,8 @@ lang TreePPLCompile
 
   | NothingTypeTppl x -> tyunit_
 
-  sem compileModelInvocation : TpplCompileContext -> (Type -> Loader -> (Loader, InferMethod)) -> Loader -> DeclTppl -> Option (Loader, Expr)
-  sem compileModelInvocation context mkInferenceMethod loader =
+  sem compileModelInvocation : TpplCompileContext -> (Type -> Loader -> (Loader, InferMethod)) -> Loader -> SymEnv -> DeclTppl -> Option (Loader, SymEnv, Expr)
+  sem compileModelInvocation context mkInferenceMethod loader fileEnv =
   | FunDeclTppl (x & {model = Some modelInfo}) ->
     -- TODO(vipa, 2024-12-13): We could technically shadow a model
     -- function, in which case the generated code will refer to the
@@ -200,14 +199,13 @@ lang TreePPLCompile
     let params : [(Name, Type)] =
       map (lam param. (param.name.v, compileTypeTppl param.ty)) x.args in
 
-    let symEnv = _getSymEnv loader in
     let tcEnv = _getTCEnv loader in
     let inputType = tyrecord_ (map (lam x. (nameGetStr x.0, x.1)) params) in
-    let inputType = resolveType modelInfo tcEnv false (symbolizeType symEnv inputType) in
+    let inputType = resolveType modelInfo tcEnv false (symbolizeType fileEnv inputType) in
     let outputType = match x. returnTy with Some ty
       then compileTypeTppl ty
       else errorSingle [modelInfo] "A model function must have an explicit return type, even if it returns nothing, i.e., ()" in
-    let outputType = resolveType modelInfo tcEnv false (symbolizeType symEnv outputType) in
+    let outputType = resolveType modelInfo tcEnv false (symbolizeType fileEnv outputType) in
     match serializationPairsFor [inputType, outputType] loader with (loader, [inputSer, outputSer]) in
 
     let app_ = lam f. lam a. withInfo modelInfo (app_ f a) in
@@ -226,7 +224,7 @@ lang TreePPLCompile
       , tyBody = tyunknown_
       , info = modelInfo
       } in
-    let loader = _addDeclExn loader parsedDecl in
+    match _addDeclWithEnvExn fileEnv loader parsedDecl with (fileEnv, loader) in
 
     match mkInferenceMethod outputType loader with (loader, inferenceMethod) in
 
@@ -242,14 +240,14 @@ lang TreePPLCompile
         , ty = tyunknown_
         } in
 
-      let inferCode = appf2_ (nvar_ context.repeat)
-        (ulam_ ""
-          (app_ (nvar_ context.printJsonLn)
-            (appf2_ (nvar_ context.serializeResult) outputSer.serializer
-              (infer_ inferenceMethod
-                (ulam_ "" invocation)))))
-        (nvar_ context.sweeps) in
-    Some (loader, inferCode)
+    let inferCode = appf2_ (nvar_ context.repeat)
+      (ulam_ ""
+        (app_ (nvar_ context.printJsonLn)
+          (appf2_ (nvar_ context.serializeResult) outputSer.serializer
+            (infer_ inferenceMethod
+              (ulam_ "" invocation)))))
+      (nvar_ context.sweeps) in
+    Some (loader, fileEnv, inferCode)
   | _ -> None ()
 
   sem compileStmtTppl: TpplCompileContext -> StmtTppl -> (Expr -> Expr)
@@ -708,19 +706,6 @@ lang TreePPLCompile
       ty = tyunknown_
     }
 
-  | MatrixPowerExprTppl x ->
-    TmApp {
-        info = x.info,
-        lhs = TmApp {
-          info = x.info,
-          lhs = nvar_ context.matrixPow,
-          rhs = compileExprTppl context x.left,
-          ty = tyunknown_
-        },
-        rhs = compileExprTppl context x.right,
-        ty = tyunknown_
-      }
-
   | PowerExprTppl x ->
    TmApp {
         info = x.info,
@@ -999,7 +984,7 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
     -- Standard library (these should be in scope in the program)
     match includeFileExn "." "treeppl::lib/standard.mc" loader with (stdlibMCEnv, loader) in
     match includeFileExn "." "treeppl::lib/standard.tppl" loader with (stdlibTPPLEnv, loader) in
-    let fileEnv = mergeSymEnv stdlibMCEnv.env stdlibTPPLEnv.env in
+    let fileEnv = stdlibTPPLEnv.env in
     -- Compiler libraries (these should *not* be in scope in the program)
     match includeFileExn "." "stdlib::ext/dist-ext.mc" loader with (distEnv, loader) in
     match includeFileExn "." "stdlib::ext/math-ext.mc" loader with (mathEnv, loader) in
@@ -1025,7 +1010,6 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
       , printJsonLn = _getVarExn "printJsonLn" jsonEnv
       , some = _getConExn "Some" optionEnv
       , matrixMul = _getVarExn "matMulExn" matrixEnv
-      , matrixPow = _getVarExn "mtxPow" stdlibMCEnv
       , matrixAdd = _getVarExn "matAddExn" matrixEnv
       , matrixMulFloat = _getVarExn "matScale" matrixEnv
       , repeat = _getVarExn "repeat" commonEnv
@@ -1046,7 +1030,7 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
 
     -- 3. Model invocations.
     let work = lam loader. lam decl.
-      match compileModelInvocation context hook.mkInferenceMethod loader decl with Some (loader, invocation) then
+      match compileModelInvocation context hook.mkInferenceMethod loader fileEnv decl with Some (loader, fileEnv, invocation) then
         let decl = DeclLet
           { body = invocation
           , ident = nameSym ""
