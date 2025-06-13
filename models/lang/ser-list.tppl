@@ -1,4 +1,4 @@
-model function distributions() : Real[][] {
+model function distributions() => Real[][] {
   let dirAlphas = [2.0, 3.0, 5.0];
 
   let myDirP = DirichletParam {alphas = dirAlphas};

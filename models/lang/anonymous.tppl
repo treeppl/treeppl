@@ -1,6 +1,7 @@
-model function example():() {
+model function example() => Int {
   let c = 10;
-  let x = sapply(1 to 5, function (i: Int) {
-    return addi(c, i);
+  let x = sapply(1 to 5, function (i: Int) => Int {
+    return c + i;
   });
+  return x[1];
 }

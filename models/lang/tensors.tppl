@@ -29,7 +29,7 @@ type TensorRecord = TensorRecord {
  * but for linear algebra (matrix algebra) we use real tensors.
  *
  */
-model function tensors(magic: Int[]): TensorRecord {
+model function tensors(magic: Int[]) => TensorRecord {
   // Convert a sequence of integers to a sequence of reals
   let magicRealSequence = sapply(magic, int2real);
 
@@ -100,9 +100,6 @@ model function tensors(magic: Int[]): TensorRecord {
   let m = mtxCreate(2, 2, [3.14, 3.14, 2.78, 2.78]);
   let m4 = mtxPow(m, 4);
   printMtx(m4);
-
-  // we can also use a syntax     ^$ -- matrix to integer ppower
-  printMtx( m ^$ 4 );
 
   // Matrix addition
   // we have no matrix addition right now

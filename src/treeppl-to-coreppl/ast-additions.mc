@@ -129,6 +129,32 @@ lang ProjMatchToJson = AstToJson + ProjMatchAst
     ] )
 end
 
+lang TyVarOrConAst = Ast
+  syn Type =
+  | TyVarOrCon {info : Info, ident : Name}
+
+  sem tyWithInfo info =
+  | TyVarOrCon t -> TyVarOrCon {t with info = info}
+
+  sem infoTy =
+  | TyVarOrCon t -> t.info
+end
+
+lang TyVarOrConSym = Sym + TyVarOrConAst + ConTypeAst + VarTypeAst
+  sem symbolizeType env =
+  | TyVarOrCon x ->
+    let mVar = mapLookup (nameGetStr x.ident) env.currentEnv.tyVarEnv in
+    let mCon = mapLookup (nameGetStr x.ident) env.currentEnv.tyConEnv in
+    switch (mVar, mCon)
+    case (Some ident, _) then
+      TyVar {info = x.info, ident = ident}
+    case (_, Some ident) then
+      TyCon {info = x.info, ident = ident, data = tyunknown_}
+    case (None _, None _) then
+      symLookupError (mapUnion env.currentEnv.tyConEnv env.currentEnv.tyVarEnv) {kind = "type", info = [x.info], allowFree = false} x.ident
+    end
+end
+
 lang TreePPLOperators
   = OverloadedOpDesugarLoader
   + IntTypeAst + CmpIntTypeAst

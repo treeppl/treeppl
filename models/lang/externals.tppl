@@ -1,4 +1,4 @@
-model function coinModel(coinflips: Bool[]) : Real  {
+model function coinModel(coinflips: Bool[]) => Real  {
     let p = log(2.0);
     return p;
 }

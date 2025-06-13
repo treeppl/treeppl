@@ -27,7 +27,7 @@ type QTTree =
                     , partialLogWeight: Real
                     }
 
-function tree2string(tree: QTTree): String {
+function tree2string(tree: QTTree) => String {
   if (tree is QTLeaf) {
     return paste0(["QTLeaf(", int2string(tree.index), ")"]);
   }
@@ -44,7 +44,7 @@ function tree2string(tree: QTTree): String {
   return "Error (tree2string): unexpected tree structure";
 }
 
-function gammaZeroMix(rho: Bool, a: Real, b: Real): Real {
+function gammaZeroMix(rho: Bool, a: Real, b: Real) => Real {
   if (rho) {
     assume x ~ Gamma(a, b);
     return x;
@@ -106,7 +106,7 @@ model function qtbirds( tree: QTTree
                       , nuScale: Real
                       , pa: Real
                       , pb: Real
-                      ): Real[]
+                      ) => Real[]
 {
   // printMtx(normQChar);
   // printMtx(jChar);
@@ -161,7 +161,7 @@ model function qtbirds( tree: QTTree
  *
  * @return QTTree that matches the QTWeightedLeaf constructor
  */
-function coalesceQTTree(tree: QTTree, m: ModelDynamics, doresample: Bool) : QTTree {
+function coalesceQTTree(tree: QTTree, m: ModelDynamics, doresample: Bool) => QTTree {
   if (tree.left is QTLeaf) && (tree.right is QTLeaf) {
     let newTree = QTWeightedNode  { left = tree.left
                                   , right = tree.right
@@ -215,7 +215,7 @@ function coalesceQTTree(tree: QTTree, m: ModelDynamics, doresample: Bool) : QTTr
  * coalesceQTTwig deals with a subtree that has two leafs as children
  * (they can be weighted or unweighted)
  */
-function coalesceQTTwig(tree: QTTree, m: ModelDynamics, doresample: Bool): QTTree {
+function coalesceQTTwig(tree: QTTree, m: ModelDynamics, doresample: Bool) => QTTree {
   let leftTime = getAgeDiff(tree, tree.left);
   let rightTime = getAgeDiff(tree, tree.right);
 
@@ -297,7 +297,7 @@ function coalesceQTTwig(tree: QTTree, m: ModelDynamics, doresample: Bool): QTTre
 }
 
 
-function getMessageSequence(tree: QTTree): Matrix[Real][] {
+function getMessageSequence(tree: QTTree) => Matrix[Real][] {
   if (tree is QTLeaf) {
     return sapply(tree.stateSequence, getMessage);
   }
@@ -316,12 +316,12 @@ function getMessageSequence(tree: QTTree): Matrix[Real][] {
 }
 
 // TODO/ WIP: What if the state is missing??
-function getMessage(state: Int): Matrix[Real] {
+function getMessage(state: Int) => Matrix[Real] {
   /* NOTE(vsenderov, 2023-11-01)
      - Messages hard-coded for now
      - see https://github.com/treeppl/treeppl/issues/30
   */
-  if (eqi(state, subi(0, 1))) {
+  if (state == 0 - 1) {
     return rvecCreate(4, [-1., -1., -1., -1.]);  // for now this is how we encode missing data
   }
 
@@ -330,17 +330,17 @@ function getMessage(state: Int): Matrix[Real] {
                   [0., 0., 1., 0.],    // 2
                   [0., 0., 0., 1.]];   // 3
 
-  return rvecCreate(4, messages[addi(state, 1)]); // one-indexing of arrays, but zero-indexing of states
+  return rvecCreate(4, messages[state + 1]); // one-indexing of arrays, but zero-indexing of states
 }
 
 
-function getCharacterMessage(tree: QTTree, messages: Real[][]): Matrix[Real]
+function getCharacterMessage(tree: QTTree, messages: Real[][]) => Matrix[Real]
 {
   if (tree is QTLeaf)
   {
     let l = length(messages);
     let curState = idInt(tree.characterState); // workaround
-    let rTensor = rvecCreate(l, messages[addi(1, curState)]);
+    let rTensor = rvecCreate(l, messages[1 + curState]);
     return rTensor;
   }
 
@@ -362,13 +362,13 @@ type MessageEvolution = MessageEvolution  { message: Matrix[Real]
                                           }
 
 // workaround not elegant, otherwise name clash
-function meGetMessage (mes: MessageEvolution): Matrix[Real]
+function meGetMessage(mes: MessageEvolution) => Matrix[Real]
 {
   return mes.message;
 }
 
 // workaround not elegant
-function meGetJumps (mes: MessageEvolution): Int
+function meGetJumps(mes: MessageEvolution) => Int
 {
   return mes.sJumps;
 }
@@ -383,11 +383,11 @@ function meGetJumps (mes: MessageEvolution): Int
 *   The initial likelihood as a row vector
 *   If the mes has negative values, it is considered missing data
 */
-function evolveMessageClosure ( dyn: ModelDynamics
+function evolveMessageClosure( dyn: ModelDynamics
                               , t: Real
                               , u: Real
                               , mes: Matrix[Real]
-                              ): MessageEvolution
+                              ) => MessageEvolution
 {
   assume sJumps ~ Poisson(dyn.nu * t * u); // divided by number of nucleotides
   // Missing data case
@@ -398,7 +398,7 @@ function evolveMessageClosure ( dyn: ModelDynamics
       sJumps = sJumps
     };
   }
-  let res = mes *@ ( ( dyn.jMol ^$ sJumps ) *@ (mtxExp(dyn.qMol *$ t)));
+  let res = mes *@ ( mtxPow(dyn.jMol, sJumps) *@ (mtxExp(dyn.qMol *$ t)));
   // TODO do something for operator precedence to avoid so many parens
   return MessageEvolution {
     message = res,
@@ -407,10 +407,10 @@ function evolveMessageClosure ( dyn: ModelDynamics
 }
 
 
-function evolveCharacter(mes: Matrix[Real], m: ModelDynamics, t: Real, sJumps: Int): Matrix[Real]
+function evolveCharacter(mes: Matrix[Real], m: ModelDynamics, t: Real, sJumps: Int) => Matrix[Real]
 {
   // TODO on top of that we need to add the s-jumps
-  let res = mes *@ ( (m.jChar ^$ sJumps) *@ (mtxExp(m.qChar *$ t)) );
+  let res = mes *@ (mtxPow(m.jChar, sJumps) *@ mtxExp(m.qChar *$ t) );
   return res;
 }
 
@@ -427,10 +427,10 @@ type MessageSequenceEvolution = MessageSequenceEvolution {
 function evolveMessageSequence( messages: Matrix[Real][]
                               , m: ModelDynamics
                               , t: Real
-                              ) : MessageSequenceEvolution
+                              ) => MessageSequenceEvolution
 {
   let u = 1.0/Real(length(messages));
-  let evolveMessage = evolveMessageClosure(m, t, u); // partial application
+  let evolveMessage = function(x : Matrix[Real]) => MessageEvolution {return evolveMessageClosure(m, t, u, x);}; // partial application
   let ret = sapply(messages, evolveMessage);
 
   return MessageSequenceEvolution {
@@ -445,7 +445,7 @@ function evolveMessageSequence( messages: Matrix[Real][]
  * into.  Makes the necesseity for writing tests even more apparent.
  *
 */
-function computeMessageLogLikelihood(mes: Matrix[Real]): Real
+function computeMessageLogLikelihood(mes: Matrix[Real]) => Real
 {
   if (isMissing(mes)) {
     return 0.;
@@ -469,34 +469,34 @@ function computeMessageLogLikelihood(mes: Matrix[Real]): Real
 //  ╚══╝╚══╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚═════╝ ╚══════╝
 //https://patorjk.com/software/taag/#p=testall&h=1&v=1&f=Univers&t=WORKAROUNDS
 
-function getAgeDiff(parent: QTTree, child: QTTree)
+function getAgeDiff(parent: QTTree, child: QTTree) => Real
 {
   return parent.age - child.age;
 }
 
 
-function idTensorReal(t: Matrix[Real])
+function idTensorReal(t: Matrix[Real]) => Matrix[Real]
 {
   return t;
 }
 
 
-function idSTensorReal(t: Matrix[Real][])
+function idSTensorReal(t: Matrix[Real][]) => Matrix[Real][]
 {
   return t;
 }
 
 
-function idSeq(s: Real[]) {
+function idSeq(s: Real[]) => Real[] {
   return s;
 }
 
 
-function idInt(i: Int) {
+function idInt(i: Int) => Int {
   return i;
 }
 
-function getIndex(tree: QTTree): Int
+function getIndex(tree: QTTree) => Int
 {
   if (tree is QTLeaf)
   {
@@ -511,7 +511,7 @@ function getIndex(tree: QTTree): Int
  * Multiplies two tensors, ignores if missing data is encoded as -1.
  * Hack!
  */
-function mtxElemMulMissing(a: Matrix[Real], b: Matrix[Real]): Matrix[Real] {
+function mtxElemMulMissing(a: Matrix[Real], b: Matrix[Real]) => Matrix[Real] {
   if (isMissing(a)) {
     if (isMissing(b)) {
       return a; // doesn't matter which one we return, both are missing
@@ -527,7 +527,7 @@ function mtxElemMulMissing(a: Matrix[Real], b: Matrix[Real]): Matrix[Real] {
   return mtxElemMul(a, b);
 }
 
-function isMissing(x: Matrix[Real]): Bool {
+function isMissing(x: Matrix[Real]) => Bool {
   if (mtxGet(1, 1, x) < 0.) {
     return true;
   }
