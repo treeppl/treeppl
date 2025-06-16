@@ -41,7 +41,7 @@ include "matrix.mc"
 include "ast-additions.mc"
 
 lang TreePPLCompile
-  = TreePPLAst + MExprPPL + MExprFindSym + RecLetsAst + Externals + MExprSym
+  = TreePPLAst + MExprPPL + MExprFindSym + RecLetsDeclAst + Externals + MExprSym
   + FloatAst + Resample + GenerateJsonSerializers + MExprEliminateDuplicateCode
   + MCoreLoader + JsonSerializationLoader
   + ProjMatchAst + TreePPLOperators
@@ -105,7 +105,7 @@ lang TreePPLCompile
     map f c.cons
   | _ -> []
 
-  sem compileTpplFunction: TpplCompileContext -> DeclTppl -> [RecLetBinding]
+  sem compileTpplFunction: TpplCompileContext -> DeclTppl -> [DeclLetRecord]
   sem compileTpplFunction (context: TpplCompileContext) =
   | FunDeclTppl f ->
     let positional =
@@ -224,8 +224,6 @@ lang TreePPLCompile
     match mkInferenceMethod outputType loader with (loader, inferenceMethod) in
 
     let invocation =
-      -- Either apply to 0 (if nullary model function) or each
-      -- parameter in sequence
       let f = withInfo modelInfo (nvar_ x.name.v) in
       let positional = map (lam p. recordproj_ (nameGetStr p.0) (nvar_ parsedName)) params in
       TmUncurriedApp
@@ -266,7 +264,7 @@ lang TreePPLCompile
         , driftKernel = driftKernel
         } in
       let tyAnnot = optionMapOr tyunknown_ compileTypeTppl a.ty in
-      bind_ (withInfo a.info (nlet_ a.randomVar.v (tyWithInfo a.info tyAnnot) (withInfo a.info body))) cont
+      bind_ (declWithInfo a.info (nlet_ a.randomVar.v (tyWithInfo a.info tyAnnot) (withInfo a.info body))) cont
 
   | ObserveStmtTppl x ->
     lam cont.
@@ -285,14 +283,17 @@ lang TreePPLCompile
       isemi_ res cont
 
   | AssignStmtTppl a ->
-    lam cont. TmLet {
-      ident = a.var.v,
-      tyBody = tyunknown_,
-      tyAnnot = optionMapOr tyunknown_ compileTypeTppl a.ty,
-      body =  compileExprTppl context a.val,
-      inexpr = cont,
-      ty = tyunknown_,
-      info = a.info
+    lam cont. TmDecl
+    { decl = DeclLet
+      { ident = a.var.v
+      , tyBody = tyunknown_
+      , tyAnnot = optionMapOr tyunknown_ compileTypeTppl a.ty
+      , body =  compileExprTppl context a.val
+      , info = a.info
+      }
+    , info = a.info
+    , inexpr = cont
+    , ty = tyunknown_
     }
 
   | WeightStmtTppl a ->
@@ -300,40 +301,40 @@ lang TreePPLCompile
 
     let cExpr: Expr = (compileExprTppl context a.value) in
     let logExpr: Expr = withInfo a.info (app_ (withInfo a.info (nvar_ context.logName)) cExpr) in
-    let tmp = TmLet {
-      ident = nameNoSym "foo",
-      tyBody = tyunknown_,
-      tyAnnot = tyunknown_,
-      body =  TmWeight {
-        weight = logExpr,
-        --weight = cExpr,
-        ty = tyunknown_,
-        info = a.info
-      },
-      inexpr = cont,
-      ty = tyunknown_,
-      info = a.info
-    } in
-    --printLn (mexprPPLToString tmp);
-    tmp
+    TmDecl
+    { decl = DeclLet
+      { ident = nameNoSym "foo"
+      , tyBody = tyunknown_
+      , tyAnnot = tyunknown_
+      , body = TmWeight
+        { weight = logExpr
+        , ty = tyunknown_
+        , info = a.info
+        }
+      , info = a.info
+      }
+    , info = a.info
+    , inexpr = cont
+    , ty = tyunknown_
+    }
 
   | LogWeightStmtTppl a ->
-    lam cont.
-
-    let tmp = TmLet {
-      ident = nameNoSym "foo",
-      tyBody = tyunknown_,
-      tyAnnot = tyunknown_,
-      body =  TmWeight {
-        weight = compileExprTppl context a.value,
-        ty = tyunknown_,
-        info = a.info
-      },
-      inexpr = cont,
-      ty = tyunknown_,
-      info = a.info
-    } in
-    tmp
+    lam cont. TmDecl
+    { decl = DeclLet
+      { ident = nameNoSym "foo"
+      , tyBody = tyunknown_
+      , tyAnnot = tyunknown_
+      , body =  TmWeight
+        { weight = compileExprTppl context a.value
+        , ty = tyunknown_
+        , info = a.info
+        }
+      , info = a.info
+      }
+    , info = a.info
+    , inexpr = cont
+    , ty = tyunknown_
+    }
 
   /--
   To avoid code duplication.
@@ -352,20 +353,23 @@ lang TreePPLCompile
     let contName = nameSym "ifCont" in
     let contF = lam_ "" tyint_ cont in -- continuation function
     let cont: Expr = withInfo a.info (app_ (nvar_ contName) (int_ 0)) in
-    TmLet {
-      ident = contName,
-      body = contF,
-      tyBody = tyunknown_,
-      tyAnnot = tyunknown_,
-      ty = tyunknown_,
-      info = a.info,
-      inexpr = TmMatch {
-        target = compileExprTppl context a.condition,
-        pat    = withInfoPat (get_ExprTppl_info a.condition) ptrue_,
-        thn    = foldr (lam f. lam e. f e) cont (map (compileStmtTppl context) a.ifTrueStmts),
-        els    = foldr (lam f. lam e. f e) cont (map (compileStmtTppl context) a.ifFalseStmts),
-        ty     = tyunknown_,
-        info   = a.info
+    TmDecl
+    { decl = DeclLet
+      { ident = contName
+      , body = contF
+      , tyBody = tyunknown_
+      , tyAnnot = tyunknown_
+      , info = a.info
+      }
+    , info = a.info
+    , ty = tyunknown_
+    , inexpr = TmMatch
+      { target = compileExprTppl context a.condition
+      , pat = withInfoPat (get_ExprTppl_info a.condition) ptrue_
+      , thn = foldr (lam f. lam e. f e) cont (map (compileStmtTppl context) a.ifTrueStmts)
+      , els = foldr (lam f. lam e. f e) cont (map (compileStmtTppl context) a.ifFalseStmts)
+      , ty = tyunknown_
+      , info = a.info
       }
     }
 
@@ -383,18 +387,21 @@ lang TreePPLCompile
       } in
     let loop_ : Expr -> ((Expr -> Expr) -> Expr) -> Expr = lam arg. lam mkBody.
       let fName = nameSym "for" in
-      TmRecLets
-      { bindings =
-        [ { ident = fName
-          , tyAnnot = tyunknown_
-          , tyBody = tyunknown_
-          , body = mkBody (app_ (var_ fName))
-          , info = x.info
-          }
-        ]
+      TmDecl
+      { decl = DeclRecLets
+        { bindings =
+          [ { ident = fName
+            , tyAnnot = tyunknown_
+            , tyBody = tyunknown_
+            , body = mkBody (app_ (var_ fName))
+            , info = x.info
+            }
+          ]
+        , info = x.info
+        }
+      , info = x.info
       , inexpr = app_ (var_ fName) arg
       , ty = tyunknown_
-      , info = x.info
       } in
     let param = nameSym "l" in
     let rest = nameSym "l" in
@@ -413,7 +420,7 @@ lang TreePPLCompile
       foldr isemi_ cont
         [ dprint_ (compileExprTppl context x.printable)
         -- , print_ (str_ "\n") in
-        , flushStdout_ unit_
+        -- , flushStdout_ unit_
         ]
 
   sem compileExprTppl: TpplCompileContext -> ExprTppl -> Expr
@@ -596,13 +603,16 @@ lang TreePPLCompile
     }
 
   | ToExprTppl x ->
-    let let_ = lam n. lam body. lam inexpr. TmLet
-      { ident = n
-      , tyAnnot = tyunknown_
-      , tyBody = tyunknown_
-      , body = body
-      , inexpr = inexpr
+    let let_ = lam n. lam body. lam inexpr. TmDecl
+      { decl = DeclLet
+        { ident = n
+        , tyAnnot = tyunknown_
+        , tyBody = tyunknown_
+        , body = body
+        , info = x.info
+        }
       , info = x.info
+      , inexpr = inexpr
       , ty = tyunknown_
       } in
     let var_ = lam n. TmVar {ident = n, ty = tyunknown_, info = x.info, frozen = false} in
@@ -877,14 +887,17 @@ lang TreePPLCompile
     let addi_ = lam l. lam r. app_ (app_ (const_ (CAddi ())) l) r in
     let var_ = lam n. TmVar {ident = n, ty = tyunknown_, info = x.info, frozen = false} in
     let subseq_ = lam seq. lam idx. lam len. app_ (app_ (app_ (const_ (CSubsequence ())) seq) idx) len in
-    let let_ = lam n. lam body. lam inexpr. TmLet
-      { ident = n
-      , tyAnnot = tyunknown_
-      , tyBody = tyunknown_
-      , body = body
+    let let_ = lam n. lam body. lam inexpr. TmDecl
+      { decl = DeclLet
+        { ident = n
+        , tyAnnot = tyunknown_
+        , tyBody = tyunknown_
+        , body = body
+        , info = x.info
+        }
       , inexpr = inexpr
-      , info = x.info
       , ty = tyunknown_
+      , info = x.info
       } in
     let idx = compileExprTppl context x.idx in
     match x.lastIdx with Some lastIdx then

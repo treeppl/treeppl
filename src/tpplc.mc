@@ -25,7 +25,7 @@ mexpr
 use TreePPLThings in
 
 let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod)) =
-  let mk = lam debugIterations. lam samplingPeriod. lam incrementalPrinting. lam iterations. lam globalProb. lam driftKernel. lam driftScale. lam cps. lam align. lam debugAlignment. lam outputType. lam loader.
+  let mk = lam debugIterations. lam samplingPeriod. lam incrementalPrinting. lam iterations. lam globalProb. lam driftKernel. lam driftScale. lam cps. lam pigeons. lam align. lam debugAlignment. lam outputType. lam loader.
     match includeFileExn "." "stdlib::json.mc" loader with (jsonEnv, loader) in
     match includeFileExn "." "coreppl::coreppl-to-mexpr/mcmc-lightweight/config.mc" loader with (configEnv, loader) in
     let debugTypeFields = switch mapLookup (_getTyConExn "DebugInfo" configEnv) (_getTCEnv loader).tyConEnv
@@ -69,8 +69,8 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
               , ulet_ "" (printError_ (app_ (nvar_ (_getVarExn "json2string" jsonEnv)) (var_ "output")))
               , ulet_ "" (printError_ (str_ "\n"))
               , ulet_ "" (flushStderr_ unit_)
-              , wallTimeMs_ unit_
-              ]))
+              ]
+              (wallTimeMs_ unit_)))
           ]
       else utuple_ [unit_, ulam_ "" (ulam_ "" unit_)] in
     let method = LightweightMCMC
@@ -78,6 +78,7 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
       , continue = continue
       , globalProb = float_ globalProb
       , debug = debug
+      , pigeons = pigeons
       , driftKernel = driftKernel
       , driftScale = driftScale
       , cps = cps
@@ -101,7 +102,7 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
     { optFlagDef with long = "incremental-printing"
     , description = "Print each sample as it is produced instead of at the end."
     } in
-  let res = optApply (optApply (optApply (optApply (optApply (optMap5 mk debugIterations samplingPeriod incrementalPrinting _particles _mcmcLightweightGlobalProb) _driftKernel) _driftScale) _cps) _align) _debugAlignment in
+  let res = optApply (optApply (optApply (optApply (optApply (optApply (optMap5 mk debugIterations samplingPeriod incrementalPrinting _particles _mcmcLightweightGlobalProb) _driftKernel) _driftScale) _cps) _pigeons) _align) _debugAlignment in
   optMap2 (lam. lam x. x) (_methodFlag false "mcmc-lightweight") res in
 
 let wrapSimpleInferenceMethod
