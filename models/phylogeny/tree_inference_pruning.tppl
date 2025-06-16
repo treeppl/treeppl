@@ -1,5 +1,5 @@
 // TreePPL script for tree inference under the
-// Jukes Cantor model with a strict clock prior. Pruning currently hard-coded.
+// Jukes Cantor model with a strict clock prior. Pruning hard-coded.
 
 // The nucleotide is specified as
 //   "A" for adenine  - 0
@@ -14,12 +14,10 @@ type MsgTree =
   | Leaf {age: Real, index: Int, msg: Matrix[Real][]}
   | Node {age: Real, msg: Matrix[Real][], left: MsgTree, right: MsgTree}
 
-
-
 // FUNCTIONS
 
 // Randomly sample two indices in the trees vector, to be combined. Avoiding mirror cases.
-function pickpair(n: Int): Int[] {
+function pickpair(n: Int) => Int[] {
     assume i ~ Categorical(rep(n, 1./Real(n)));
     let i = i + 1;
     assume j ~ Categorical(rep(subi(n, 1), 1./Real(subi(n, 1))));
@@ -29,41 +27,41 @@ function pickpair(n: Int): Int[] {
 }
 
 // Build forest of trees from leaves, recursively
-function build_forest(data: Int[][], forest: MsgTree[], index: Int, data_len: Int, seq_len: Int): MsgTree[] {
+function build_forest(data: Int[][], forest: MsgTree[], index: Int, data_len: Int, seq_len: Int) => MsgTree[] {
     let new_message = sapply(data[index], get_leaf_message);
     let new_leaf = Leaf{age = 0.0, index = index, msg =  new_message};
     let new_forest = paste0([forest, [new_leaf]]);
-    if (eqi(data_len, index)) {
+    if (data_len == index) {
         return new_forest;
     }
     else {
-        return build_forest(data, new_forest, addi(index, 1), data_len, seq_len);
+        return build_forest(data, new_forest, index + 1, data_len, seq_len);
     }
 }
 
 // Get message from leaves for each site
-function get_leaf_message(seq: Int) : Matrix[Real] {
-    if (eqi(seq, 0)) { // "A"
+function get_leaf_message(seq: Int) => Matrix[Real] {
+    if (seq == 0) { // "A"
        let message = rvecCreate(4, [1.0, 0.0, 0.0, 0.0]);
-        logWeight (log(0.25));
-        return message;
+       logWeight (log(0.25));
+       return message;
     }
-    if (eqi(seq, 1)) { // "C"
+    if (seq == 1) { // "C"
         let message = rvecCreate(4, [0.0, 1.0, 0.0, 0.0]);
         logWeight (log(0.25));
         return message;
     }
-    if (eqi(seq, 2)) { // "G"
+    if (seq == 2) { // "G"
         let message = rvecCreate(4, [0.0, 0.0, 1.0, 0.0]);
         logWeight (log(0.25));
         return message;
     }
-    if (eqi(seq, 3)) {  // "T"
+    if (seq == 3) {  // "T"
         let message = rvecCreate(4, [0.0, 0.0, 0.0, 1.0]);
         logWeight (log(0.25));
         return message;
     }
-    if (eqi(seq, 4)) {  // "-"
+    if (seq == 4) {  // "-"
         let message = rvecCreate(4, [1.0, 1.0, 1.0, 1.0]);
         return message;
     }
@@ -72,35 +70,35 @@ function get_leaf_message(seq: Int) : Matrix[Real] {
     }
 }
 
-function mini(a: Int, b: Int): Int {
-  if a <= b {
-    return a;
-  }
-  return b;
-}
-
-function maxi(a: Int, b: Int): Int {
-  if a <= b {
-    return b;
-  }
-  return a;
-}
-
 //Compute log likelihood for each site
-function get_log_likes(msg: Matrix[Real]): Real {
+function get_log_likes(msg: Matrix[Real]) => Real {
     let stationary_probs = cvecCreate(4, [0.25,0.25,0.25,0.25]);
     let like = mtxMul(msg, stationary_probs);
     let log_like = log(mtxGet(1, 1, like));
     return log_like;
 }
 
+function mini(a: Int, b: Int) => Int {
+  if a <= b {
+    return a;
+  }
+  return b;
+}
+
+function maxi(a: Int, b: Int) => Int {
+  if a <= b {
+    return b;
+  }
+  return a;
+}
+
 // KEY FUNCTION: CLUSTER
-function cluster(q: Matrix[Real], trees: MsgTree[], maxAge: Real, seq_len: Int): MsgTree[] {
+function cluster(q: Matrix[Real], trees: MsgTree[], maxAge: Real, seq_len: Int) => MsgTree[] {
 
     let n = length(trees);
 
     // Check if we have reached the root of the tree
-    if (eqi(n, 1)) {
+    if (n == 1) {
         return trees;
     }
 
@@ -151,7 +149,7 @@ function cluster(q: Matrix[Real], trees: MsgTree[], maxAge: Real, seq_len: Int):
 
 // MODEL FUNCTION
 
-model function myModel(data: Int[][]) : MsgTree[] {
+model function myModel(data: Int[][]) => MsgTree[] {
     // Define the scaled rate matrix for Jukes-Cantor
     let q = mtxCreate(4,4,
         [     -1.0, (1.0/3.0), (1.0/3.0), (1.0/3.0),
@@ -165,7 +163,7 @@ model function myModel(data: Int[][]) : MsgTree[] {
 
     // Define the initial trees sequence (containing the leaves)
     let trees = build_forest(data, [], 1, data_len, seq_len);
-    
+
     // Build the tree by random clustering and return
     return cluster(q, trees, 0.0, seq_len);
 }
