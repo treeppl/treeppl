@@ -137,7 +137,7 @@ function observeTree(g: Globals, age: Real, logSplitRate: Real, tree: SpecTree) 
 
 function countLeaves(tree: SpecTree) => Real {
   if tree is Node {
-    return 1.0 + countLeaves(tree.left) + countLeaves(tree.right);
+    return countLeaves(tree.left) + countLeaves(tree.right);
   }
   return 1.0;
 }
@@ -154,7 +154,6 @@ model function top(tree: SpecTree, rho: Real) => Real {
   assume mu ~ Gamma(1.0, 0.5);
   assume sigma ~ Gamma(1.0, 1.0);
   let sigma = sqrt(0.2 / sigma);
-  let sigma = 0.2 / sigma;
   assume log_alpha ~ Gaussian(0.0, sigma);
   let g = Globals {
     logInitSplitRate = log(lambda),
