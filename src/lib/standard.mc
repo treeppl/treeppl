@@ -39,6 +39,9 @@ let mathLog = log
 let mathSqrt = sqrt
 let mathModi = modi
 
+let mathMini = mini
+let mathMaxi = maxi
+
 -- NOTE(vipa, 2025-05-05): Some of the functions below use the
 -- internal mutability of matrices for their workings. This ok,
 -- because these mutations are never observable; we mutate matrices

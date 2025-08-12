@@ -89,20 +89,6 @@ function get_leaf_message(seq: Int) => Matrix[Real] {
     }
 }
 
-function mini(a: Int, b: Int): Int {
-  if a <= b {
-    return a;
-  }
-  return b;
-}
-
-function maxi(a: Int, b: Int): Int {
-  if a <= b {
-    return b;
-  }
-  return a;
-}
-
 //Compute log likelihood for each site
 function get_log_likes(msg: Matrix[Real], pi: Real[]) => Real {
     let stationary_probs = cvecCreate(4, pi);
@@ -158,8 +144,8 @@ function cluster(q: Matrix[Real], trees: MsgTree[], maxAge: Real, seq_len: Int, 
     let parent = Node{age=age, msg=node_msg, left=left_child, right=right_child};  
 
     // Compute new_trees list
-    let min = mini(pairs[2],pairs[1]);
-    let max = maxi(pairs[2],pairs[1]);
+    let min = minInt(pairs[2],pairs[1]);
+    let max = maxInt(pairs[2],pairs[1]);
     let new_trees = paste0([slice(trees, 1, min), slice(trees, (min+1), max), slice(trees, (max+1), (n+1)), [parent]]);
 
     // Recursive call to cluster for new_trees
