@@ -20,7 +20,7 @@ type MsgTree =
 function pickpair(n: Int) => Int[] {
     assume i ~ Categorical(rep(n, 1./Real(n)));
     let i = i + 1;
-    assume j ~ Categorical(rep(subi(n, 1), 1./Real(subi(n, 1))));
+    assume j ~ Categorical(rep((n-1), 1./Real(n-1)));
     let j = j+1;
     if (j < i) { return [i, j];}
     else { return [i,j+1];}
@@ -141,7 +141,7 @@ function cluster(q: Matrix[Real], trees: MsgTree[], maxAge: Real, seq_len: Int) 
     // Compute new_trees list
     let min = mini(pairs[2],pairs[1]);
     let max = maxi(pairs[2],pairs[1]);
-    let new_trees = paste0([slice(trees, 1, min), slice(trees, addi(min, 1), max), slice(trees, addi(max, 1), addi(n, 1)), [parent]]);
+    let new_trees = paste0([slice(trees, 1, min), slice(trees, (min+1), max), slice(trees, (max+1), (n+1)), [parent]]);
 
     // Recursive call to cluster for new_trees
     return cluster(q, new_trees, age, seq_len);
