@@ -46,20 +46,20 @@ function pickpair(n: Int) => Int[] {
 }
 
 // Build forest of trees from leaves, recursively
-function build_forest(data: Int[][], forest: MsgTree[], index: Int, data_len: Int, seq_len: Int) => MsgTree[] {
-    let new_message = sapply(data[index], get_leaf_message);
+function build_forest(data: Int[][], forest: MsgTree[], index: Int, data_len: Int, seq_len: Int, pi: Real[]) => MsgTree[] {
+    let new_message = sapply1(data[index], get_leaf_message, pi); 
     let new_leaf = Leaf{age = 0.0, index = index, msg =  new_message};
     let new_forest = paste0([forest, [new_leaf]]);
     if (data_len == index) {
         return new_forest;
     }
     else {
-        return build_forest(data, new_forest, index + 1, data_len, seq_len);
+        return build_forest(data, new_forest, index + 1, data_len, seq_len, pi);
     }
 }
 
 // Get message from leaves for each site
-function get_leaf_message(seq: Int) => Matrix[Real] {
+function get_leaf_message(seq: Int, pi: Real[]) => Matrix[Real] {
     if (seq == 0) { // "A"
        let message = rvecCreate(4, [1.0, 0.0, 0.0, 0.0]);
         logWeight (log(pi[1]));
@@ -165,7 +165,7 @@ model function myModel(data: Int[][]) => MsgTree[] {
     let seq_len =  length(data[1]);
 
     // Define the initial trees sequence (containing the leaves)
-    let trees = build_forest(data, [], 1, data_len, seq_len);
+    let trees = build_forest(data, [], 1, data_len, seq_len, pi);
 
     // Build the tree by random clustering and return
     return cluster(q, trees, 0.0, seq_len, pi);
