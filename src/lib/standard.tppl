@@ -27,6 +27,17 @@ function sqrt(x : Real) => Real {
   return mathSqrt(x);
 }
 
+/* -------------------
+   Finding maximum and minimum of pairs
+   ------------------- */
+
+function minInt(a : Int, b : Int) => Int {
+  return mathMini(a)(b);
+}
+
+function maxInt(a : Int, b : Int) => Int {
+  return mathMaxi(a)(b);
+}
 
 /* -------------------
    Sequence operations

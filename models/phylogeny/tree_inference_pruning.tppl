@@ -1,22 +1,12 @@
 // TreePPL script for tree inference under the
-// Jukes Cantor model with a strict clock prior. Pruning currently hard-coded.
+// Jukes Cantor model with a strict clock prior. Pruning hard-coded.
 
-// Run this by compiling:
-// tpplc models/phylo/phylogeny/tree_inference_pruning.tppl -m 'smc-apf' --resample align --output phylo
-// Or if subsampling is desired, where n is the number of samples in putput:
-// tpplc models/phylo/phylogeny/tree_inference_pruning.tppl -m 'smc-apf' --resample align --subsample -n 1 --output phylo
-// And then execution 10000 particles 1 sweep, using for example toy dataset phylo_toydata.json:
-// ./phylo models/data/treeinference/phylo_toydata.json 10000 1 > phylo_pruning.json
-
-// Toy dataset as json file phylo_toydata2.json.
-// Data is a matrix with each row
-// consisting of the aligned DNA sequence for a single
-// taxon. The nucleotide is specified as
+// The nucleotide is specified as
 //   "A" for adenine  - 0
 //   "C" for cytosine  - 1
 //   "G" for guanine - 2
 //   "T" for thymine - 3
-//   "-" for gaps - 4 //To be extended
+//   "-" for gaps - 4 
 
 // TYPES
 
@@ -24,15 +14,16 @@ type MsgTree =
   | Leaf {age: Real, index: Int, msg: Matrix[Real][]}
   | Node {age: Real, msg: Matrix[Real][], left: MsgTree, right: MsgTree}
 
-
 // FUNCTIONS
 
 // Randomly sample two indices in the trees vector, to be combined. Avoiding mirror cases.
 function pickpair(n: Int) => Int[] {
-    assume i_1 ~ Categorical(rep(n - 1, 1./Real(n - 1)));
-    let i = i_1 + 2; //Adding two, avoiding index zero for i and avoiding trouble picking j
-    assume j ~ Categorical(rep(i - 1, 1./Real(i - 1)));  // j is always smaller than i, avoiding mirror cases
-    return [i, j + 1]; //avoid index of zero for j
+    assume i ~ Categorical(rep(n, 1./Real(n)));
+    let i = i + 1;
+    assume j ~ Categorical(rep((n-1), 1./Real(n-1)));
+    let j = j+1;
+    if (j < i) { return [i, j];}
+    else { return [i,j+1];}
 }
 
 // Build forest of trees from leaves, recursively
@@ -52,18 +43,22 @@ function build_forest(data: Int[][], forest: MsgTree[], index: Int, data_len: In
 function get_leaf_message(seq: Int) => Matrix[Real] {
     if (seq == 0) { // "A"
        let message = rvecCreate(4, [1.0, 0.0, 0.0, 0.0]);
-        return message;
+       logWeight (log(0.25));
+       return message;
     }
     if (seq == 1) { // "C"
         let message = rvecCreate(4, [0.0, 1.0, 0.0, 0.0]);
+        logWeight (log(0.25));
         return message;
     }
     if (seq == 2) { // "G"
         let message = rvecCreate(4, [0.0, 0.0, 1.0, 0.0]);
+        logWeight (log(0.25));
         return message;
     }
     if (seq == 3) {  // "T"
         let message = rvecCreate(4, [0.0, 0.0, 0.0, 1.0]);
+        logWeight (log(0.25));
         return message;
     }
     if (seq == 4) {  // "-"
@@ -117,23 +112,22 @@ function cluster(q: Matrix[Real], trees: MsgTree[], maxAge: Real, seq_len: Int) 
     let log_likes = sapply(node_msg, get_log_likes);
     logWeight (seqSumReal(log_likes));
 
-    // Remove weights of previous internal nodes
-    if (left_child is Node) {
-        let log_likes_left = sapply(left_child.msg, get_log_likes);
-        logWeight -(seqSumReal(log_likes_left));
-    }
-    if (right_child is Node) {
-        let log_likes_right = sapply(right_child.msg, get_log_likes);
-        logWeight -(seqSumReal(log_likes_right));
-    }
+    // Remove weights of previous internal children
+    let log_likes_left = sapply(left_child.msg, get_log_likes);
+    logWeight -(seqSumReal(log_likes_left));
+    let log_likes_right = sapply(right_child.msg, get_log_likes);
+    logWeight -(seqSumReal(log_likes_right));
+
+    // Manual resample
+    resample;
 
     // Combine picked pair of trees into a new node
     let parent = Node{age=age, msg=node_msg, left=left_child, right=right_child};
 
     // Compute new_trees list
-    let min = pairs[2];
-    let max = pairs[1];
-    let new_trees = paste0([slice(trees, 1, min), slice(trees, min + 1, max), slice(trees, max + 1, n + 1), [parent]]);
+    let min = minInt(pairs[2],pairs[1]);
+    let max = maxInt(pairs[2],pairs[1]);
+    let new_trees = paste0([slice(trees, 1, min), slice(trees, (min+1), max), slice(trees, (max+1), (n+1)), [parent]]);
 
     // Recursive call to cluster for new_trees
     return cluster(q, new_trees, age, seq_len);
