@@ -1,14 +1,6 @@
 // TreePPL script for tree inference under the
 // Jukes Cantor model with a strict clock prior. Pruning currently hard-coded.
 
-// Run this by compiling:
-// tpplc models/phylo/phylogeny/tree_inference_pruning_scaled.tppl -m 'smc-apf' --resample align --output phylo_scaled
-// Or if subsampling is desired, where n is the number of samples in putput:
-// tpplc models/phylo/phylogeny/tree_inference_pruning_scaled.tppl -m 'smc-apf' --resample align --subsample -n 1 --output phylo_scaled
-// And then execution x particles x sweeps, using for example toy dataset phylo_toydata.json or primates dataset:
-// ./phylo_scaled models/data/treeinference/phylo_toydata.json 10000 1 > phylo_pruning_scaled.json
-// ./phylo_scaled models/data/treeinference/primates.json 10000 3 > phylo_pruning_scaled_primates.json
-
 // Toy dataset as json file phylo_toydata.json.
 // Data is a matrix with each row
 // consisting of the aligned DNA sequence for a single
@@ -17,7 +9,7 @@
 //   "C" for cytosine  - 1
 //   "G" for guanine - 2
 //   "T" for thymine - 3
-//   "-" for gaps - 4 //To be extended
+//   "-" for gaps - 4 
 
 // TYPES
 

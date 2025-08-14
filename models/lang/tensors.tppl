@@ -1,9 +1,6 @@
 /*
  * File: tensors.tppl
  * Description: This program illustrates how to work with tensors.
- * Compilation:
- *   tpplc models/lang/tensors.tppl
- * Execution: ./out models/data/tensors.json 1 1
  */
 
 type TensorRecord = TensorRecord {

@@ -6,11 +6,6 @@
  *
  * This version explicitly repays weight associated with proposal
  *
- * Compile
- * tpplc host_repertoire.tppl -m smc-apf
- *
- * Run
- * ./out treeppl/models/data/hostrep.json 10 1
  */
 
 /*---------------------------- TYPES --------------------------------*/

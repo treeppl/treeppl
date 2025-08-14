@@ -4,11 +4,6 @@
 // produce a state-of-the-art model with MCMC, using
 // suitable drift kernels, slice sampling, or with HMC.
 
-// Run this by compiling:
-// tpplc models/phylo/phylogeny/substmodel_belief_propagation.tppl -m 'smc-apf' --resample align  --subsample -n 1 --output substmodel
-// And then execution x particles x sweeps, using for example a toy dataset found in phylo_toydata_fixtree.json:
-// ./substmodel models/data/treeinference/phylo_toydata_fixtree.json 1000 1 > substmodel_output.json
-
 // Data is a matrix of integers character, with each row
 // consisting of the (translated) aligned DNA sequence for a single
 // taxon. The nucleotide is specified as

@@ -1,9 +1,6 @@
 /*
  * File: blub.tppl
  * Description: Program to showcase data manipulation.
- * Compilation:
- *   tpplc models/lang/blub.tppl models/data/examples.mc out.mc && mi compile out.mc
- * Execution: ./out 1 1
  */
 
 /*
