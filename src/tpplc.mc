@@ -69,8 +69,8 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
               , ulet_ "" (printError_ (app_ (nvar_ (_getVarExn "json2string" jsonEnv)) (var_ "output")))
               , ulet_ "" (printError_ (str_ "\n"))
               , ulet_ "" (flushStderr_ unit_)
-              , wallTimeMs_ unit_
-              ]))
+              ]
+              (wallTimeMs_ unit_)))
           ]
       else utuple_ [unit_, ulam_ "" (ulam_ "" unit_)] in
     let method = LightweightMCMC
