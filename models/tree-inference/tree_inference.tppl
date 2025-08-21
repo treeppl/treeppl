@@ -3,13 +3,6 @@
 // the naive version; for effective inference, belief
 // propagation needs to be implemented in the back end.
 
-// Run this by compiling:
-// tpplc models/phylo/phylogeny/tree_inference.tppl -m 'smc-apf' --resample align --output basic_phylo
-// Or if subsampling is desired, where n is the number of samples in putput:
-// tpplc models/phylo/phylogeny/tree_inference.tppl -m 'smc-apf' --resample align --subsample -n 1 --output basic_phylo
-// And then execution 10000 particles 1 sweep, using for example toy dataset phylo_toydata.json.json:
-// ./basic_phylo models/data/treeinference/phylo_toydata.json 10000 1 > basic_phylo.json
-
 // Toy dataset as json file phylo_toydata.json. Integers.
 // Data is a matrix, with each row
 // consisting of the aligned DNA sequence for a single

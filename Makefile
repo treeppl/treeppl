@@ -75,7 +75,7 @@ $(MODEL_CONFIGS):
 	conf="$(subst _, ,$(lastword $(subst @, ,$@)))"; \
 	mkdir -p build/$$(dirname $$path); \
 	build/${tppl_name} $$conf $$path -p 2 --debug-phases --output build/$@ > build/$@.c.out 2> build/$@.c.err || { st=$$?; echo "$$path,$$conf,compile failure,$$st"; exit $$st; }; \
-	build/$@ "$${path%.tppl}.json" > build/$@.r.out 2> build/$@.r.err || { st=$$?; echo "$$path,$$conf,run failure,$$st"; exit $$st; }; \
+	build/$@ $$(dirname $$path)"/data/testdata_"$$(basename -s ".tppl" $$path)".json" > build/$@.r.out 2> build/$@.r.err || { st=$$?; echo "$$path,$$conf,run failure,$$st"; exit $$st; }; \
 	echo "$$path,$$conf,success,0"
 
 .PHONY: test-models

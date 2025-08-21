@@ -1,9 +1,6 @@
 /*
  * File: coin.tppl
  * Description: Simplest meaningful probabilistic program. Evaluates how likely it is that a coin is fair, given data.
- * Compilation:
- *   tpplc models/lang/coin.tppl models/data/examples.mc out.mc && mi compile out.mc
- * Execution: ./out 100 1
  */
 
 /**
