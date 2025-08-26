@@ -1,0 +1,33 @@
+import "stdlib::seq.mc"
+
+function debugNode(
+  t: String,
+  label: Int,
+  logDebtBranch: Real,
+  logExcessBranch: Real,
+  logDebtNode: Real
+) {
+  if t == "Node" {
+    printLn(join([
+      "{",
+      "\"type\":", "\"", t, "\"", ",",
+      "\"label\":", int2string(label), ",",
+      "\"logDebtBranch\":", real2string(logDebtBranch), ",",
+      "\"logExcessBranch\":", real2string(logExcessBranch), ",",
+      "\"logDebtNode\":", real2string(logDebtNode),
+      "}"
+    ]));
+
+  } else {
+    printLn(join([
+      "{",
+      "\"type\":", "\"", t, "\"", ",",
+      "\"label\":", int2string(label), ",",
+      "\"logDebtBranch\":", real2string(logDebtBranch), ",",
+      "\"logExcessBranch\":", real2string(logExcessBranch),
+      "}"
+    ]));
+
+
+  }
+}

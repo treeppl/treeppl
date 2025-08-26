@@ -1,0 +1,47 @@
+import "drift-kernels.tppl"
+
+function rbLambdaMove(
+  x: Real[]
+) {
+  /*
+  * This hard codes the _most_common_ simplex move used for the switch rate parameter in the
+  * RevBayes implementation. See docs/revbayes_drift_kernels.md for more details
+  */
+  let _EPSILON = 1e-3; // Set the numerical error constant
+  let alpha = 25.; 
+  return simplexMove(x, alpha, _EPSILON);
+}
+
+function rbBetaMove(
+  x: Real
+) {
+  /*
+  * This hard codes the scale move used for the phy_scale parameter in the
+  * RevBayes implementation. See docs/revbayes_drift_kernels.md for more details
+  */
+  let lambda = 1.;
+  return scaleMove(x, lambda);
+}
+
+function rbMuMove(
+  x: Real
+) {
+  /*
+  * This hard codes the _most_common_ scale move used for the clock_host parameter in the
+  * RevBayes implementation. See docs/revbayes_drift_kernels.md for more details
+  */
+  let lambda = 0.2;
+  return scaleMove(x, lambda);
+}
+
+function categoricalMove(
+  x: Int, param: Real[]
+) {
+  let lambda = 0.9;
+  let errMargin = 1e-6;
+  return categoricalShiftKernel(
+    x, param, lambda, errMargin
+  );
+}
+
+

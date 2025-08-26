@@ -1,0 +1,99 @@
+import "container-types.tppl"
+import "stdlib::seq.mc"
+
+function independenceLikelihood(
+  fromRep: Int[],
+  toRep: Int[],
+  fromAge: Real,
+  toAge: Real,
+  eventSeqs: Event[][],
+  modelParams: ModelParams
+): Real {
+  let unconditional = fold(
+    function(acc: Real, h: Int) {
+      let eventSeq = eventSeqs[h];
+      let fromState = fromRep[h];
+      let toState = toRep[h];
+      return acc + hostIndepLikelihood(
+        1,
+        fromState,
+        toState,
+        fromAge,
+        toAge,
+        eventSeq,
+        modelParams.embeddedQMatrix
+      );
+    },
+    0.0,
+    range(1, length(eventSeqs) + 1, 1)
+  );
+  return unconditional;
+}
+
+function independenceLikelihoodEndCond(
+  fromRep: Int[],
+  toRep: Int[],
+  fromAge: Real,
+  toAge: Real,
+  eventSeqs: Event[][],
+  modelParams: ModelParams,
+  kernel: Matrix[Real]
+): Real {
+  // If the CTMC samle is x(.) then the below computes 
+  //      P[X(.) = x(.), X(T) = b | X(0) = a]
+  let unconditional = independenceLikelihood(
+   fromRep,
+    toRep,
+    fromAge,
+    toAge,
+    eventSeqs,
+    modelParams
+  );
+  // For correct weights we need to compute P[X(T) = b | X(0) = a]
+  let logTotalTransProb = fold(
+    function(acc: Real, val: Real) { return acc + val; },
+    0.0,
+    zipWith(
+      function(fromState: Int, toState: Int) {
+        return log(mtxGet(fromState + 1, toState + 1, kernel));
+      },
+      fromRep,
+      toRep
+    )
+  );
+  // The weight of the branch sample is P[X(.) = x(.) | X(0) = a, X(T) = b]
+  let conditional = unconditional - logTotalTransProb;
+  return conditional;
+}
+
+function hostIndepLikelihood(
+  nextIndex: Int,
+  currState: Int,
+  finalState: Int,
+  currAge: Real,
+  finalAge: Real,
+  eventSeq: Event[],
+  embeddedQMatrix: EmbeddedMarkovChainMatrix
+): Real {
+  if nextIndex > length(eventSeq) {
+    let timePassed = currAge - finalAge;
+    let outRate = embeddedQMatrix.totalRates[currState + 1];
+    return -timePassed * outRate;
+  } else {
+    let nextEvent = eventSeq[nextIndex];
+    let nextState = nextEvent.toState;
+    let nextAge = nextEvent.eventTime;
+    let timePassed = currAge - nextAge;
+    let outRate = embeddedQMatrix.totalRates[currState + 1];
+    let transProb = embeddedQMatrix.transitionProbs[currState + 1][nextState + 1];
+    return log(transProb) - timePassed * outRate + hostIndepLikelihood(
+      nextIndex + 1,
+      nextState,
+      finalState,
+      nextAge,
+      finalAge,
+      eventSeq,
+      embeddedQMatrix
+    );
+  }
+}

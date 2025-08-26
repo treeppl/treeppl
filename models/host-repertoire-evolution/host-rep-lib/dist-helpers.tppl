@@ -1,0 +1,55 @@
+import "stdlib::ext/dist-ext.mc"
+import "stdlib::seq.mc"
+import "helpers.tppl"
+/*
+ * Log-PDFs for distributions used
+ */
+function categoricalLogPdf(x: Int, params: Real[]) {
+  if x >= 0 && x < length(params) {
+    return log(params[x + 1]);
+  } else {
+    return log(0.);
+  }
+}
+
+function exponentialLogPdf(x: Real, rate: Real) {
+  if (x >= 0) {
+    return -x * rate;
+  } else {
+    return log(0.);
+  }
+}
+
+function uniformLogPdf(x: Real, a: Real, b: Real) {
+  if x >= a && x <= b {
+    return -log(b - a);
+  } else {
+    return log(0.);
+  }
+}
+
+
+
+/*
+ * Node repertoire debt
+ */ 
+
+function mtx3ToSeq(mtx: Matrix[Real], i: Int ) {
+  let p1 = mtxGet(i, 1, mtx); 
+  let p2 = mtxGet(i, 2, mtx); 
+  let p3 = mtxGet(i, 3, mtx); 
+  let s = p1 + p2 + p3;
+  return [p1 / s, p2 / s, p3 / s];
+}
+
+function getRepertoireDebt(x: Int[], samplingProb: Matrix[Real], nhosts: Int) {
+  // Accumulate the total log probability of sampling this repertoire
+  return fold(
+    function(acc: Real, i: Int) {
+      let param = mtx3ToSeq(samplingProb, i);
+      return acc + categoricalLogPdf(x[i], param);
+    },
+    0.0,
+    range(1, nhosts + 1, 1)
+  );
+}
