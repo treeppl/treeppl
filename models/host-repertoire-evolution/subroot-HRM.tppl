@@ -6,7 +6,6 @@ import "host-rep-lib/belief-propagation.tppl"
 import "host-rep-lib/dist-helpers.tppl"
 import "host-rep-lib/full-model.tppl"
 import "host-rep-lib/rb-drift-kernels.tppl"
-import "host-rep-lib/custom-debug-info.tppl"
 import "host-rep-lib/independence-model.tppl"
 
 type ReturnType = ReturnType{
@@ -24,15 +23,9 @@ model function rejectAcceptSubroot(
   tune: Real,
   subrootLength: Real
 ) => ReturnType {
-//  printLn(">>>>>  ALIGNED: LAMBDA");
   assume lambda ~ Dirichlet([1., 1., 1., 1.]) drift rbLambdaMove(lambda);
-//  printLn("<<<<<  ALIGNED: LAMBDA");
-//  printLn(">>>>>  ALIGNED: MU");
   assume mu ~ Exponential(10.) drift rbMuMove(mu);
-  //printLn("<<<<<  ALIGNED: MU");
-//  printLn(">>>>>  ALIGNED: BETA");
   assume beta ~ Exponential(1.) drift rbBetaMove(beta);
-  // printLn("<<<<<  ALIGNED: BETA");
 
   let r = mtxCreate(3,3,
     [0.-lambda[1],                lambda[1],          0.0,
@@ -138,9 +131,7 @@ model function rejectAcceptSubroot(
 function suggestRepAligned(msg: Matrix[Real], i: Int, max: Int) {
   if i <= max {
     let param = mtx3ToSeq(msg, i);
-//  printLn(join([">>>>>  ALIGNED: NODE ", int2string(i)]));
     assume x ~ Categorical(param) drift categoricalMove(x, param); 
-    //printLn(join(["<<<<<  ALIGNED: NODE ", int2string(i)]));
     return cons(x, suggestRepAligned(msg, i + 1, max));
   } else {
     return [];
@@ -166,9 +157,7 @@ function suggestRepRS(msg: Matrix[Real], max: Int, initialRep: Int[], depth: Int
 function suggestRepUnaligned(msg: Matrix[Real], i: Int, max: Int) {
   if i <= max {
     let param = mtx3ToSeq(msg, i);
-    // printLn(join([">>>>>UNALIGNED: NODE ", int2string(i)]));
     assume x ~ Categorical(param); 
-    // printLn(join(["<<<<<UNALIGNED: NODE ", int2string(i)]));
     return join([[x], suggestRepUnaligned(msg, i + 1, max)]);
   } else {
     return [];
@@ -198,15 +187,7 @@ function sampleTreeHistory(
       branchKernel,
       0
     );
-    /*
-    debugNode(
-      "Leaf",
-      tree.label,
-      branchSample.logDebt,
-      branchSample.logExcess,
-      0.0
-    );
-    */
+
     // We are aligned so we can weight the program here (shouldn't matter for MCMC)
     if branchSample.success {
       logWeight branchSample.logExcess - branchSample.logDebt;
@@ -238,15 +219,7 @@ function sampleTreeHistory(
       branchKernel,
       0
     );
-    /*
-    debugNode(
-      "Node",
-      tree.label,
-      branchSample.logDebt,
-      branchSample.logExcess,
-      nodeLogDebt
-    );
-    */
+
     // We are aligned so we can weight the program here (shouldn't matter for MCMC)
     if branchSample.success {
       logWeight branchSample.logExcess - branchSample.logDebt - nodeLogDebt;
@@ -418,16 +391,11 @@ function sampleHostHistory(
   let totalRate = embeddedQMatrix.totalRates[startState + 1];
   if startState != finalState && stepIndex == 1 {
     // If there is a mutation on the interval, sample the first event from a truncated exponential
-
-    // printLn(">>>>>UNALIGNED: TRUNCATED EXPONENTIAL");
     let t = sampleTruncatedExponential(totalRate, startAge - finalAge);
-    // printLn("<<<<<UNALIGNED: TRUNCATED EXPONENTIAL");
     let eventTime = startAge - t;
 
     // Sample the next event
-    // printLn(">>>>>UNALIGNED: CATEGORICAL");
     let nextState = sampleNextEvent(startState, embeddedQMatrix);
-    // printLn(join(["<<<<<UNALIGNED Trunc: CATEGORICAL ", int2string(host)]));
     let param = embeddedQMatrix.transitionProbs[startState + 1];
 
     let restOfHistory = sampleHostHistory(nextState, finalState, eventTime, finalAge, host, embeddedQMatrix, stepIndex + 1);
@@ -442,9 +410,7 @@ function sampleHostHistory(
   } else {
     // If the final state does not equal the start state, then we don't want to
     // force there to be events in the remaining interval
-    // printLn(">>>>>UNALIGNED: EXPONENTIAL");
     assume t ~ Exponential(totalRate);
-    // printLn("<<<<<UNALIGNED: EXPONENTIAL");
     if startAge - t < finalAge {
       // We overshoot so we are finished, and just save the debt
       if startState == finalState {
@@ -461,11 +427,9 @@ function sampleHostHistory(
     } else {
 
       // Sample the next transition
-      // printLn(">>>>>UNALIGNED: CATEGORICAL");
       let nextState = sampleNextEvent(startState, embeddedQMatrix);
       let param = embeddedQMatrix.transitionProbs[startState + 1];
       // assume nextState ~ Categorical(param);
-      // printLn(join(["<<<<<UNALIGNED      : CATEGORICAL ", int2string(host)]));
 
       // Record the event time
       let eventTime = startAge - t;
