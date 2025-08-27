@@ -21,30 +21,6 @@ function rateMatrixToEmbeddedMarkovChain(
   };
 }
 
-function rateMatrixToUnifMatrix(
-  qMatrix: Matrix[Real]
-): UniformizationParams {
-  
-  // nu is the dominating rate of the CTMC
-  // This ensures that the poisson process dominates the CTMC
-
-  let q1 = -mtxGet(1, 1, qMatrix);
-  let q2 = -mtxGet(2, 2, qMatrix);
-  let q3 = -mtxGet(3, 3, qMatrix);
-  let nu = maxf(q1, maxf(q2, q3));
-  let uMatrix = mtxAdd(
-    mtxSclrMul(1.0 / nu, qMatrix),
-    mtxCreateId(dim(qMatrix)[1])
-  );
-  return UniformizationParams {
-    uMatrix = uMatrix,
-    nu = nu,
-    qMatrix = qMatrix
-  };
-}
-
-
-
 function is2(x: Int): Bool {
   return x == 2;
 }
