@@ -80,6 +80,7 @@ prod FunTypeTppl: TypeTppl = "Function" "(" (params:TypeTppl ("," params:TypeTpp
 prod AtomicReal: TypeTppl = "Real"
 prod AtomicBool: TypeTppl = "Bool"
 prod AtomicInt: TypeTppl = "Int"
+prod AtomicDist: TypeTppl = "Dist"
 prod TpplStr: TypeTppl = "String"
 prod Nothing: TypeTppl = "(" ")"
 
