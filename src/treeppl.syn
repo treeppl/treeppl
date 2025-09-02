@@ -132,7 +132,6 @@ prod True: ExprTppl = "true"
 prod False: ExprTppl = "false"
 prod Sequence: ExprTppl = "[" (values:ExprTppl ("," values:ExprTppl)*)? "]"
 
-
 -- infix left Addition: Expr = "+"
 prod left Add: ExprTppl = left:ExprTppl "+" right:ExprTppl
 -- infix Multiplication: Expr = "*"
