@@ -16,7 +16,7 @@ function fullModelWeight(
   nEvents: Int,
   nhosts: Int,
   modelParams: ModelParams
-): Real {
+) => Real {
   if nextIndex > nEvents {
    // Handle the fact that there was no event in the last time segment
     let timePassed = currAge - finalAge;
@@ -50,12 +50,12 @@ function fullModelWeight(
 
 function getTotalRate(
   currRep: Int[], modelParams: ModelParams, nhosts: Int
-) {
+) => Real {
   // Compute the total rate of leaving the current repertoire
   let gainRates = fold(
-    function(acc: Real, i: Int) {
+    function(acc: Real, i: Int) => Real {
       let fromState = currRep[i];
-      if eqi(fromState, 2) {
+      if fromState == 2 {
         // No gain events from 2
         return acc;
       } else {
@@ -63,10 +63,10 @@ function getTotalRate(
       }
     },
     0.0,
-    range(1, nhosts + 1, 1)
+    range(1)(nhosts + 1)(1)
   );
   let lossRates = fold(
-    function(acc: Real, i: Int) {
+    function(acc: Real, i: Int) => Real {
       let fromState = currRep[i];
       if fromState == 0 {
         return acc;
@@ -75,12 +75,12 @@ function getTotalRate(
       }
     }, 
     0.0,
-    range(1, nhosts + 1, 1)
+    range(1)(nhosts + 1)(1)
   );
   return gainRates + lossRates;
 }
 
-function getRate(currRep: Int[], nextEvent: Event, modelParams: ModelParams) {
+function getRate(currRep: Int[], nextEvent: Event, modelParams: ModelParams) => Real {
   let hostIndex = nextEvent.host;
   if nextEvent.fromState > nextEvent.toState {
     return getLossRate(currRep, hostIndex, modelParams);
@@ -91,7 +91,7 @@ function getRate(currRep: Int[], nextEvent: Event, modelParams: ModelParams) {
 
 function getLossRate(
   repertoire: Int[], hostIndex: Int, modelParams: ModelParams
-): Real {
+) => Real {
   // Check if we are losing a two and if this results in a legal repertoire
   let fromState = repertoire[hostIndex];
   if fromState == 2 && n2s(repertoire) == 1 {
@@ -107,14 +107,14 @@ function getGainRate (
   repertoire: Int[],
   hostIndex: Int,
   modelParams: ModelParams
-): Real {
+) => Real {
   let fromState = repertoire[hostIndex];
   let toState = fromState + 1;
   let baseRate = mtxGet(fromState + 1, toState + 1, modelParams.embeddedQMatrix.mat);
   // We need to add the phylogenetic influence to the rate
   // since we have a gain event
   if fromState == 0 {
-    let currentHosts = whichTrue(sapply(repertoire, function (i: Int) {return i == 2 || i == 1; })); 
+    let currentHosts = whichTrue(sapply(repertoire, function (i: Int) => Bool {return i == 2 || i == 1; })); 
     let dist = mtxMean(mtxRowCols(
       modelParams.hostMetric, hostIndex, currentHosts
     ));
@@ -123,7 +123,7 @@ function getGainRate (
       (dist / modelParams.meanDist)^(-modelParams.beta)
     );
   } else {
-    let currentHosts = whichTrue(sapply(repertoire, function (i: Int) {return i == 2; }));   
+    let currentHosts = whichTrue(sapply(repertoire, function (i: Int) => Bool {return i == 2; }));   
     let dist = mtxMean(mtxRowCols(
       modelParams.hostMetric, hostIndex, currentHosts
     ));
@@ -138,14 +138,14 @@ function getGainRate (
 // one host after each event in the ordered event sequence
 function allTimesValidBranch(
   currRep: Int[], eventSeq: Event[], eventIndex: Int, nEvents: Int, nhosts: Int
-): Bool {
+) => Bool {
   if eventIndex > nEvents {
     // We reached the end of the proposed history, the branch is valid!
     return true;
   } else {
     let event = eventSeq[eventIndex];
     if event.fromState == 2 {
-      let n2s = fold(function(acc: Int, h: Int) { if h == 2 { return acc + 1; } else { return acc; }}, 0, currRep);
+      let n2s = fold(function(acc: Int, h: Int) => Int { if h == 2 { return acc + 1; } else { return acc; }}, 0, currRep);
       if n2s == 1 {
         // We have a loss event on repertoire with a single true hosts, so it is invalid
         return false;

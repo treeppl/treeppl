@@ -20,7 +20,7 @@ function simplexMove(x: Real[], alpha: Real, epsilon: Real) {
    * https://github.com/revbayes/revbayes/blob/master/src/core/moves/proposal/simplex/DirichletSimplexProposal.cpp
    *
    */
-  let newParamFun = function (a: Real) {
+  let newParamFun = function (a: Real) => Real {
     if a > epsilon {
       if a < 1. - epsilon {
         return a * alpha;

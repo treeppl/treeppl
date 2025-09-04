@@ -8,7 +8,7 @@ function independenceLikelihood(
   toAge: Real,
   eventSeqs: Event[][],
   modelParams: ModelParams
-): Real {
+) => Real {
   let unconditional = fold(
     function(acc: Real, h: Int) {
       let eventSeq = eventSeqs[h];
@@ -38,7 +38,7 @@ function independenceLikelihoodEndCond(
   eventSeqs: Event[][],
   modelParams: ModelParams,
   kernel: Matrix[Real]
-): Real {
+) => Real {
   // If the CTMC samle is x(.) then the below computes 
   //      P[X(.) = x(.), X(T) = b | X(0) = a]
   let unconditional = independenceLikelihood(
@@ -74,7 +74,7 @@ function hostIndepLikelihood(
   finalAge: Real,
   eventSeq: Event[],
   embeddedQMatrix: EmbeddedMarkovChainMatrix
-): Real {
+) => Real {
   if nextIndex > length(eventSeq) {
     let timePassed = currAge - finalAge;
     let outRate = embeddedQMatrix.totalRates[currState + 1];

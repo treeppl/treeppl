@@ -4,7 +4,7 @@ import "lib.mc"
 // Compute postorder messages on the observed tree
 function postorderTraverse(
   tree: TreeLabeled, qMatrix: Matrix[Real], interactions: Int[][], nhosts: Int
-): MsgTree {
+) => MsgTree {
   if tree is Leaf {
     let outmsg = mtxCreate(nhosts, 3, observationMessage(interactions[tree.label], 1, nhosts));
     let leafInts = interactions[tree.label];
@@ -42,16 +42,16 @@ function postorderTraverse(
 }
 
 // Compute leaf message from observed interactions
-function observationMessage(obsRepertoire: Int[], i: Int, max: Int): Real[] {
+function observationMessage(obsRepertoire: Int[], i: Int, max: Int) => Real[] {
   if i <= max {
     let stateMsg = makeStateMessage(obsRepertoire[i]);
     // Aligned, so don't use join
     return cons(
-      stateMsg[1],
+      stateMsg[1])(
       cons(
-        stateMsg[2],
+        stateMsg[2])(
         cons(
-          stateMsg[3],
+          stateMsg[3])(
           observationMessage(obsRepertoire, i + 1, max)
         )
       )
@@ -61,7 +61,7 @@ function observationMessage(obsRepertoire: Int[], i: Int, max: Int): Real[] {
   }
 }
 
-function makeStateMessage(interaction: Int): Real[] {
+function makeStateMessage(interaction: Int) => Real[] {
   if interaction == 0 {
     return [1., 0., 0.];
   } else {

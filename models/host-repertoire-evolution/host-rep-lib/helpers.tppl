@@ -4,7 +4,7 @@ import "lib.mc"
 
 function rateMatrixToEmbeddedMarkovChain(
   qMatrix: Matrix[Real]
-): EmbeddedMarkovChainMatrix {
+) => EmbeddedMarkovChainMatrix {
   // Construct a sequence representations of the qMatrix which we can later
   // use for sampling from the embedded Markov Chain
   let q1 = -mtxGet(1, 1, qMatrix);
@@ -21,11 +21,11 @@ function rateMatrixToEmbeddedMarkovChain(
   };
 }
 
-function is2(x: Int): Bool {
+function is2(x: Int) => Bool {
   return x == 2;
 }
 
-function compAge(left: Event, right: Event): Int {
+function compAge(left: Event, right: Event) => Int {
   if (right.eventTime >= left.eventTime) {
     return 1;
   } else {
@@ -33,24 +33,23 @@ function compAge(left: Event, right: Event): Int {
   }
 }
 
-function ones(nOnes: Int) {
+function ones(nOnes: Int) => Real[] {
   if nOnes > 0 {
     return cons(
-      1.,
-      ones(nOnes - 1)
+      1.)(ones(nOnes - 1)
     );
   } else {
     return [];
   }
 }
 
-function n2s(repertoire: Int[]): Int {
-  return fold(function (acc: Int, h: Int) {
+function n2s(repertoire: Int[]) => Int {
+  return fold(function (acc: Int, h: Int) => Int {
       if h == 2 { return acc + 1; } else { return acc; }
     }, 0, repertoire);
 }
 
-function updateRepertoire(currRep: Int[], event: Event, nhosts: Int): Int[] {
+function updateRepertoire(currRep: Int[], event: Event, nhosts: Int) => Int[] {
   let hostIndex = event.host;
   return join(
     [
@@ -64,7 +63,7 @@ function updateRepertoire(currRep: Int[], event: Event, nhosts: Int): Int[] {
 function sampleNextEvent(
   currState: Int,
   embeddedQMatrix: EmbeddedMarkovChainMatrix
-): Int {
+) => Int {
   // If currState \in \{0, 2 \} then the transition is deterministic
   // Categorical distribution seems to sometimes fail when sampling 
   // from a trivial probability vector
