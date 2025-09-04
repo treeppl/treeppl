@@ -167,6 +167,13 @@ lang TreePPLCompile
       info = x.info
     }
 
+  | AtomicDistTypeTppl x ->
+    errorSingle [x.info] "The Dist type needs exactly one type argument."
+  | TypeAppOrSequenceTypeTppl (x & {ty = AtomicDistTypeTppl _, args = [arg]}) -> TyDist {
+      info = x.info,
+      ty = compileTypeTppl arg
+    }
+
   | TypeAppOrSequenceTypeTppl (x & {args = []}) -> TySeq {
     info = x.info,
     ty = compileTypeTppl x.ty
