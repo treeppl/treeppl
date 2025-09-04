@@ -6,7 +6,7 @@
 //   "C" for cytosine  - 1
 //   "G" for guanine - 2
 //   "T" for thymine - 3
-//   "-" for gaps - 4 
+//   "-" for gaps - 4
 
 // TYPES
 
@@ -47,7 +47,7 @@ function pickpair(n: Int) => Int[] {
 
 // Build forest of trees from leaves, recursively
 function build_forest(data: Int[][], forest: MsgTree[], index: Int, data_len: Int, seq_len: Int, pi: Real[]) => MsgTree[] {
-    let new_message = sapply1(data[index], get_leaf_message, pi); 
+    let new_message = sapply(data[index], get_leaf_message(_, pi));
     let new_leaf = Leaf{age = 0.0, index = index, msg =  new_message};
     let new_forest = paste0([forest, [new_leaf]]);
     if (data_len == index) {
@@ -121,27 +121,27 @@ function cluster(q: Matrix[Real], trees: MsgTree[], maxAge: Real, seq_len: Int, 
     let tmatrix_left = mtxTrans(mtxExp(mtxSclrMul(age-left_child.age, q)));
     let tmatrix_right = mtxTrans(mtxExp(mtxSclrMul(age-right_child.age, q)));
 
-    let left_in_msg  = sapply1(left_child.msg, mtxMul, tmatrix_left);
-    let right_in_msg = sapply1(right_child.msg, mtxMul, tmatrix_right);
+    let left_in_msg  = sapply(left_child.msg, mtxMul(_, tmatrix_left));
+    let right_in_msg = sapply(right_child.msg, mtxMul(_, tmatrix_right));
 
     // Get the message of the new node.
     let node_msg = messageElemMul(left_in_msg, right_in_msg);
 
     // Weights
-    let log_likes = sapply1(node_msg, get_log_likes, pi);
+    let log_likes = sapply(node_msg, get_log_likes(_, pi));
     logWeight (seqSumReal(log_likes));
 
     // Remove weights of previous internal children
-    let log_likes_left = sapply1(left_child.msg, get_log_likes, pi);
+    let log_likes_left = sapply(left_child.msg, get_log_likes(_, pi));
     logWeight -(seqSumReal(log_likes_left));
-    let log_likes_right = sapply1(right_child.msg, get_log_likes, pi);
+    let log_likes_right = sapply(right_child.msg, get_log_likes(_, pi));
     logWeight -(seqSumReal(log_likes_right));
 
     // Manual resample
     resample;
 
     // Combine picked pair of trees into a new node
-    let parent = Node{age=age, msg=node_msg, left=left_child, right=right_child};  
+    let parent = Node{age=age, msg=node_msg, left=left_child, right=right_child};
 
     // Compute new_trees list
     let min = minInt(pairs[2],pairs[1]);

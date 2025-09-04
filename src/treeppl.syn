@@ -187,6 +187,7 @@ prod AnonFun: ExprTppl = "function"
 
 -- Function call as expression
 prod FunCall: ExprTppl = f:ExprTppl "(" (args:ExprTppl ("," args:ExprTppl)*)? ")"
+prod PartialApplication: ExprTppl = "_"
 
 prod Projection: ExprTppl = target:ExprTppl "." field:LIdent
 

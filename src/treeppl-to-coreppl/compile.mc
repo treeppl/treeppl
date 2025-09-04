@@ -460,12 +460,34 @@ lang TreePPLCompile
       ty = tyunknown_
     }
 
-  | FunCallExprTppl x -> TmUncurriedApp
-    { f = compileExprTppl context x.f
-    , positional = map (compileExprTppl context) x.args
-    , info = x.info
-    , ty = tyunknown_
-    }
+  | PartialApplicationExprTppl x ->
+    errorSingle [x.info] "'_' is only allowed in a (partial) function application."
+  | FunCallExprTppl x ->
+    let compileArg = lam e.
+      match e with PartialApplicationExprTppl a
+      then Left (nameSym "x", a.info)
+      else Right (compileExprTppl context e) in
+    let args = map compileArg x.args in
+    match eitherLefts args with params & ![]
+    then TmUncurriedLam
+      { positional = map
+        (lam p. {ident = p.0, tyAnnot = tyunknown_, tyParam = tyunknown_, info = p.1})
+        params
+      , body = TmUncurriedApp
+        { f = compileExprTppl context x.f
+        , positional = map (eitherEither (lam p. withInfo p.1 (nvar_ p.0)) (lam x. x)) args
+        , info = x.info
+        , ty = tyunknown_
+        }
+      , info = x.info
+      , ty = tyunknown_
+      }
+    else TmUncurriedApp
+      { f = compileExprTppl context x.f
+      , positional = eitherRights args
+      , info = x.info
+      , ty = tyunknown_
+      }
 
   | BernoulliExprTppl d ->
     TmDist {
