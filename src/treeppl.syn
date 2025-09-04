@@ -219,6 +219,7 @@ prod Multinomial: ExprTppl = "Multinomial" "(" n:ExprTppl "," probs:ExprTppl ")"
 prod Empirical: ExprTppl = "Empirical" "(" samples:ExprTppl ")"
 prod Dirichlet: ExprTppl = "Dirichlet" "(" alphas:ExprTppl ")"
 prod Binomial: ExprTppl = "Binomial" "(" n:ExprTppl "," prob:ExprTppl ")"
+prod Reciprocal: ExprTppl = "Reciprocal" "(" a:ExprTppl "," b:ExprTppl ")"
 
 
 prod Record: ExprTppl = "{" ((key:LName ("=" value:ExprTppl)?) ("," key:LName ("=" value:ExprTppl)?)*)? "}"
