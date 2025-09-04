@@ -101,21 +101,6 @@ function foldi[A, B](f : Function(A, Int, B)=>A, init : A, seq : B[]) => A {
   return seqFoldli(function(a : A) => Function(Int) => Function(B) => A {return function(idx : Int) => Function(B) => A {return function(b : B) => A {return f(a, idx+1, b);};};})(init)(seq);
 }
 
-// TODO(vipa, 2025-04-30): This can be replaced with `sapply(xs, f(_, b))` with partial application
-function sapply1[A, B, C](s : A[], f : Function(A, B)=>C, b : B) => C[] {
-  return sapply(s, function(e : A) => C { return f(e, b); });
-}
-
-// TODO(vipa, 2025-04-30): This can be replaced with `sapplyi(xs, f(_, _, b))` with partial application
-function sapplyi1[A, B, C](s : A[], f : Function(Int, A, B)=>C, b : B) => C[] {
-  return sapplyi(s, function(i : Int, a : A) => C {return f(i, a, b);});
-}
-
-// TODO(vipa, 2025-04-30): This can be replaced with `sapplyi(xs, f(_, _, b, c))` with partial application
-function sapplyi2[A, B, C, D](s : A[], f : Function(Int, A, B, C)=>D, b : B, c : C) => D[] {
-  return sapplyi(s, function(i : Int, a : A) => D {return f(i, a, b, c);});
-}
-
 function zipWith[A, B, C](f : Function(A, B) => C, a : A[], b : B[]) => C[] {
   return seqZipWith(function(a : A) => Function(B) => C {return function(b : B) => C {return f(a, b);};})(a)(b);
 }

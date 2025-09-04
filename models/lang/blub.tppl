@@ -3,6 +3,13 @@
  * Description: Program to showcase data manipulation.
  */
 
+function example(a: Int, b: Int) => Int {
+  return a + b;
+}
+function example3(a: Int, b: Int, c: Int) => Int {
+  return a + b + c;
+}
+
 /*
  * Model function
  * Parameters:
@@ -81,6 +88,14 @@ model function blub(n: Int, pi: Real, trump: Bool, coinflips: Bool[], text: Stri
   printLn("Not");
   printLn(bool2string(!false));
   printLn(bool2string(!true));
+
+  let add2 = example(_, 2);
+  printLn(int2string(add2(1)));
+  printLn(int2string(add2(6)));
+
+  let add2and3 = example3(_, _, 3);
+  printLn(int2string(add2and3(1, 2)));
+  printLn(int2string(add2and3(6, 2)));
 
   printLn("Dist type");
   let d : Dist[Bool] = Bernoulli(0.5);

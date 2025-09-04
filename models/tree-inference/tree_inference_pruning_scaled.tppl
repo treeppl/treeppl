@@ -9,7 +9,7 @@
 //   "C" for cytosine  - 1
 //   "G" for guanine - 2
 //   "T" for thymine - 3
-//   "-" for gaps - 4 
+//   "-" for gaps - 4
 
 // TYPES
 
@@ -108,8 +108,8 @@ function cluster(q: Matrix[Real], trees: MsgTree[], maxAge: Real, seq_len: Int) 
     let tmatrix_left = mtxTrans(mtxExp(mtxSclrMul(age-left_child.age, q)));
     let tmatrix_right = mtxTrans(mtxExp(mtxSclrMul(age-right_child.age, q)));
 
-    let left_in_msg  = sapply1(left_child.msg, mtxMul, tmatrix_left);
-    let right_in_msg = sapply1(right_child.msg, mtxMul, tmatrix_right);
+    let left_in_msg  = sapply(left_child.msg, mtxMul(_, tmatrix_left));
+    let right_in_msg = sapply(right_child.msg, mtxMul(_, tmatrix_right));
 
     // Get the message of the new node
     let node_msg = messageElemMul(left_in_msg, right_in_msg);
