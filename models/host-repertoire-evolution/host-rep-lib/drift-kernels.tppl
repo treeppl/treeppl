@@ -3,7 +3,7 @@ import "stdlib::seq.mc"
  * Library of drift kernels emulating the drift kernels from the RevBayes implementation
  */
 
-function simplexMove(x: Real[], alpha: Real, epsilon: Real) {
+function simplexMove(x: Real[], alpha: Real, epsilon: Real) => Dist[Real[]] {
   /*
    * Drift kernel for Dirichlet distribution aka. probability simplex 
    *
@@ -35,18 +35,7 @@ function simplexMove(x: Real[], alpha: Real, epsilon: Real) {
   return Dirichlet(newParams);
 }
 
-function stochSimplexMove(
-  x: Real[], weights: Real[], alphas: Real[]
-) {
-  /*
-   * Select a simplexMove stochastically 
-   * THIS IS NOT SUPPORTED CURRENTLY
-   */ 
-  assume i ~ Categorical(weights);
-  return simplexMove(x, alphas[i + 1]);
-}
-
-function scaleMove(x: Real, lambda: Real) {
+function scaleMove(x: Real, lambda: Real) => Dist[Real] {
   /*
    * Drift kernel for distributions with support on positive real axis
    * (like exponential r.v.s)
@@ -62,23 +51,12 @@ function scaleMove(x: Real, lambda: Real) {
   return Reciprocal(x * exp(-lambda / 2.), x * exp(lambda / 2.));
 }
 
-function stochScaleMove(
-  x: Real, weights: Real[], lambdas: Real[]
-) {
-  /*
-   * Select a scaleMove stochastically 
-   * THIS IS NOT SUPPORTED CURRENTLY
-   */ 
-  assume i ~ Categorical(weights);
-  return scaleMove(x, lambdas[i + 1]);
-}
-
 function categoricalShiftKernel(
   x: Int,
   param: Real[],
   lambda: Real,
   errMargin: Real
-) {
+) => Dist[Int] {
   /*
    * This returns a categorical distribution where some weight is shifted
    * from the current value. Sampling of categorical variables is handled

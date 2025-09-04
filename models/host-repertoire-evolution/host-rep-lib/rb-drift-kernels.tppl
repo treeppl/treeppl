@@ -2,7 +2,7 @@ import "drift-kernels.tppl"
 
 function rbLambdaMove(
   x: Real[]
-) {
+) => Dist[Real[]] {
   /*
   * This hard codes the _most_common_ simplex move used for the switch rate parameter in the
   * RevBayes implementation. See docs/revbayes_drift_kernels.md for more details
@@ -14,7 +14,7 @@ function rbLambdaMove(
 
 function rbBetaMove(
   x: Real
-) {
+) => Dist[Real] {
   /*
   * This hard codes the scale move used for the phy_scale parameter in the
   * RevBayes implementation. See docs/revbayes_drift_kernels.md for more details
@@ -25,7 +25,7 @@ function rbBetaMove(
 
 function rbMuMove(
   x: Real
-) {
+) => Dist[Real] {
   /*
   * This hard codes the _most_common_ scale move used for the clock_host parameter in the
   * RevBayes implementation. See docs/revbayes_drift_kernels.md for more details
@@ -36,7 +36,7 @@ function rbMuMove(
 
 function categoricalMove(
   x: Int, param: Real[]
-) {
+) => Dist[Int] {
   let lambda = 0.9;
   let errMargin = 1e-6;
   return categoricalShiftKernel(
