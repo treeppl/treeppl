@@ -80,6 +80,7 @@ prod FunTypeTppl: TypeTppl = "Function" "(" (params:TypeTppl ("," params:TypeTpp
 prod AtomicReal: TypeTppl = "Real"
 prod AtomicBool: TypeTppl = "Bool"
 prod AtomicInt: TypeTppl = "Int"
+prod AtomicDist: TypeTppl = "Dist"
 prod TpplStr: TypeTppl = "String"
 prod Nothing: TypeTppl = "(" ")"
 
@@ -218,6 +219,7 @@ prod Multinomial: ExprTppl = "Multinomial" "(" n:ExprTppl "," probs:ExprTppl ")"
 prod Empirical: ExprTppl = "Empirical" "(" samples:ExprTppl ")"
 prod Dirichlet: ExprTppl = "Dirichlet" "(" alphas:ExprTppl ")"
 prod Binomial: ExprTppl = "Binomial" "(" n:ExprTppl "," prob:ExprTppl ")"
+prod Reciprocal: ExprTppl = "Reciprocal" "(" a:ExprTppl "," b:ExprTppl ")"
 
 
 prod Record: ExprTppl = "{" ((key:LName ("=" value:ExprTppl)?) ("," key:LName ("=" value:ExprTppl)?)*)? "}"

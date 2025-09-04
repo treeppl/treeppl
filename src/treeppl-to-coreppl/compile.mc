@@ -167,6 +167,13 @@ lang TreePPLCompile
       info = x.info
     }
 
+  | AtomicDistTypeTppl x ->
+    errorSingle [x.info] "The Dist type needs exactly one type argument."
+  | TypeAppOrSequenceTypeTppl (x & {ty = AtomicDistTypeTppl _, args = [arg]}) -> TyDist {
+      info = x.info,
+      ty = compileTypeTppl arg
+    }
+
   | TypeAppOrSequenceTypeTppl (x & {args = []}) -> TySeq {
     info = x.info,
     ty = compileTypeTppl x.ty
@@ -598,6 +605,16 @@ lang TreePPLCompile
       dist = DBinomial {
         n = compileExprTppl context d.n,
         p = compileExprTppl context d.prob
+      },
+      ty = tyunknown_,
+      info = d.info
+  }
+
+| ReciprocalExprTppl d ->
+    TmDist {
+      dist = DReciprocal {
+        a = compileExprTppl context d.a,
+        b = compileExprTppl context d.b
       },
       ty = tyunknown_,
       info = d.info

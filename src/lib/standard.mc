@@ -20,6 +20,7 @@ let crash = error
 
 let seqSnoc = snoc
 let seqCons = cons
+let seqRange = range
 let seqCreate = create
 let seqConcat = concat
 let seqLength = length

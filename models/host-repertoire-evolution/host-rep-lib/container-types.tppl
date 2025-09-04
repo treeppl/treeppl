@@ -1,0 +1,60 @@
+/*
+ * Types shared by several files
+ */ 
+// Tree with labels 
+type TreeLabeled =
+  | Leaf{age: Real, label: Int}
+  | Node{age: Real, left: TreeLabeled, right: TreeLabeled, label: Int}
+  
+// The result from postorder message passing
+type MsgTree =
+  | MsgLeaf{
+    age: Real, label: Int, outMsg: Matrix[Real], interactions: Int[]
+  }
+  | MsgNode{
+    age: Real, label: Int,
+    left: MsgTree, right: MsgTree,
+    leftInMsg: Matrix[Real], rightInMsg: Matrix[Real],
+    leftKernel: Matrix[Real], rightKernel: Matrix[Real],
+    outMsg: Matrix[Real]
+  }
+// Container type for all model params
+type ModelParams = ModelParams {
+  beta: Real,
+  hostMetric: Matrix[Real],
+  embeddedQMatrix: EmbeddedMarkovChainMatrix,
+  meanDist: Real
+}
+
+// This is the final tree with node repertoires and branch histories
+type HistoryTree =
+  | HistoryLeaf {age: Real, label: Int, repertoire: Int[], history: Event[]}
+  | HistoryNode {age: Real, left: HistoryTree, right: HistoryTree, label: Int, repertoire: Int[], history: Event[]}
+
+// Container type for a single event in a host
+type Event = Event {eventTime: Real, fromState: Int, toState: Int, host: Int}
+
+// Container type for the history along a branch,
+// along with the debt from the independence model
+type BranchSample = BranchSample {
+  history: Event[][], success: Bool
+}
+
+type HostBranchSample = HostBranchSample {
+  history: Event[], success: Bool
+}
+
+// Like the above but with the excess from the full model too
+type CorrectedBranchSample = CorrectedBranchSample {
+  history: Event[],
+  logDebt: Real,
+  logExcess: Real,
+  success: Bool
+}
+
+// Container type for a CTMC in jump chain form
+type EmbeddedMarkovChainMatrix = EmbeddedMarkovChainMatrix {
+  totalRates: Real[],
+  transitionProbs: Real[][],
+  mat: Matrix[Real]
+}
