@@ -1,5 +1,4 @@
 import "container-types.tppl"
-import "stdlib::seq.mc"
 
 function independenceLikelihood(
   fromRep: Int[],
@@ -10,7 +9,7 @@ function independenceLikelihood(
   modelParams: ModelParams
 ) => Real {
   let unconditional = fold(
-    function(acc: Real, h: Int) {
+    function(acc: Real, h: Int) => Real {
       let eventSeq = eventSeqs[h];
       let fromState = fromRep[h];
       let toState = toRep[h];
@@ -25,7 +24,7 @@ function independenceLikelihood(
       );
     },
     0.0,
-    range(1, length(eventSeqs) + 1, 1)
+    range(1, length(eventSeqs), 1)
   );
   return unconditional;
 }
@@ -51,10 +50,10 @@ function independenceLikelihoodEndCond(
   );
   // For correct weights we need to compute P[X(T) = b | X(0) = a]
   let logTotalTransProb = fold(
-    function(acc: Real, val: Real) { return acc + val; },
+    function(acc: Real, val: Real) => Real { return acc + val; },
     0.0,
     zipWith(
-      function(fromState: Int, toState: Int) {
+      function(fromState: Int, toState: Int) => Real {
         return log(mtxGet(fromState + 1, toState + 1, kernel));
       },
       fromRep,

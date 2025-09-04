@@ -1,4 +1,3 @@
-import "stdlib::seq.mc"
 import "stdlib::math.mc"
 import "helpers.tppl"
 import "container-types.tppl"
@@ -63,7 +62,7 @@ function getTotalRate(
       }
     },
     0.0,
-    range(1)(nhosts + 1)(1)
+    range(1, nhosts, 1)
   );
   let lossRates = fold(
     function(acc: Real, i: Int) => Real {
@@ -75,7 +74,7 @@ function getTotalRate(
       }
     }, 
     0.0,
-    range(1)(nhosts + 1)(1)
+    range(1, nhosts, 1)
   );
   return gainRates + lossRates;
 }

@@ -1,6 +1,5 @@
-import "stdlib::seq.mc"
 import "container-types.tppl"
-import "lib.mc"
+import "lib.tppl"
 
 function rateMatrixToEmbeddedMarkovChain(
   qMatrix: Matrix[Real]
@@ -36,7 +35,7 @@ function compAge(left: Event, right: Event) => Int {
 function ones(nOnes: Int) => Real[] {
   if nOnes > 0 {
     return cons(
-      1.)(ones(nOnes - 1)
+      1., ones(nOnes - 1)
     );
   } else {
     return [];
@@ -51,7 +50,7 @@ function n2s(repertoire: Int[]) => Int {
 
 function updateRepertoire(currRep: Int[], event: Event, nhosts: Int) => Int[] {
   let hostIndex = event.host;
-  return join(
+  return paste0(
     [
       slice(currRep, 1, hostIndex),
       [event.toState],

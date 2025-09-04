@@ -1,5 +1,4 @@
-import "stdlib::seq.mc"
-import "host-rep-lib/lib.mc"
+import "host-rep-lib/lib.tppl"
 import "host-rep-lib/container-types.tppl"
 import "host-rep-lib/helpers.tppl"
 import "host-rep-lib/belief-propagation.tppl"
@@ -35,7 +34,7 @@ model function rejectAcceptSubroot(
   let qMatrix = mtxSclrMul(mu, r);
 
 
-  let nestedInteractions = nestList(interactions, ntips, nhosts);
+  let nestedInteractions = nestSeq(interactions, ntips, nhosts);
   let postorderTree = postorderTraverse(symbiont_tree, qMatrix, nestedInteractions, nhosts);
 
   // We have a subroot branch so we should propagate the messages
@@ -128,7 +127,7 @@ model function rejectAcceptSubroot(
   };
 } 
 
-function suggestRepAligned(msg: Matrix[Real], i: Int, max: Int) {
+function suggestRepAligned(msg: Matrix[Real], i: Int, max: Int) => Int[] {
   if i <= max {
     let param = mtx3ToSeq(msg, i);
     assume x ~ Categorical(param) drift categoricalMove(x, param); 
@@ -138,7 +137,7 @@ function suggestRepAligned(msg: Matrix[Real], i: Int, max: Int) {
   }
 }
 
-function suggestRepRS(msg: Matrix[Real], max: Int, initialRep: Int[], depth: Int) {
+function suggestRepRS(msg: Matrix[Real], max: Int, initialRep: Int[], depth: Int) => Int[] {
   let _REP_REJECTION_DEPTH = 10;
   if any(is2, initialRep) {
     return initialRep;
@@ -154,11 +153,11 @@ function suggestRepRS(msg: Matrix[Real], max: Int, initialRep: Int[], depth: Int
   }
 }
 
-function suggestRepUnaligned(msg: Matrix[Real], i: Int, max: Int) {
+function suggestRepUnaligned(msg: Matrix[Real], i: Int, max: Int) => Int[] {
   if i <= max {
     let param = mtx3ToSeq(msg, i);
     assume x ~ Categorical(param); 
-    return join([[x], suggestRepUnaligned(msg, i + 1, max)]);
+    return paste0([[x], suggestRepUnaligned(msg, i + 1, max)]);
   } else {
     return [];
   }
@@ -272,7 +271,7 @@ function sampleBranch(
 
       // All host histories were sampled correctly,
       // compile the events for all hosts and sort them
-      let allHostEvents = join(unorderedBranch.history);
+      let allHostEvents = paste0(unorderedBranch.history);
       let orderedEvents = qSort(compAge, allHostEvents);
       let nEvents = length(orderedEvents);
       if allTimesValidBranch(startRep, orderedEvents, 1, nEvents, nhosts) {
