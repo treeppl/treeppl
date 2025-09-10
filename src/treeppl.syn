@@ -80,6 +80,7 @@ prod FunTypeTppl: TypeTppl = "Function" "(" (params:TypeTppl ("," params:TypeTpp
 prod AtomicReal: TypeTppl = "Real"
 prod AtomicBool: TypeTppl = "Bool"
 prod AtomicInt: TypeTppl = "Int"
+prod AtomicDist: TypeTppl = "Dist"
 prod TpplStr: TypeTppl = "String"
 prod Nothing: TypeTppl = "(" ")"
 
@@ -187,6 +188,7 @@ prod AnonFun: ExprTppl = "function"
 
 -- Function call as expression
 prod FunCall: ExprTppl = f:ExprTppl "(" (args:ExprTppl ("," args:ExprTppl)*)? ")"
+prod PartialApplication: ExprTppl = "_"
 
 prod Projection: ExprTppl = target:ExprTppl "." field:LIdent
 
