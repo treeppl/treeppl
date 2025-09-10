@@ -19,7 +19,6 @@ model function rejectAcceptSubroot(
   interactions: Int[],
   host_distances: Real[],
   dMean: Real,
-  tune: Real,
   subrootLength: Real
 ) => ReturnType {
   assume lambda ~ Dirichlet([1., 1., 1., 1.]) drift rbLambdaMove(lambda);
