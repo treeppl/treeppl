@@ -51,12 +51,6 @@ function rep[X](count : Int, elem : X) => X[] {
   return make(count)(elem);
 }
 
-// NOTE(ErikDanielsson, 04-09-2025) This will construct a range where the
-// stop element is included
-function range(start : Int, stop : Int, step : Int) => Int[] {
-  return seqRange(start)(stop + 1)(step);
-}
-
 function repApply[X](count : Int, f : Function(Int) => X) => X[] {
   return seqCreate(count)(function(idx:Int) => X { return f(idx + 1); });
 }

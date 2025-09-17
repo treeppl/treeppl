@@ -24,7 +24,7 @@ function independenceLikelihood(
       );
     },
     0.0,
-    range(1, length(eventSeqs), 1)
+    1 to (length(eventSeqs))
   );
   return unconditional;
 }

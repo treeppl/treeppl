@@ -48,6 +48,6 @@ function getRepertoireDebt(x: Int[], samplingProb: Matrix[Real], nhosts: Int) =>
       return acc + categoricalLogPdf(x[i], param);
     },
     0.0,
-    range(1, nhosts, 1)
+    1 to nhosts
   );
 }

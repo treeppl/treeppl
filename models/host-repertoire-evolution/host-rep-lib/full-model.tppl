@@ -62,7 +62,7 @@ function getTotalRate(
       }
     },
     0.0,
-    range(1, nhosts, 1)
+    1 to nhosts
   );
   let lossRates = fold(
     function(acc: Real, i: Int) => Real {
@@ -74,7 +74,7 @@ function getTotalRate(
       }
     }, 
     0.0,
-    range(1, nhosts, 1)
+    1 to nhosts
   );
   return gainRates + lossRates;
 }
