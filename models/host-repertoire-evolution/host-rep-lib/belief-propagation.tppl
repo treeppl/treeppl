@@ -1,0 +1,70 @@
+import "container-types.tppl"
+import "lib.tppl"
+
+// Compute postorder messages on the observed tree
+function postorderTraverse(
+  tree: TreeLabeled, qMatrix: Matrix[Real], interactions: Int[][], nhosts: Int
+) => MsgTree {
+  if tree is Leaf {
+    let outmsg = mtxCreate(nhosts, 3, observationMessage(interactions[tree.label], 1, nhosts));
+    let leafInts = interactions[tree.label];
+    return MsgLeaf{
+      age = 0.0,
+      label = tree.label,
+      outMsg = mtxCreate(nhosts, 3, observationMessage(leafInts, 1, nhosts)),
+      interactions = leafInts
+    };
+  }
+
+  let left = postorderTraverse(tree.left, qMatrix, interactions, nhosts);
+  let right = postorderTraverse(tree.right, qMatrix, interactions, nhosts);
+
+    // These will be used when we propagate messages in the forward pass later
+  let leftKernel = mtxExp(mtxSclrMul(tree.age-left.age, qMatrix));
+  let rightKernel = mtxExp(mtxSclrMul(tree.age-right.age, qMatrix));
+
+  // We are doing the backward pass, so we should transpose the kernels
+  let leftBackwardKernel = mtxTrans(leftKernel);
+  let rightBackwardKernel = mtxTrans(rightKernel);
+
+  let leftInMsg = mtxMul(left.outMsg, leftBackwardKernel);
+  let rightInMsg = mtxMul(right.outMsg, rightBackwardKernel);
+
+  let outMsg = mtxElemMul(leftInMsg, rightInMsg);
+
+  return MsgNode{
+    age = tree.age, label = tree.label,
+    left = left, right = right, 
+    leftInMsg = leftInMsg, rightInMsg = rightInMsg,
+    leftKernel = leftKernel, rightKernel = rightKernel, 
+    outMsg = outMsg
+  };
+}
+
+// Compute leaf message from observed interactions
+function observationMessage(obsRepertoire: Int[], i: Int, max: Int) => Real[] {
+  if i <= max {
+    let stateMsg = makeStateMessage(obsRepertoire[i]);
+    // Aligned, so don't use join
+    return cons(
+      stateMsg[1],
+      cons(
+        stateMsg[2],
+        cons(
+          stateMsg[3],
+          observationMessage(obsRepertoire, i + 1, max)
+        )
+      )
+    );
+  } else {
+    return [];
+  }
+}
+
+function makeStateMessage(interaction: Int) => Real[] {
+  if interaction >= 0 && interaction <= 2 {
+    return kroneckerDelta(interaction + 1, 3);
+  } else {
+    return rep(3, 1.);
+  }
+}

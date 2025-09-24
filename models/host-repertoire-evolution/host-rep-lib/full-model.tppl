@@ -1,0 +1,163 @@
+import "stdlib::math.mc"
+import "helpers.tppl"
+import "container-types.tppl"
+/*
+ * This file contains functions for calculating the point wise density (excess)
+ * for the full model.
+ */ 
+function fullModelWeight(
+  nextIndex: Int,
+  currRep: Int[],
+  finalRep: Int[],
+  currAge: Real,
+  finalAge: Real,
+  eventSeq: Event[],
+  nEvents: Int,
+  nhosts: Int,
+  modelParams: ModelParams
+) => Real {
+  if nextIndex > nEvents {
+   // Handle the fact that there was no event in the last time segment
+    let timePassed = currAge - finalAge;
+    let totalLeavingRate = getTotalRate(currRep, modelParams, nhosts);
+    // The probability that no event occurs in the time interval is exp(-t * rate)
+    return -timePassed * totalLeavingRate;
+  } else {
+    let nextEvent = eventSeq[nextIndex];
+    let newAge = nextEvent.eventTime;
+    // Compute the total rate of leaving the current state
+    let totalLeavingRate = getTotalRate(currRep, modelParams, nhosts);
+    let thisRate = getRate(currRep, nextEvent, modelParams);
+    let timePassed = currAge - newAge;
+    // Compute the log density at this event
+    let thisWeight = log(thisRate / totalLeavingRate) - timePassed * totalLeavingRate;
+    // Compute the next repertoire 
+    let newRep = updateRepertoire(currRep, nextEvent, nhosts);
+    return thisWeight + fullModelWeight(
+      nextIndex + 1,
+      newRep,
+      finalRep,
+      newAge,
+      finalAge,
+      eventSeq,
+      nEvents,
+      nhosts,
+      modelParams
+    );
+  }
+}
+
+function getTotalRate(
+  currRep: Int[], modelParams: ModelParams, nhosts: Int
+) => Real {
+  // Compute the total rate of leaving the current repertoire
+  let gainRates = fold(
+    function(acc: Real, i: Int) => Real {
+      let fromState = currRep[i];
+      if fromState == 2 {
+        // No gain events from 2
+        return acc;
+      } else {
+        return acc + getGainRate(currRep, i, modelParams);
+      }
+    },
+    0.0,
+    1 to nhosts
+  );
+  let lossRates = fold(
+    function(acc: Real, i: Int) => Real {
+      let fromState = currRep[i];
+      if fromState == 0 {
+        return acc;
+      } else {
+        return acc + getLossRate(currRep, i, modelParams);
+      }
+    }, 
+    0.0,
+    1 to nhosts
+  );
+  return gainRates + lossRates;
+}
+
+function getRate(currRep: Int[], nextEvent: Event, modelParams: ModelParams) => Real {
+  let hostIndex = nextEvent.host;
+  if nextEvent.fromState > nextEvent.toState {
+    return getLossRate(currRep, hostIndex, modelParams);
+  } else {
+    return getGainRate(currRep, hostIndex, modelParams);
+  }
+}
+
+function getLossRate(
+  repertoire: Int[], hostIndex: Int, modelParams: ModelParams
+) => Real {
+  // Check if we are losing a two and if this results in a legal repertoire
+  let fromState = repertoire[hostIndex];
+  if fromState == 2 && n2s(repertoire) == 1 {
+    return 0.0;
+  } else {
+    let toState = fromState - 1;
+    let baseRate = mtxGet(fromState + 1, toState + 1, modelParams.embeddedQMatrix.mat);
+    return baseRate;
+  }
+}
+
+function getGainRate (
+  repertoire: Int[],
+  hostIndex: Int,
+  modelParams: ModelParams
+) => Real {
+  let fromState = repertoire[hostIndex];
+  let toState = fromState + 1;
+  let baseRate = mtxGet(fromState + 1, toState + 1, modelParams.embeddedQMatrix.mat);
+  // We need to add the phylogenetic influence to the rate
+  // since we have a gain event
+  if fromState == 0 {
+    let currentHosts = whichTrue(sapply(repertoire, function (i: Int) => Bool {return i == 2 || i == 1; })); 
+    let dist = mtxMean(mtxRowCols(
+      modelParams.hostMetric, hostIndex, currentHosts
+    ));
+    // This is where the model departs from the original implementation
+    return baseRate * (
+      (dist / modelParams.meanDist)^(-modelParams.beta)
+    );
+  } else {
+    let currentHosts = whichTrue(sapply(repertoire, function (i: Int) => Bool {return i == 2; }));   
+    let dist = mtxMean(mtxRowCols(
+      modelParams.hostMetric, hostIndex, currentHosts
+    ));
+    // This is where the model departs from the original implementation
+    return baseRate * (
+      (dist / modelParams.meanDist)^(-modelParams.beta)
+    );
+  }
+}
+
+// Check if the branch is valid in the sense that the parasite has at least 
+// one host after each event in the ordered event sequence
+function allTimesValidBranch(
+  currRep: Int[], eventSeq: Event[], eventIndex: Int, nEvents: Int, nhosts: Int
+) => Bool {
+  if eventIndex > nEvents {
+    // We reached the end of the proposed history, the branch is valid!
+    return true;
+  } else {
+    let event = eventSeq[eventIndex];
+    if event.fromState == 2 {
+      let n2s = fold(function(acc: Int, h: Int) => Int { if h == 2 { return acc + 1; } else { return acc; }}, 0, currRep);
+      if n2s == 1 {
+        // We have a loss event on repertoire with a single true hosts, so it is invalid
+        return false;
+      }
+    }
+    // The repertoire is still valid, update it with the new event
+    let newRep = updateRepertoire(currRep, event, nhosts);
+    return allTimesValidBranch(
+      newRep,
+      eventSeq,
+      eventIndex + 1,
+      nEvents,
+      nhosts
+    );
+  }
+}

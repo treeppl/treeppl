@@ -43,6 +43,10 @@ function maxInt(a : Int, b : Int) => Int {
    Sequence operations
    ------------------- */
 
+function cons[X](e : X, s : X[]) => X[] {
+  return seqCons(e)(s);
+}
+
 function rep[X](count : Int, elem : X) => X[] {
   return make(count)(elem);
 }

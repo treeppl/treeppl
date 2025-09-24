@@ -1,0 +1,15 @@
+import "lib.mc"
+
+// NOTE(ErikDanielsson, 04-09-2025) Creates a nested list with `rows` rows and `cols` columns out of the `seq`
+function nestSeq[X](seq : X[], rows : Int, cols : Int) => X[][] {
+  return seqNest(seq)(rows)(cols);
+}
+
+// NOTE(ErikDanielsson, 04-09-2025) Constructs an Kronecker delta of a given length
+function kroneckerDelta(index : Int, length : Int) => Real[] {
+  return seqKroneckerDelta(index)(length);
+}
+
+function isNaN(r : Real) => Bool {
+  return mathIsNaN(r);
+}
