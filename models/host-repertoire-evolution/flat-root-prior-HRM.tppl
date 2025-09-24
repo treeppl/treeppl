@@ -18,8 +18,7 @@ model function rejectAccept(
   nhosts: Int,
   interactions: Int[],
   host_distances: Real[],
-  dMean: Real,
-  subrootLength: Real
+  dMean: Real
 ) => ReturnType {
   assume lambda ~ Dirichlet([1., 1., 1., 1.]) drift rbLambdaMove(lambda);
   assume mu ~ Exponential(10.) drift rbMuMove(mu);
