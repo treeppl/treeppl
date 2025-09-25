@@ -1,0 +1,80 @@
+import "container-types.tppl"
+import "lib.tppl"
+
+function rateMatrixToEmbeddedMarkovChain(
+  qMatrix: Matrix[Real]
+) => EmbeddedMarkovChainMatrix {
+  // Construct a sequence representations of the qMatrix which we can later
+  // use for sampling from the embedded Markov Chain
+  let q1 = -mtxGet(1, 1, qMatrix);
+  let q2 = -mtxGet(2, 2, qMatrix);
+  let q3 = -mtxGet(3, 3, qMatrix);
+  return EmbeddedMarkovChainMatrix {
+    totalRates = [q1, q2, q3],
+    transitionProbs = [
+      [0.0, 1.0, 0.0],
+      [mtxGet(2, 1, qMatrix) / q2, 0.0, mtxGet(2, 3, qMatrix) / q2],
+      [0.0, 1.0, 0.0]
+    ],
+    mat = qMatrix
+  };
+}
+
+function is2(x: Int) => Bool {
+  return x == 2;
+}
+
+function compAge(left: Event, right: Event) => Int {
+  if (right.eventTime >= left.eventTime) {
+    return 1;
+  } else {
+    return -1;
+  }
+}
+
+function ones(nOnes: Int) => Real[] {
+  if nOnes > 0 {
+    return cons(
+      1., ones(nOnes - 1)
+    );
+  } else {
+    return [];
+  }
+}
+
+function n2s(repertoire: Int[]) => Int {
+  return fold(function (acc: Int, h: Int) => Int {
+      if h == 2 { return acc + 1; } else { return acc; }
+    }, 0, repertoire);
+}
+
+function updateRepertoire(currRep: Int[], event: Event, nhosts: Int) => Int[] {
+  let hostIndex = event.host;
+  return paste0(
+    [
+      slice(currRep, 1, hostIndex),
+      [event.toState],
+      slice(currRep, hostIndex + 1, nhosts + 1)
+    ]
+  );
+}
+
+function sampleNextEvent(
+  currState: Int,
+  embeddedQMatrix: EmbeddedMarkovChainMatrix
+) => Int {
+  // If currState \in \{0, 2 \} then the transition is deterministic
+  // Categorical distribution seems to sometimes fail when sampling 
+  // from a trivial probability vector
+  if currState == 0 {
+    return 1;
+  } else {
+    if currState == 2 {
+      return 1;
+    } else {
+      let param = embeddedQMatrix.transitionProbs[currState + 1];
+      assume nextState ~ Categorical(param);
+      return nextState;
+    }
+  }
+}
