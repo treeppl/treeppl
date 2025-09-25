@@ -6,11 +6,6 @@
  *
  * This version explicitly repays weight associated with proposal
  *
- * Compile
- * tpplc host_repertoire.tppl -m smc-apf
- *
- * Run
- * ./out treeppl/models/data/hostrep.json 10 1
  */
 
 /*---------------------------- TYPES --------------------------------*/
@@ -192,8 +187,8 @@ function postorder_msgs(tree: TreeLabeled, iMatrix: Matrix[Real], qMatrix: Matri
   let tMatrixLeft = mtxTrans(mtxExp(mtxSclrMul(tree.age-left.age, qMatrix)));
   let tMatrixRight = mtxTrans(mtxExp(mtxSclrMul(tree.age-right.age, qMatrix)));
 
-  let left_in_msg  = sapply1(left.out_msg, mtxMul, tMatrixLeft);
-  let right_in_msg = sapply1(right.out_msg, mtxMul, tMatrixRight);
+  let left_in_msg  = sapply(left.out_msg, mtxMul(_, tMatrixLeft));
+  let right_in_msg = sapply(right.out_msg, mtxMul(_, tMatrixRight));
 
   let out_msg = messageNormalize(messageElemMul(left_in_msg, right_in_msg));
 
@@ -244,8 +239,8 @@ function final_probs(tree: MsgTree, parent_msg: Matrix[Real][], qMatrix: Matrix[
   let tMatrixLeft = mtxExp(mtxSclrMul(left_branch, qMatrix));
   let tMatrixRight = mtxExp(mtxSclrMul(right_branch, qMatrix));
 
-  let left_parent_msg  = sapply1(messageElemMul(parent_msg,tree.left_in_msg), mtxMul, tMatrixLeft);
-  let right_parent_msg = sapply1(messageElemMul(parent_msg,tree.right_in_msg), mtxMul, tMatrixRight);
+  let left_parent_msg  = sapply(messageElemMul(parent_msg,tree.left_in_msg), mtxMul(_, tMatrixLeft));
+  let right_parent_msg = sapply(messageElemMul(parent_msg,tree.right_in_msg), mtxMul(_, tMatrixRight));
 
   let left  =  final_probs(tree.left,  left_parent_msg, qMatrix, tune);
   let right =  final_probs(tree.right, right_parent_msg, qMatrix, tune);
@@ -457,7 +452,7 @@ function simulate_by_event (repertoire: Int[], eventSeq: Event[], event_index: I
   let logScore = exp_log_prob + log(rate/change_rate);
 
   // Update repertoire with the change in the_event
-  let new_repertoire = sapplyi1(repertoire, getNewState, the_event);
+  let new_repertoire = sapplyi(repertoire, getNewState(_, _, the_event));
 	let hp = HistoryPoint{age = the_event.age, repertoire = new_repertoire};
   // Simulate next event
 	let simHist = simulate_by_event(new_repertoire, eventSeq, event_index + 1, the_event.age, end_age, mp, log_debt);
@@ -513,7 +508,7 @@ function total_rate(repertoire: Int[], mp: ModelParams) => Real {
 	let n2s = fold(count2s, 0, repertoire);
 	let totalLoss2 = getLoss2(Real(n2s), mp);
 
-  let gainsSeq = sapplyi2(repertoire, gainsIf0or1, repertoire, mp);
+  let gainsSeq = sapplyi(repertoire, gainsIf0or1(_, _, repertoire, mp));
 	let totalGains = seqSumReal(gainsSeq);
 
   return totalLoss1 + totalLoss2 + totalGains;

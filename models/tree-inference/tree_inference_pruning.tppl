@@ -1,23 +1,12 @@
 // TreePPL script for tree inference under the
-// Jukes Cantor model with a strict clock prior. Pruning currently hard-coded.
+// Jukes Cantor model with a strict clock prior. Pruning hard-coded.
 
-// Run this by compiling:
-// tpplc models/phylo/phylogeny/tree_inference_pruning_scaled.tppl -m 'smc-apf' --resample align --output phylo_scaled
-// Or if subsampling is desired, where n is the number of samples in putput:
-// tpplc models/phylo/phylogeny/tree_inference_pruning_scaled.tppl -m 'smc-apf' --resample align --subsample -n 1 --output phylo_scaled
-// And then execution x particles x sweeps, using for example toy dataset phylo_toydata.json or primates dataset:
-// ./phylo_scaled models/data/treeinference/phylo_toydata.json 10000 1 > phylo_pruning_scaled.json
-// ./phylo_scaled models/data/treeinference/primates.json 10000 3 > phylo_pruning_scaled_primates.json
-
-// Toy dataset as json file phylo_toydata.json.
-// Data is a matrix with each row
-// consisting of the aligned DNA sequence for a single
-// taxon. The nucleotide is specified as
+// The nucleotide is specified as
 //   "A" for adenine  - 0
 //   "C" for cytosine  - 1
 //   "G" for guanine - 2
 //   "T" for thymine - 3
-//   "-" for gaps - 4 //To be extended
+//   "-" for gaps - 4
 
 // TYPES
 
@@ -29,10 +18,12 @@ type MsgTree =
 
 // Randomly sample two indices in the trees vector, to be combined. Avoiding mirror cases.
 function pickpair(n: Int) => Int[] {
-    assume i_1 ~ Categorical(rep(n - 1, 1./Real(n - 1)));
-    let i = i_1 + 2; //Adding two, avoiding index zero for i and avoiding trouble picking j
-    assume j ~ Categorical(rep(i - 1, 1./Real(i - 1)));  // j is always smaller than i, avoiding mirror cases
-    return [i, j + 1]; //avoid index of zero for j
+    assume i ~ Categorical(rep(n, 1./Real(n)));
+    let i = i + 1;
+    assume j ~ Categorical(rep((n-1), 1./Real(n-1)));
+    let j = j+1;
+    if (j < i) { return [i, j];}
+    else { return [i,j+1];}
 }
 
 // Build forest of trees from leaves, recursively
@@ -52,18 +43,22 @@ function build_forest(data: Int[][], forest: MsgTree[], index: Int, data_len: In
 function get_leaf_message(seq: Int) => Matrix[Real] {
     if (seq == 0) { // "A"
        let message = rvecCreate(4, [1.0, 0.0, 0.0, 0.0]);
-        return message;
+       logWeight (log(0.25));
+       return message;
     }
     if (seq == 1) { // "C"
         let message = rvecCreate(4, [0.0, 1.0, 0.0, 0.0]);
+        logWeight (log(0.25));
         return message;
     }
     if (seq == 2) { // "G"
         let message = rvecCreate(4, [0.0, 0.0, 1.0, 0.0]);
+        logWeight (log(0.25));
         return message;
     }
     if (seq == 3) {  // "T"
         let message = rvecCreate(4, [0.0, 0.0, 0.0, 1.0]);
+        logWeight (log(0.25));
         return message;
     }
     if (seq == 4) {  // "-"
@@ -75,16 +70,12 @@ function get_leaf_message(seq: Int) => Matrix[Real] {
     }
 }
 
-// Get factor for each message
-function get_factor(msg: Matrix[Real]) => Real {
-    let factor = mtxGet(1, 1, msg) + mtxGet(1, 2, msg) + mtxGet(1, 3, msg) + mtxGet(1, 4, msg);
-    return factor;
-}
-
-// Normalise message for each site
-function norm_mess(msg: Matrix[Real], factor: Real) => Matrix[Real] {
-    let norm_msg = rvecCreate(4, [mtxGet(1, 1, msg)/factor, mtxGet(1, 2, msg)/factor, mtxGet(1, 3, msg)/factor, mtxGet(1, 4, msg)/factor]);
-    return norm_msg;
+//Compute log likelihood for each site
+function get_log_likes(msg: Matrix[Real]) => Real {
+    let stationary_probs = cvecCreate(4, [0.25,0.25,0.25,0.25]);
+    let like = mtxMul(msg, stationary_probs);
+    let log_like = log(mtxGet(1, 1, like));
+    return log_like;
 }
 
 // KEY FUNCTION: CLUSTER
@@ -94,11 +85,6 @@ function cluster(q: Matrix[Real], trees: MsgTree[], maxAge: Real, seq_len: Int) 
 
     // Check if we have reached the root of the tree
     if (n == 1) {
-
-        // Stationarity at root
-        let stationary = rep(seq_len, 0.25);
-        logWeight (seqSumReal(sapply(stationary, log)));
-
         return trees;
     }
 
@@ -116,26 +102,32 @@ function cluster(q: Matrix[Real], trees: MsgTree[], maxAge: Real, seq_len: Int) 
     let tmatrix_left = mtxTrans(mtxExp(mtxSclrMul(age-left_child.age, q)));
     let tmatrix_right = mtxTrans(mtxExp(mtxSclrMul(age-right_child.age, q)));
 
-    let left_in_msg  = sapply1(left_child.msg, mtxMul, tmatrix_left);
-    let right_in_msg = sapply1(right_child.msg, mtxMul, tmatrix_right);
+    let left_in_msg  = sapply(left_child.msg, mtxMul(_, tmatrix_left));
+    let right_in_msg = sapply(right_child.msg, mtxMul(_, tmatrix_right));
 
-    // Get the message of the new node
+    // Get the message of the new node.
     let node_msg = messageElemMul(left_in_msg, right_in_msg);
 
-    // Normalize the rescaled node message
-    let factors = sapply(node_msg, get_factor);
-    let node_msg_norm = zipWith(norm_mess, node_msg, factors);
-
     // Weights
-    logWeight (seqSumReal(sapply(factors, log)));
+    let log_likes = sapply(node_msg, get_log_likes);
+    logWeight (seqSumReal(log_likes));
+
+    // Remove weights of previous internal children
+    let log_likes_left = sapply(left_child.msg, get_log_likes);
+    logWeight -(seqSumReal(log_likes_left));
+    let log_likes_right = sapply(right_child.msg, get_log_likes);
+    logWeight -(seqSumReal(log_likes_right));
+
+    // Manual resample
+    resample;
 
     // Combine picked pair of trees into a new node
-    let parent = Node{age=age, msg=node_msg_norm, left=left_child, right=right_child};
+    let parent = Node{age=age, msg=node_msg, left=left_child, right=right_child};
 
     // Compute new_trees list
-    let min = pairs[2];
-    let max = pairs[1];
-    let new_trees = paste0([slice(trees, 1, min), slice(trees, min + 1, max), slice(trees, max + 1, n + 1), [parent]]);
+    let min = minInt(pairs[2],pairs[1]);
+    let max = maxInt(pairs[2],pairs[1]);
+    let new_trees = paste0([slice(trees, 1, min), slice(trees, (min+1), max), slice(trees, (max+1), (n+1)), [parent]]);
 
     // Recursive call to cluster for new_trees
     return cluster(q, new_trees, age, seq_len);

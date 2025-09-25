@@ -4,11 +4,6 @@
 // produce a state-of-the-art model with MCMC, using
 // suitable drift kernels, slice sampling, or with HMC.
 
-// Run this by compiling:
-// tpplc models/phylo/phylogeny/substmodel_belief_propagation.tppl -m 'smc-apf' --resample align  --subsample -n 1 --output substmodel
-// And then execution x particles x sweeps, using for example a toy dataset found in phylo_toydata_fixtree.json:
-// ./substmodel models/data/treeinference/phylo_toydata_fixtree.json 1000 1 > substmodel_output.json
-
 // Data is a matrix of integers character, with each row
 // consisting of the (translated) aligned DNA sequence for a single
 // taxon. The nucleotide is specified as
@@ -57,7 +52,7 @@ function gtr(pi: Real[], r: Real[]) => Matrix[Real] {
 // for the structure of q with respect to time (rows = from-states)
 function message(start_msg: Matrix[Real][], q: Matrix[Real], time: Real) => Matrix[Real][] {
     let trans_matrix = mtxTrans(mtxExp(mtxSclrMul(time, q)));
-    return sapply1(start_msg, mtxMul, trans_matrix);
+    return sapply(start_msg, mtxMul(_, trans_matrix));
 }
 
 // Compute postorder messages on the observed tree
@@ -124,7 +119,7 @@ model function myModel(data: Int[][], tree: GTR_Tree) => TheReturn {
 
     let msgs = compute_postorder_message(tree, data, q);
 
-    let log_likes = sapply1(msgs, get_log_likes, cvecCreate(4, pi));
+    let log_likes = sapply(msgs, get_log_likes(_, cvecCreate(4, pi)));
 
     logWeight (seqSumReal(log_likes));
 
