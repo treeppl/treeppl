@@ -27,6 +27,9 @@ use TreePPLThings in
 let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod)) =
   let mk = lam debugIterations. lam samplingPeriod. lam incrementalPrinting. lam iterations. lam globalProb. lam driftKernel. lam driftScale. lam cps. lam pigeons. lam align. lam debugAlignment. lam outputType. lam loader.
     match includeFileExn "." "stdlib::json.mc" loader with (jsonEnv, loader) in
+    match includeFileExn "." "stdlib::string.mc" loader with (stringEnv, loader) in
+    match includeFileExn "." "stdlib::basic-types.mc" loader with (basicEnv, loader) in
+    match includeFileExn "." "stdlib::ext/file-ext.mc" loader with (fileEnv, loader) in
     match includeFileExn "." "coreppl::coreppl-to-mexpr/mcmc-lightweight/config.mc" loader with (configEnv, loader) in
     let debugTypeFields = switch mapLookup (_getTyConExn "DebugInfo" configEnv) (_getTCEnv loader).tyConEnv
       case Some (_, [], TyRecord x) then x
@@ -42,16 +45,43 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
         then ulam_ "" true_
         else ulam_ "idx" (eqi_ (int_ 0) (modi_ (var_ "idx") (int_ samplingPeriod))) in
     let continue =
-      let ret = utuple_ [addi_ (var_ "idx") (int_ 1), neqi_ (var_ "idx") (int_ iterations)] in
+      let idx = nameSym "idx" in
+      let beta = nameSym "beta" in
+      let optWc = nameSym "optWc" in
+      let accLets = [  
+        nulet_ idx (tupleproj_ 0 (var_ "acc")),
+        nulet_ beta (tupleproj_ 1 (var_ "acc")),
+        nulet_ optWc (tupleproj_ 2 (var_ "acc"))
+      ] in
+      let ret = utuple_ [utuple_ [addi_ (nvar_ idx) (int_ 1), nvar_ beta, nvar_ optWc], if pigeons then true_ else neqi_ (nvar_ idx) (int_ iterations)] in
       let ret =
         if incrementalPrinting then
-          let print = app_ (nvar_ (_getVarExn "printJsonLn" jsonEnv)) (app_ outputSer.serializer (var_ "sample")) in
-          let print = if eqi samplingPeriod 1
-            then print
-            else if_ (eqi_ (int_ 0) (modi_ (var_ "idx") (int_ samplingPeriod))) print unit_ in
+          let ch = nameSym "ch" in
+          let jsonLn = nvar_ (_getVarExn "getJsonLn" jsonEnv) in
+          let writeFile_ = appf2_ (nvar_ (_getVarExn "fileWriteString" fileEnv)) in
+          let flushFile_ = app_ (nvar_ (_getVarExn "fileWriteFlush" fileEnv)) in
+          let printer = (match_
+            (nvar_ optWc)
+            (npcon_ (_getConExn "Some" basicEnv) (npvar_ ch))
+            (ulam_ "s" (semi_ (writeFile_ (nvar_ ch) (var_ "s")) (flushFile_ (nvar_ ch))))
+            (ulam_ "s" (print_ (var_ "s")))
+          ) in
+          let serSample = app_ jsonLn (app_ outputSer.serializer (var_ "sample")) in
+          let strJoin_ = appf2_ (nvar_ (_getVarExn "strJoin" stringEnv)) in
+          let int2string_ = app_ (nvar_ (_getVarExn "int2string" stringEnv)) in
+          let serSample = if pigeons then
+            (strJoin_ (str_ "\t") (seq_ [int2string_ (nvar_ idx), serSample]))
+            else serSample in 
+          let print =  app_ printer serSample in
+          let print = if pigeons
+            then if_ (eqf_ (float_ 1.0) (nvar_ beta)) print unit_ 
+            else if eqi samplingPeriod 1
+              then print
+              else if_ (eqi_ (int_ 0) (modi_ (nvar_ idx) (int_ samplingPeriod))) print unit_ in
           semi_ print ret
         else ret in
-      utuple_ [int_ 0, ulam_ "idx" (ulam_ "sample" ret)] in
+      let bret = bindall_ accLets ret in
+      utuple_ [utuple_ [int_ 0, float_ 1.0, nconapp_ (_getConExn "None" basicEnv) unit_], ulam_ "acc" (ulam_ "sample" bret)] in
     let debug =
       if debugIterations then
         utuple_
