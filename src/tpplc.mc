@@ -13,6 +13,7 @@ include "mexpr/type-check.mc"
 include "mexpr/generate-json-serializers.mc"
 
 include "treeppl-to-coreppl/compile.mc"
+include "treeppl-to-coreppl/continue.mc"
 
 include "coreppl::dppl-arg.mc" -- inherit cmd-line opts from cppl
 include "coreppl::parser.mc"
@@ -25,12 +26,17 @@ mexpr
 use TreePPLThings in
 
 let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod)) =
-  let mk = lam debugIterations. lam samplingPeriod. lam incrementalPrinting. lam iterations. lam globalProb. lam driftKernel. lam driftScale. lam cps. lam pigeons. lam pigeonsIID. lam align. lam debugAlignment. lam outputType. lam loader.
+  let mk = lam debugIterations. lam samplingPeriod. lam incrementalPrinting. lam iterations. lam globalProb.
+    lam driftKernel. lam driftScale. lam cps.
+    lam pigeons. lam pigeonsGlobal. lam pigeonsExploreSteps.
+    lam align. lam debugAlignment. lam outputType. lam loader.
+
     match includeFileExn "." "stdlib::json.mc" loader with (jsonEnv, loader) in
     match includeFileExn "." "stdlib::string.mc" loader with (stringEnv, loader) in
     match includeFileExn "." "stdlib::basic-types.mc" loader with (basicEnv, loader) in
     match includeFileExn "." "stdlib::ext/file-ext.mc" loader with (fileEnv, loader) in
     match includeFileExn "." "coreppl::coreppl-to-mexpr/mcmc-lightweight/config.mc" loader with (configEnv, loader) in
+    match includeFileExn "." "treeppl::treeppl-to-coreppl/continue.mc" loader with (continueEnv, loader) in
     let debugTypeFields = switch mapLookup (_getTyConExn "DebugInfo" configEnv) (_getTCEnv loader).tyConEnv
       case Some (_, [], TyRecord x) then x
       case Some (_, _, _) then error "Compiler error: unexpected shape of DebugInfo"
@@ -45,43 +51,16 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
         then ulam_ "" true_
         else ulam_ "idx" (eqi_ (int_ 0) (modi_ (var_ "idx") (int_ samplingPeriod))) in
     let continue =
-      let idx = nameSym "idx" in
-      let beta = nameSym "beta" in
-      let optWc = nameSym "optWc" in
-      let accLets = [  
-        nulet_ idx (tupleproj_ 0 (var_ "acc")),
-        nulet_ beta (tupleproj_ 1 (var_ "acc")),
-        nulet_ optWc (tupleproj_ 2 (var_ "acc"))
-      ] in
-      let ret = utuple_ [utuple_ [addi_ (nvar_ idx) (int_ 1), nvar_ beta, nvar_ optWc], if pigeons then true_ else neqi_ (nvar_ idx) (int_ iterations)] in
-      let ret =
-        if incrementalPrinting then
-          let ch = nameSym "ch" in
-          let jsonLn = nvar_ (_getVarExn "getJsonLn" jsonEnv) in
-          let writeFile_ = appf2_ (nvar_ (_getVarExn "fileWriteString" fileEnv)) in
-          let flushFile_ = app_ (nvar_ (_getVarExn "fileWriteFlush" fileEnv)) in
-          let printer = (match_
-            (nvar_ optWc)
-            (npcon_ (_getConExn "Some" basicEnv) (npvar_ ch))
-            (ulam_ "s" (semi_ (writeFile_ (nvar_ ch) (var_ "s")) (flushFile_ (nvar_ ch))))
-            (ulam_ "s" (print_ (var_ "s")))
-          ) in
-          let serSample = app_ jsonLn (app_ outputSer.serializer (var_ "sample")) in
-          let strJoin_ = appf2_ (nvar_ (_getVarExn "strJoin" stringEnv)) in
-          let int2string_ = app_ (nvar_ (_getVarExn "int2string" stringEnv)) in
-          let serSample = if pigeons then
-            (strJoin_ (str_ "\t") (seq_ [int2string_ (nvar_ idx), serSample]))
-            else serSample in 
-          let print =  app_ printer serSample in
-          let print = if pigeons
-            then if_ (eqf_ (float_ 1.0) (nvar_ beta)) print unit_ 
-            else if eqi samplingPeriod 1
-              then print
-              else if_ (eqi_ (int_ 0) (modi_ (nvar_ idx) (int_ samplingPeriod))) print unit_ in
-          semi_ print ret
-        else ret in
-      let bret = bindall_ accLets ret in
-      utuple_ [utuple_ [int_ 0, float_ 1.0, nconapp_ (_getConExn "None" basicEnv) unit_], ulam_ "acc" (ulam_ "sample" bret)] in
+      match (if pigeons then 
+        appf3_ (nvar_ (_getVarExn "continuePigeons" continueEnv)) (int_ pigeonsExploreSteps)
+      else
+        appf3_ (nvar_ (_getVarExn "continueBase" continueEnv)) (int_ iterations)
+      ) with specializedFunc in
+      let appFunc = specializedFunc (int_ samplingPeriod) outputSer.serializer in
+      let accInit = nvar_ (_getVarExn (if pigeons then "mkContinueStatePigeons" else "mkContinueStateBase") continueEnv) in
+      utuple_ [accInit, appFunc] in
+    let temperature = nvar_ (_getVarExn (if pigeons then "temperaturePigeons" else "temperatureBase") continueEnv) in
+    let init = nvar_ (_getVarExn (if pigeons then "pigeonsInit" else "baseInit") continueEnv) in
     let debug =
       if debugIterations then
         utuple_
@@ -106,10 +85,13 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
     let method = LightweightMCMC
       { keepSample = keepSample
       , continue = continue
+      , temperature = temperature
+      , init = init
       , globalProb = float_ globalProb
       , debug = debug
       , pigeons = pigeons
-      , pigeonsIID = pigeonsIID
+      , pigeonsGlobal = pigeonsGlobal
+      , pigeonsExploreSteps = pigeonsExploreSteps
       , driftKernel = driftKernel
       , driftScale = driftScale
       , cps = cps
@@ -133,7 +115,23 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
     { optFlagDef with long = "incremental-printing"
     , description = "Print each sample as it is produced instead of at the end."
     } in
-  let res = optApply (optApply (optApply (optApply (optApply (optApply (optApply (optMap5 mk debugIterations samplingPeriod incrementalPrinting _particles _mcmcLightweightGlobalProb) _driftKernel) _driftScale) _cps) _pigeons) _pigeonsIID) _align) _debugAlignment in
+  let res = optApply (
+    optApply (
+      optApply (
+        optApply (
+          optApply (
+            optApply (
+              optApply (
+                optApply (
+                  optMap5 mk debugIterations samplingPeriod incrementalPrinting _particles _mcmcLightweightGlobalProb
+                ) _driftKernel
+              ) _driftScale
+            ) _cps
+          ) _pigeons
+        ) _pigeonsGlobal
+      ) _pigeonsExploreSteps
+    )_align
+  ) _debugAlignment in
   optMap2 (lam. lam x. x) (_methodFlag false "mcmc-lightweight") res in
 
 let wrapSimpleInferenceMethod
