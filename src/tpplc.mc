@@ -13,7 +13,6 @@ include "mexpr/type-check.mc"
 include "mexpr/generate-json-serializers.mc"
 
 include "treeppl-to-coreppl/compile.mc"
-include "treeppl-to-coreppl/continue.mc"
 
 include "coreppl::dppl-arg.mc" -- inherit cmd-line opts from cppl
 include "coreppl::parser.mc"
@@ -37,7 +36,7 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
     match includeFileExn "." "stdlib::basic-types.mc" loader with (basicEnv, loader) in
     match includeFileExn "." "stdlib::ext/file-ext.mc" loader with (fileEnv, loader) in
     match includeFileExn "." "coreppl::coreppl-to-mexpr/mcmc-lightweight/config.mc" loader with (configEnv, loader) in
-    match includeFileExn "." "treeppl::treeppl-to-coreppl/continue.mc" loader with (continueEnv, loader) in
+    match includeFileExn "." "treeppl::treeppl-to-coreppl/mcmc-lightweight.mc" loader with (lwEnv, loader) in
     let debugTypeFields = switch mapLookup (_getTyConExn "DebugInfo" configEnv) (_getTCEnv loader).tyConEnv
       case Some (_, [], TyRecord x) then x
       case Some (_, _, _) then error "Compiler error: unexpected shape of DebugInfo"
@@ -52,20 +51,20 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
         then ulam_ "" true_
         else ulam_ "idx" (eqi_ (int_ 0) (modi_ (var_ "idx") (int_ samplingPeriod))) in
     match (if pigeons then 
-      (appf3_ (nvar_ (_getVarExn "continuePigeons" continueEnv)) (int_ pigeonsExploreSteps)
-      , nvar_ (_getVarExn "mkContinueStatePigeons" continueEnv)
-      , nvar_ (_getVarExn "temperaturePigeons" continueEnv)
+      (appf3_ (nvar_ (_getVarExn "continuePigeons" lwEnv)) (int_ pigeonsExploreSteps)
+      , nvar_ (_getVarExn "mkContinueStatePigeons" lwEnv)
+      , nvar_ (_getVarExn "temperaturePigeons" lwEnv)
       )
     else if incrementalPrinting then
-      (appf3_ (nvar_ (_getVarExn "continueIncremental" continueEnv)) (int_ iterations)
-      , nvar_ (_getVarExn "mkContinueStateIncremental" continueEnv)
-      , nvar_ (_getVarExn "temperatureIncremental" continueEnv)
+      (appf3_ (nvar_ (_getVarExn "continueIncremental" lwEnv)) (int_ iterations)
+      , nvar_ (_getVarExn "mkContinueStateIncremental" lwEnv)
+      , nvar_ (_getVarExn "temperatureIncremental" lwEnv)
       )
     else 
       -- In the base case we do not need the sampling period or the serializer, so just forget them
-      (lam. lam. appf1_ (nvar_ (_getVarExn "continueBase" continueEnv)) (int_ iterations)
-      , nvar_ (_getVarExn "mkContinueStateBase" continueEnv)
-      , nvar_ (_getVarExn "temperatureBase" continueEnv)
+      (lam. lam. appf1_ (nvar_ (_getVarExn "continueBase" lwEnv)) (int_ iterations)
+      , nvar_ (_getVarExn "mkContinueStateBase" lwEnv)
+      , nvar_ (_getVarExn "temperatureBase" lwEnv)
       )
     ) with (specializedFunc, accInit, temperature) in
     let continue =
