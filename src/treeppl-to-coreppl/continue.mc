@@ -1,4 +1,25 @@
 include "ext/file-ext.mc"
+include "sys.mc"
+include "coreppl::coreppl-to-mexpr/mcmc-lightweight/config.mc"
+
+-- 
+-- Base -- only record the iteration index
+--
+let mkContinueStateBase : () -> Int = lam. 0
+
+let continueBase : all a. all b. Int -> Int -> b -> a -> (Int, Bool) =
+  lam iterations. lam acc. lam sampleInfo. lam sample.
+    -- printLn (strJoin " : " ["Base continue", int2string idx, int2string iterations]);
+    (addi acc 1, neqi acc iterations)
+
+let temperatureBase : Int -> Float = lam acc. 1.0
+
+-- 
+-- Incremental printing
+--
+let getJsonLn: JsonValue -> String = lam value.
+  let jStr = json2string value in
+  concat jStr "\n"
 
 let printSample : all a. (a -> JsonValue) -> Option WriteChannel -> a -> [String] ->  () = 
   lam serializer. lam optWc. lam sample. lam sampleInfo.
@@ -9,26 +30,33 @@ let printSample : all a. (a -> JsonValue) -> Option WriteChannel -> a -> [String
     let serSample = match sampleInfo with [] then serSample else strJoin "\t" (snoc sampleInfo serSample) in
     printer serSample
 
--- Do nothing when initalizing 
-let baseInit : () -> () = lam. ()
+let checkEnvForFn : () -> Option WriteChannel = lam.
+  match sysGetEnv "PPL_OUTPUT" with Some fn then
+    match fileWriteOpen fn with Some wc then
+      Some wc
+    else error (join ["Failed to open file ", fn])
+  else None ()
 
-let mkContinueStateBase : Option WriteChannel -> (Int, Option WriteChannel) =
-  lam optWc. (0, optWc)
+let mkContinueStateIncremental : () -> (Int, Option WriteChannel) = lam.
+  let optWc = checkEnvForFn () in
+  (0, optWc)
 
-let continueBase : all a. all b. Int -> Int -> (a -> JsonValue) -> (Int, Option WriteChannel) -> b -> a -> ((Int, Option WriteChannel), Bool) =
+let continueIncremental : all a. all b. Int -> Int -> (a -> JsonValue) -> (Int, Option WriteChannel) -> b -> a -> ((Int, Option WriteChannel), Bool) =
   lam iterations. lam samplingPeriod. lam serializer. lam acc. lam sampleInfo. lam sample.
     match acc with (idx, optWc) in
-    -- printLn (strJoin " : " ["Base continue", int2string idx, int2string iterations]);
+    -- printLn (strJoin " : " ["Incremental continue", int2string idx, int2string iterations]);
     (if eqi 0 (modi idx samplingPeriod) then printSample serializer optWc sample [] else ()); 
-    ((addi idx 1, optWc), neqi idx iterations)
+    if eqi idx iterations then 
+      (match optWc with Some wc then fileWriteClose wc else ());
+      ((addi idx 1, optWc), false)
+    else
+      ((addi idx 1, optWc), true)
   
-let temperatureBase : (Int, Option WriteChannel) -> Float = lam acc. 1.0
+let temperatureIncremental : (Int, Option WriteChannel) -> Float = lam acc. 1.0
 
--- We assume that Pigeons first issues a `call_sampler!(beta)`
-let pigeonsInit : () -> () = lam.
-  fileReadLine fileStdin;
-  printLn "response()"
-
+-- 
+-- Pigeons
+--
 recursive let listenPigeons : Float -> Float -> Option Float = lam weight. lam priorWeight.
   switch fileReadLine fileStdin
   case Some ("log_potential(" ++ beta ++ ")") then
@@ -48,13 +76,18 @@ recursive let listenPigeons : Float -> Float -> Option Float = lam weight. lam p
   end
 end
 
-let mkContinueStatePigeons : Option WriteChannel -> (Int, Float, Option WriteChannel) =
-  lam optWc. (0, 1.0, optWc)
+let mkContinueStatePigeons : () -> (Int, Float, Option WriteChannel) = lam.
+  -- Initialize Pigeons continue state. We assume that Pigeons first issues a `call_sampler!(beta)`
+  fileReadLine fileStdin;
+  printLn "response()";
+  let optWc = checkEnvForFn () in
+  (0, 1.0, optWc)
 
-let continuePigeons : all a. Int -> Int -> (a -> JsonValue) -> (Int, Float, Option WriteChannel) -> (Float, Float) -> a -> ((Int, Float, Option WriteChannel), Bool) =
+let continuePigeons : all a. Int -> Int -> (a -> JsonValue) -> (Int, Float, Option WriteChannel) -> SampleInfo -> a -> ((Int, Float, Option WriteChannel), Bool) =
   lam exploreSteps. lam samplingPeriod. lam serializer. lam acc. lam sampleInfo. lam sample.
     match acc with (idx, beta, optWc) in
-    match sampleInfo with (weight, priorWeight) in
+    let weight = sampleInfo.weight in
+    let priorWeight = sampleInfo.priorWeight in
     -- printLn (strJoin " : " ["Pigeons continue", int2string idx, float2string beta, float2string weight, float2string priorWeight]);
     (if and (eqi 0 (modi idx samplingPeriod)) (eqf beta 1.0) then 
       printSample serializer optWc sample [int2string idx, float2string beta]
@@ -65,6 +98,7 @@ let continuePigeons : all a. Int -> Int -> (a -> JsonValue) -> (Int, Float, Opti
     match optBeta with Some beta then 
         ((addi idx 1, beta, optWc), true) 
     else 
+        (match optWc with Some wc then fileWriteClose wc else ());
         ((addi idx 1, beta, optWc), false)
 
 let temperaturePigeons : (Int, Float, Option WriteChannel) -> Float =

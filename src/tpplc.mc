@@ -28,8 +28,9 @@ use TreePPLThings in
 let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod)) =
   let mk = lam debugIterations. lam samplingPeriod. lam incrementalPrinting. lam iterations. lam globalProb.
     lam driftKernel. lam driftScale. lam cps.
+    lam align. lam debugAlignment.
     lam pigeons. lam pigeonsGlobal. lam pigeonsExploreSteps.
-    lam align. lam debugAlignment. lam outputType. lam loader.
+    lam outputType. lam loader.
 
     match includeFileExn "." "stdlib::json.mc" loader with (jsonEnv, loader) in
     match includeFileExn "." "stdlib::string.mc" loader with (stringEnv, loader) in
@@ -50,17 +51,26 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
       else if eqi 1 samplingPeriod
         then ulam_ "" true_
         else ulam_ "idx" (eqi_ (int_ 0) (modi_ (var_ "idx") (int_ samplingPeriod))) in
+    match (if pigeons then 
+      (appf3_ (nvar_ (_getVarExn "continuePigeons" continueEnv)) (int_ pigeonsExploreSteps)
+      , nvar_ (_getVarExn "mkContinueStatePigeons" continueEnv)
+      , nvar_ (_getVarExn "temperaturePigeons" continueEnv)
+      )
+    else if incrementalPrinting then
+      (appf3_ (nvar_ (_getVarExn "continueIncremental" continueEnv)) (int_ iterations)
+      , nvar_ (_getVarExn "mkContinueStateIncremental" continueEnv)
+      , nvar_ (_getVarExn "temperatureIncremental" continueEnv)
+      )
+    else 
+      -- In the base case we do not need the sampling period or the serializer, so just forget them
+      (lam. lam. appf1_ (nvar_ (_getVarExn "continueBase" continueEnv)) (int_ iterations)
+      , nvar_ (_getVarExn "mkContinueStateBase" continueEnv)
+      , nvar_ (_getVarExn "temperatureBase" continueEnv)
+      )
+    ) with (specializedFunc, accInit, temperature) in
     let continue =
-      match (if pigeons then 
-        appf3_ (nvar_ (_getVarExn "continuePigeons" continueEnv)) (int_ pigeonsExploreSteps)
-      else
-        appf3_ (nvar_ (_getVarExn "continueBase" continueEnv)) (int_ iterations)
-      ) with specializedFunc in
       let appFunc = specializedFunc (int_ samplingPeriod) outputSer.serializer in
-      let accInit = nvar_ (_getVarExn (if pigeons then "mkContinueStatePigeons" else "mkContinueStateBase") continueEnv) in
       utuple_ [accInit, appFunc] in
-    let temperature = nvar_ (_getVarExn (if pigeons then "temperaturePigeons" else "temperatureBase") continueEnv) in
-    let init = nvar_ (_getVarExn (if pigeons then "pigeonsInit" else "baseInit") continueEnv) in
     let debug =
       if debugIterations then
         utuple_
@@ -86,12 +96,9 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
       { keepSample = keepSample
       , continue = continue
       , temperature = temperature
-      , init = init
       , globalProb = float_ globalProb
       , debug = debug
-      , pigeons = pigeons
-      , pigeonsGlobal = pigeonsGlobal
-      , pigeonsExploreSteps = pigeonsExploreSteps
+      , forceGlobal = pigeonsGlobal
       , driftKernel = driftKernel
       , driftScale = driftScale
       , cps = cps
@@ -115,6 +122,23 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
     { optFlagDef with long = "incremental-printing"
     , description = "Print each sample as it is produced instead of at the end."
     } in
+  let _pigeonsDefault : Bool = false in
+  let _pigeons : OptParser Bool = optMap (xor _pigeonsDefault) (optFlag
+    { optFlagDef with long = "pigeons"
+    , description = "Let Pigeons.jl control inference via stdio."
+    }) in
+  let _pigeonsGlobalDefault : Bool = true in
+  let _pigeonsGlobal : OptParser Bool = optMap (xor _pigeonsGlobalDefault) (optFlag
+    { optFlagDef with long = "pigeons-no-global"
+    , description = "Requires --pigeons. Do not use global moves when sampling at temperature 0.0"
+    }) in
+  let _pigeonsExploreStepsDefault : Int = 1 in
+  let _pigeonsExploreSteps : OptParser Int =
+    let opt = optArg
+      { optArgDefInt with long = "pigeons-explore-steps"
+      , description = concat "Requires --pigeons. The number of local MCMC steps to take before communicating with Pigeons.jl. Default: " (int2string _pigeonsExploreStepsDefault)
+      } in
+    optOr opt (optPure _pigeonsExploreStepsDefault) in
   let res = optApply (
     optApply (
       optApply (
@@ -127,11 +151,11 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
                 ) _driftKernel
               ) _driftScale
             ) _cps
-          ) _pigeons
-        ) _pigeonsGlobal
-      ) _pigeonsExploreSteps
-    )_align
-  ) _debugAlignment in
+          )_align
+        ) _debugAlignment
+      ) _pigeons
+    ) _pigeonsGlobal
+  ) _pigeonsExploreSteps in
   optMap2 (lam. lam x. x) (_methodFlag false "mcmc-lightweight") res in
 
 let wrapSimpleInferenceMethod
