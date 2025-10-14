@@ -5,7 +5,7 @@ include "coreppl::coreppl-to-mexpr/mcmc-lightweight/config.mc"
 -- 
 -- Base -- only record the iteration index
 --
-let mkContinueStateBase : () -> Int = lam. 0
+let accInitBase : () -> Int = lam. 0
 
 let continueBase : all a. all b. Int -> Int -> b -> a -> (Int, Bool) =
   lam iterations. lam acc. lam sampleInfo. lam sample.
@@ -37,7 +37,7 @@ let checkEnvForFn : () -> Option WriteChannel = lam.
     else error (join ["Failed to open file ", fn])
   else None ()
 
-let mkContinueStateIncremental : () -> (Int, Option WriteChannel) = lam.
+let accInitIncremental : () -> (Int, Option WriteChannel) = lam.
   let optWc = checkEnvForFn () in
   (0, optWc)
 
@@ -76,7 +76,7 @@ recursive let listenPigeons : Float -> Float -> Option Float = lam weight. lam p
   end
 end
 
-let mkContinueStatePigeons : () -> (Int, Float, Option WriteChannel) = lam.
+let accInitPigeons : () -> (Int, Float, Option WriteChannel) = lam.
   -- Initialize Pigeons continue state. We assume that Pigeons first issues a `call_sampler!(beta)`
   fileReadLine fileStdin;
   printLn "response()";

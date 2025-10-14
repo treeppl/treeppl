@@ -32,9 +32,6 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
     lam outputType. lam loader.
 
     match includeFileExn "." "stdlib::json.mc" loader with (jsonEnv, loader) in
-    match includeFileExn "." "stdlib::string.mc" loader with (stringEnv, loader) in
-    match includeFileExn "." "stdlib::basic-types.mc" loader with (basicEnv, loader) in
-    match includeFileExn "." "stdlib::ext/file-ext.mc" loader with (fileEnv, loader) in
     match includeFileExn "." "coreppl::coreppl-to-mexpr/mcmc-lightweight/config.mc" loader with (configEnv, loader) in
     match includeFileExn "." "treeppl::treeppl-to-coreppl/mcmc-lightweight.mc" loader with (lwEnv, loader) in
     let debugTypeFields = switch mapLookup (_getTyConExn "DebugInfo" configEnv) (_getTCEnv loader).tyConEnv
@@ -52,23 +49,22 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
         else ulam_ "idx" (eqi_ (int_ 0) (modi_ (var_ "idx") (int_ samplingPeriod))) in
     match (if pigeons then 
       (appf3_ (nvar_ (_getVarExn "continuePigeons" lwEnv)) (int_ pigeonsExploreSteps)
-      , nvar_ (_getVarExn "mkContinueStatePigeons" lwEnv)
+      , nvar_ (_getVarExn "accInitPigeons" lwEnv)
       , nvar_ (_getVarExn "temperaturePigeons" lwEnv)
       )
     else if incrementalPrinting then
       (appf3_ (nvar_ (_getVarExn "continueIncremental" lwEnv)) (int_ iterations)
-      , nvar_ (_getVarExn "mkContinueStateIncremental" lwEnv)
+      , nvar_ (_getVarExn "accInitIncremental" lwEnv)
       , nvar_ (_getVarExn "temperatureIncremental" lwEnv)
       )
     else 
-      -- In the base case we do not need the sampling period or the serializer, so just forget them
       (lam. lam. appf1_ (nvar_ (_getVarExn "continueBase" lwEnv)) (int_ iterations)
-      , nvar_ (_getVarExn "mkContinueStateBase" lwEnv)
+      , nvar_ (_getVarExn "accInitBase" lwEnv)
       , nvar_ (_getVarExn "temperatureBase" lwEnv)
       )
-    ) with (specializedFunc, accInit, temperature) in
+    ) with (unappContinue, accInit, temperature) in
     let continue =
-      let appFunc = specializedFunc (int_ samplingPeriod) outputSer.serializer in
+      let appFunc = unappContinue (int_ samplingPeriod) outputSer.serializer in
       utuple_ [accInit, appFunc] in
     let debug =
       if debugIterations then
