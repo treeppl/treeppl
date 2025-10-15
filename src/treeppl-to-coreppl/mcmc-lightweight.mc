@@ -12,8 +12,6 @@ let continueBase : all a. all b. Int -> Int -> b -> a -> (Int, Bool) =
     -- printLn (strJoin " : " ["Base continue", int2string idx, int2string iterations]);
     (addi acc 1, neqi acc iterations)
 
-let temperatureBase : Int -> Float = lam acc. 1.0
-
 -- 
 -- Incremental printing
 --
@@ -52,8 +50,6 @@ let continueIncremental : all a. all b. Int -> Int -> (a -> JsonValue) -> (Int, 
     else
       ((addi idx 1, optWc), true)
   
-let temperatureIncremental : (Int, Option WriteChannel) -> Float = lam acc. 1.0
-
 -- 
 -- Pigeons
 --
@@ -104,3 +100,8 @@ let continuePigeons : all a. Int -> Int -> (a -> JsonValue) -> (Int, Float, Opti
 let temperaturePigeons : (Int, Float, Option WriteChannel) -> Float =
   lam acc. match acc with (_, beta, _) in beta
 
+let globalProbPigeons : Bool -> Float -> (Int, Float, Option WriteChannel) -> Float =
+  lam forceGlobal. lam globalProb. lam acc.
+    match acc with (_, beta, _) in
+    if and forceGlobal (eqf beta 0.0)
+    then 1.0 else globalProb

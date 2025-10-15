@@ -51,18 +51,21 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
       (appf3_ (nvar_ (_getVarExn "continuePigeons" lwEnv)) (int_ pigeonsExploreSteps)
       , nvar_ (_getVarExn "accInitPigeons" lwEnv)
       , nvar_ (_getVarExn "temperaturePigeons" lwEnv)
+      , appf2_ (_getVarExn "globalProbPigeons" lwEnv) (bool_ pigeonsGlobal) (bool_ globalProb)
       )
     else if incrementalPrinting then
       (appf3_ (nvar_ (_getVarExn "continueIncremental" lwEnv)) (int_ iterations)
       , nvar_ (_getVarExn "accInitIncremental" lwEnv)
-      , nvar_ (_getVarExn "temperatureIncremental" lwEnv)
+      , ulam_ "" (float_ 1.0)
+      , ulam_ "" (float_ globalProb)
       )
     else 
       (lam. lam. appf1_ (nvar_ (_getVarExn "continueBase" lwEnv)) (int_ iterations)
       , nvar_ (_getVarExn "accInitBase" lwEnv)
-      , nvar_ (_getVarExn "temperatureBase" lwEnv)
+      , ulam_ "" (float_ 1.0)
+      , ulam_ "" (float_ globalProb)
       )
-    ) with (unappContinue, accInit, temperature) in
+    ) with (unappContinue, accInit, temperature, globalProb) in
     let continue =
       let appFunc = unappContinue (int_ samplingPeriod) outputSer.serializer in
       utuple_ [accInit, appFunc] in
@@ -91,9 +94,8 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
       { keepSample = keepSample
       , continue = continue
       , temperature = temperature
-      , globalProb = float_ globalProb
+      , globalProb = globalProb
       , debug = debug
-      , forceGlobal = pigeonsGlobal
       , driftKernel = driftKernel
       , driftScale = driftScale
       , cps = cps
