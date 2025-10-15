@@ -25,10 +25,11 @@ mexpr
 use TreePPLThings in
 
 let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod)) =
-  let mk = lam debugIterations. lam samplingPeriod. lam incrementalPrinting. lam iterations. lam globalProb.
+  let mk =
+    lam pigeonsInfo.  
+    lam debugIterations. lam samplingPeriod. lam incrementalPrinting. lam iterations. lam globalProb.
     lam driftKernel. lam driftScale. lam cps.
     lam align. lam debugAlignment.
-    lam pigeons. lam pigeonsGlobal. lam pigeonsExploreSteps.
     lam outputType. lam loader.
 
     match includeFileExn "." "stdlib::json.mc" loader with (jsonEnv, loader) in
@@ -42,16 +43,18 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
     let fullDebugType = TyRecord
       { debugTypeFields with fields = mapInsert (stringToSid "durationMs") tyfloat_ debugTypeFields.fields } in
     match serializationPairsFor [outputType, fullDebugType] loader with (loader, [outputSer, debugSer]) in
+    let pigeons = match pigeonsInfo with Some _ then true else false in
     let keepSample = if incrementalPrinting
       then ulam_ "" false_
       else if eqi 1 samplingPeriod
         then ulam_ "" true_
         else ulam_ "idx" (eqi_ (int_ 0) (modi_ (var_ "idx") (int_ samplingPeriod))) in
     match (if pigeons then 
+      match pigeonsInfo with Some (pigeonsGlobal, pigeonsExploreSteps) in
       (appf3_ (nvar_ (_getVarExn "continuePigeons" lwEnv)) (int_ pigeonsExploreSteps)
       , nvar_ (_getVarExn "accInitPigeons" lwEnv)
       , nvar_ (_getVarExn "temperaturePigeons" lwEnv)
-      , appf2_ (_getVarExn "globalProbPigeons" lwEnv) (bool_ pigeonsGlobal) (bool_ globalProb)
+      , appf2_ (nvar_ (_getVarExn "globalProbPigeons" lwEnv)) (bool_ pigeonsGlobal) (float_ globalProb)
       )
     else if incrementalPrinting then
       (appf3_ (nvar_ (_getVarExn "continueIncremental" lwEnv)) (int_ iterations)
@@ -119,40 +122,36 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
     { optFlagDef with long = "incremental-printing"
     , description = "Print each sample as it is produced instead of at the end."
     } in
-  let _pigeonsDefault : Bool = false in
-  let _pigeons : OptParser Bool = optMap (xor _pigeonsDefault) (optFlag
-    { optFlagDef with long = "pigeons"
+  let _pigeons : OptParser Bool = optNoArg
+    { optNoArgDef true with long = "pigeons"
     , description = "Let Pigeons.jl control inference via stdio."
-    }) in
+    } in
   let _pigeonsGlobalDefault : Bool = true in
   let _pigeonsGlobal : OptParser Bool = optMap (xor _pigeonsGlobalDefault) (optFlag
     { optFlagDef with long = "pigeons-no-global"
-    , description = "Requires --pigeons. Do not use global moves when sampling at temperature 0.0"
+    , description = "Do not use global moves when sampling at temperature 0.0"
     }) in
   let _pigeonsExploreStepsDefault : Int = 1 in
   let _pigeonsExploreSteps : OptParser Int =
     let opt = optArg
       { optArgDefInt with long = "pigeons-explore-steps"
-      , description = concat "Requires --pigeons. The number of local MCMC steps to take before communicating with Pigeons.jl. Default: " (int2string _pigeonsExploreStepsDefault)
+      , description = concat "The number of local MCMC steps to take before communicating with Pigeons.jl. Default: " (int2string _pigeonsExploreStepsDefault)
       } in
     optOr opt (optPure _pigeonsExploreStepsDefault) in
+  let pigeonsOptions = optOptional (optMap3 (lam. lam pg. lam pes. (pg, pes)) _pigeons _pigeonsGlobal _pigeonsExploreSteps) in
   let res = optApply (
     optApply (
       optApply (
         optApply (
           optApply (
             optApply (
-              optApply (
-                optApply (
-                  optMap5 mk debugIterations samplingPeriod incrementalPrinting _particles _mcmcLightweightGlobalProb
-                ) _driftKernel
-              ) _driftScale
-            ) _cps
-          )_align
-        ) _debugAlignment
-      ) _pigeons
-    ) _pigeonsGlobal
-  ) _pigeonsExploreSteps in
+              optMap5 mk pigeonsOptions debugIterations samplingPeriod incrementalPrinting _particles
+            ) _mcmcLightweightGlobalProb
+          ) _driftKernel
+        ) _driftScale
+      ) _cps
+    ) _align
+  ) _debugAlignment in
   optMap2 (lam. lam x. x) (_methodFlag false "mcmc-lightweight") res in
 
 let wrapSimpleInferenceMethod
