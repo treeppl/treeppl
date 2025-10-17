@@ -19,31 +19,41 @@ let getJsonLn: JsonValue -> String = lam value.
   let jStr = json2string value in
   concat jStr "\n"
 
-let printSample : all a. (a -> JsonValue) -> Option WriteChannel -> a -> [String] ->  () = 
-  lam serializer. lam optWc. lam sample. lam sampleInfo.
-    let printer = match optWc with Some ch then
-      lam s. (fileWriteString ch s); (fileWriteFlush ch)
-    else print in
+let sample2string : all a. (a -> JsonValue) -> a -> [String] -> String = 
+  lam serializer. lam sample. lam sampleInfo.
     let serSample = getJsonLn (serializer sample) in
-    let serSample = match sampleInfo with [] then serSample else strJoin "\t" (snoc sampleInfo serSample) in
-    printer serSample
+    let serSample = match sampleInfo with []
+    then serSample
+    else strJoin "\t" (snoc sampleInfo serSample) in
+    serSample
 
-let checkEnvForFn : () -> Option WriteChannel = lam.
+let printFile : all a. String -> WriteChannel -> () = 
+  lam sampleStr. lam wc. 
+    fileWriteString wc sampleStr;
+    fileWriteFlush wc 
+
+let tryOpenSampleFile : () -> Option WriteChannel = lam.
   match sysGetEnv "PPL_OUTPUT" with Some fn then
-    match fileWriteOpen fn with Some wc then
-      Some wc
+    match fileWriteOpen fn with Some wc then Some wc
     else error (join ["Failed to open file ", fn])
   else None ()
 
 let accInitIncremental : () -> (Int, Option WriteChannel) = lam.
-  let optWc = checkEnvForFn () in
+  -- Check for a file set by PPL_OUTPUT. If none is given then default to printing to stdout
+  let optWc = tryOpenSampleFile () in
   (0, optWc)
 
 let continueIncremental : all a. all b. Int -> Int -> (a -> JsonValue) -> (Int, Option WriteChannel) -> b -> a -> ((Int, Option WriteChannel), Bool) =
   lam iterations. lam samplingPeriod. lam serializer. lam acc. lam sampleInfo. lam sample.
     match acc with (idx, optWc) in
     -- printLn (strJoin " : " ["Incremental continue", int2string idx, int2string iterations]);
-    (if eqi 0 (modi idx samplingPeriod) then printSample serializer optWc sample [] else ()); 
+    (if eqi 0 (modi idx samplingPeriod) then
+      let sampleStr = sample2string serializer sample [] in
+      let printer = match optWc with Some wc
+        then lam s. printFile s wc
+        else lam s. print s in 
+      printer sampleStr
+    else ()); 
     if eqi idx iterations then 
       (match optWc with Some wc then fileWriteClose wc else ());
       ((addi idx 1, optWc), false)
@@ -72,11 +82,16 @@ recursive let listenPigeons : Float -> Float -> Option Float = lam weight. lam p
   end
 end
 
-let accInitPigeons : () -> (Int, Float, Option WriteChannel) = lam.
+let accInitPigeons : Bool -> () -> (Int, Float, Option WriteChannel) = lam incrementalPrinting. lam.
   -- Initialize Pigeons continue state. We assume that Pigeons first issues a `call_sampler!(beta)`
   fileReadLine fileStdin;
   printLn "response()";
-  let optWc = checkEnvForFn () in
+  let optWc = tryOpenSampleFile () in
+  -- If we are printing samples from Pigeons then we must ensure that a filename is set
+  (if incrementalPrinting then 
+    match optWc with None () then error "You must set `PPL_OUTPUT` with a filename to print samples with Pigeons"
+    else ()
+  else ());
   (0, 1.0, optWc)
 
 let continuePigeons : all a. Int -> Int -> (a -> JsonValue) -> (Int, Float, Option WriteChannel) -> SampleInfo -> a -> ((Int, Float, Option WriteChannel), Bool) =
@@ -86,7 +101,10 @@ let continuePigeons : all a. Int -> Int -> (a -> JsonValue) -> (Int, Float, Opti
     let priorWeight = sampleInfo.priorWeight in
     -- printLn (strJoin " : " ["Pigeons continue", int2string idx, float2string beta, float2string weight, float2string priorWeight]);
     (if and (eqi 0 (modi idx samplingPeriod)) (eqf beta 1.0) then 
-      printSample serializer optWc sample [int2string idx, float2string beta]
+      match optWc with Some wc then
+        let sampleStr = sample2string serializer sample [int2string idx] in
+        printFile sampleStr wc
+      else printLn "Not writing sample" 
     else ()); 
     let optBeta = if (eqi 0 (modi idx exploreSteps)) then 
       listenPigeons weight priorWeight

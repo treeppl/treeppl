@@ -44,26 +44,29 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
       { debugTypeFields with fields = mapInsert (stringToSid "durationMs") tyfloat_ debugTypeFields.fields } in
     match serializationPairsFor [outputType, fullDebugType] loader with (loader, [outputSer, debugSer]) in
     let pigeons = match pigeonsInfo with Some _ then true else false in
-    let keepSample = if incrementalPrinting
+    let keepSample = if or incrementalPrinting pigeons
       then ulam_ "" false_
       else if eqi 1 samplingPeriod
         then ulam_ "" true_
         else ulam_ "idx" (eqi_ (int_ 0) (modi_ (var_ "idx") (int_ samplingPeriod))) in
-    match (if pigeons then 
+    match (
+    -- The order here is important since the pigeons option uses the incremental
+    -- printing flag too.
+    if pigeons then 
       match pigeonsInfo with Some (pigeonsGlobal, pigeonsExploreSteps) in
-      (appf3_ (nvar_ (_getVarExn "continuePigeons" lwEnv)) (int_ pigeonsExploreSteps)
-      , nvar_ (_getVarExn "accInitPigeons" lwEnv)
+      ( appf3_ (nvar_ (_getVarExn "continuePigeons" lwEnv)) (int_ pigeonsExploreSteps)
+      , appf1_ (nvar_ (_getVarExn "accInitPigeons" lwEnv)) (bool_ incrementalPrinting)
       , nvar_ (_getVarExn "temperaturePigeons" lwEnv)
       , appf2_ (nvar_ (_getVarExn "globalProbPigeons" lwEnv)) (bool_ pigeonsGlobal) (float_ globalProb)
       )
     else if incrementalPrinting then
-      (appf3_ (nvar_ (_getVarExn "continueIncremental" lwEnv)) (int_ iterations)
+      ( appf3_ (nvar_ (_getVarExn "continueIncremental" lwEnv)) (int_ iterations)
       , nvar_ (_getVarExn "accInitIncremental" lwEnv)
       , ulam_ "" (float_ 1.0)
       , ulam_ "" (float_ globalProb)
       )
     else 
-      (lam. lam. appf1_ (nvar_ (_getVarExn "continueBase" lwEnv)) (int_ iterations)
+      ( lam. lam. appf1_ (nvar_ (_getVarExn "continueBase" lwEnv)) (int_ iterations)
       , nvar_ (_getVarExn "accInitBase" lwEnv)
       , ulam_ "" (float_ 1.0)
       , ulam_ "" (float_ globalProb)
