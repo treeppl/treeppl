@@ -16,6 +16,7 @@ include "mexpr/type-check.mc"
 include "mexpr/generate-json-serializers.mc"
 include "mexpr/utils.mc"
 include "mexpr/duplicate-code-elimination.mc"
+include "mexpr/deadcode.mc"
 include "mexpr/generate-utest.mc"
 include "mexpr/uncurried.mc"
 include "ocaml/mcore.mc"
@@ -1009,7 +1010,7 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
   + TreePPLOperators
   + StripUtestLoader + PprintUnifyErrorNumArguments + UncurriedTypeCheck + SymUncurried + UncurriedPrettyPrint + LowerUncurryLoader
   + UnifyUncurriedMixed
-  + MExprLowerNestedPatterns + MCoreCompileLang
+  + MExprLowerNestedPatterns + MExprDeadcodeElimination + MCoreCompileLang
   + PhaseStats
   + BPFCompilerPicker + APFCompilerPicker + ImportanceCompilerPicker
   + NaiveMCMCCompilerPicker + TraceMCMCCompilerPicker + PIMHCompilerPicker
@@ -1190,6 +1191,8 @@ let compileTpplToExecutable = lam frontend. lam transformations. lam mkInference
     res.cleanup ();
     frontend.output in
   let hooks = mkEmptyHooks ocamlCompile in
+  let ast = deadcodeElimination ast in
+  endPhaseStatsExpr log "deadcode-elimination" ast;
   let ast = lowerAll ast in
   endPhaseStatsExpr log "lower-all" ast;
   let res = compileMCore ast hooks in
