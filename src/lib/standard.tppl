@@ -39,6 +39,22 @@ function maxInt(a : Int, b : Int) => Int {
   return mathMaxi(a)(b);
 }
 
+/* -----------------------
+   Real to Int convertion
+   ----------------------- */
+
+function floor(x : Real) => Int {
+  return floor(x);
+}
+
+function ceil(x : Real) => Int {
+  return ceil(x);
+}
+
+function round(x : Real) => Int {
+  return round(x);
+}
+
 /* -------------------
    Sequence operations
    ------------------- */
