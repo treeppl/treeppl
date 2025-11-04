@@ -53,6 +53,11 @@ type TestDistributions = TestDistributions {
   scoreGaussian: Real,
   logScoreGaussian: Real,
 
+  aGeometric: Int,
+  someGeometric: Int[],
+  scoreGeometric: Real,
+  logScoreGeometric: Real,
+
   aBinomial: Int,
   someBinomial: Int[],
   scoreBinomial: Real,
@@ -145,6 +150,14 @@ model function distributions() => TestDistributions {
   let scoreG = gaussianScore(-1.5, myGaussP);
   let logScoreG = gaussianLogScore(-1.5, myGaussP);
 
+  // Geometric
+  assume aGeo ~ Geometric(0.5);
+
+  let myGeoP = GeometricParam {prob = 0.5};
+  let someGeo = iid(geometric, myGeoP, 10);
+  let scoreGeo = geometricScore(5, myGeoP);
+  let logScoreGeo = geometricLogScore(5, myGeoP);
+
   // Binomial
   assume aBn ~ Binomial(10, 0.5);
 
@@ -204,6 +217,11 @@ model function distributions() => TestDistributions {
     someGaussian = someG,
     scoreGaussian = scoreG,
     logScoreGaussian = logScoreG,
+
+    aGeometric = aGeo,
+    someGeometric = someGeo,
+    scoreGeometric = scoreGeo,
+    logScoreGeometric = logScoreGeo,
 
     aBinomial = aBn,
     someBinomial = someBn,
