@@ -44,15 +44,15 @@ function maxInt(a : Int, b : Int) => Int {
    ----------------------- */
 
 function floor(x : Real) => Int {
-  return floor(x);
+  return mathFloor(x);
 }
 
 function ceil(x : Real) => Int {
-  return ceil(x);
+  return mathCeil(x);
 }
 
 function round(x : Real) => Int {
-  return round(x);
+  return mathRound(x);
 }
 
 /* -------------------
