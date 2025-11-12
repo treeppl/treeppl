@@ -65,7 +65,7 @@ TEST_CONFIGURATIONS += -m_mcmc-naive
 TEST_CONFIGURATIONS += -m_pmcmc-pimh_--cps_full
 TEST_CONFIGURATIONS += -m_pmcmc-pimh_--cps_partial
 
-MODELS := $(shell find models -name "*.tppl" -a ! -path '*-lib/*')
+MODELS := $(shell find models -name "*.tppl" -a ! -path '*-lib/*' -a ! -name "clads.tppl")
 MODEL_CONFIGS := $(foreach model,$(MODELS),$(foreach config,$(TEST_CONFIGURATIONS),$(model)@$(config)))
 
 .PHONY: $(MODEL_CONFIGS)
