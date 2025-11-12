@@ -538,6 +538,24 @@ function gaussianScore(x: Real, param: GaussianParam) => Real {
   return gaussianPdf(param.mean)(param.dev)(x);
 }
 
+// Geometric
+type GeometricParam = GeometricParam {
+  prob: Real
+}
+
+function geometric(param: GeometricParam) => Int {
+  assume x ~ Geometric(param.prob);
+  return x;
+}
+
+function geometricLogScore(x: Int, param: GeometricParam) => Real {
+  return geometricLogPmf(param.prob)(x);
+}
+
+function geometricScore(x: Int, param: GeometricParam) => Real {
+  return geometricPmf(param.prob)(x);
+}
+
 // Binomial
 type BinomialParam = BinomialParam {
   n: Int,

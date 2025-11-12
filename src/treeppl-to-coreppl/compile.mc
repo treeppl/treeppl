@@ -515,6 +515,15 @@ lang TreePPLCompile
       ty = tyunknown_,
       info = d.info
     }
+  
+  | GeometricExprTppl d ->
+    TmDist {
+      dist = DGeometric {
+        p = compileExprTppl context d.prob
+      },
+      ty = tyunknown_,
+      info = d.info
+  }
 
   | PoissonExprTppl d ->
     TmDist {
