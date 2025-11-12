@@ -31,6 +31,10 @@ let seqFoldl = foldl
 let seqFoldli = foldli
 let seqAny = any
 
+let mathFloor = floorfi
+let mathCeil = ceilfi
+let mathRound = roundfi
+
 let float2string = float2string
 let const_int2string = int2string
 
