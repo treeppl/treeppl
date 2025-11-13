@@ -205,11 +205,11 @@
         "nixpkgs": "nixpkgs_3"
       },
       "locked": {
-        "lastModified": 1762951956,
-        "narHash": "sha256-9oWglRw+78LvSNQG2kB8zESj9fYisHqQQALEPuWKjMw=",
+        "lastModified": 1763049881,
+        "narHash": "sha256-ifP90w13aC87Xg8cin3hTQBfhtLBvLewDfMsJh025bw=",
         "owner": "elegios",
         "repo": "relocatable.nix",
-        "rev": "51ec0e642ba7bd5e38eb64240831959831df0a79",
+        "rev": "68a74ac039d499977771cc5ad5cd8089b0761d03",
         "type": "github"
       },
       "original": {
