@@ -107,6 +107,10 @@ model function blub(n: Int, pi: Real, trump: Bool, coinflips: Bool[], text: Stri
   printLn(int2string(ceil(0.5)));
   printLn(int2string(round(0.5)));
 
+  printLn("Conditional expression");
+  let x = when false { 7; } else { 42; };
+  debug(x);
+
   for i in 1 to 10 {
     if i > 5.0 {
       print("\n");
