@@ -165,21 +165,6 @@
         "type": "github"
       }
     },
-    "nixpkgs_3": {
-      "locked": {
-        "lastModified": 1655373859,
-        "narHash": "sha256-cWzphupbw161K5p6yA8L58Wcc5oFAISit+VkPhcBNMw=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "af97e1313dc3d05c22faa9b541e69c6bff02becb",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
     "relocatable": {
       "inputs": {
         "flake-utils": "flake-utils_4",
@@ -202,14 +187,16 @@
     "relocatable_2": {
       "inputs": {
         "flake-utils": "flake-utils_5",
-        "nixpkgs": "nixpkgs_3"
+        "nixpkgs": [
+          "nixpkgs"
+        ]
       },
       "locked": {
-        "lastModified": 1763049881,
-        "narHash": "sha256-ifP90w13aC87Xg8cin3hTQBfhtLBvLewDfMsJh025bw=",
+        "lastModified": 1763399696,
+        "narHash": "sha256-H19tupNDXwLeInGpkHLploEY6AxdI4VbkSD2QoFiYFU=",
         "owner": "elegios",
         "repo": "relocatable.nix",
-        "rev": "68a74ac039d499977771cc5ad5cd8089b0761d03",
+        "rev": "81ff68c1f3a7a359dfcf5274b59adecafc016783",
         "type": "github"
       },
       "original": {
