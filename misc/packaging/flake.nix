@@ -3,6 +3,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     relocatable.url = "github:elegios/relocatable.nix";
+    relocatable.inputs.nixpkgs.follows = "nixpkgs";
     miking.url = "github:miking-lang/miking?dir=misc/packaging";
     miking.inputs.nixpkgs.follows = "nixpkgs";
     miking-dppl.url = "github:miking-lang/miking-dppl?dir=misc/packaging";
@@ -24,17 +25,17 @@
           treeppl-tmp-tar-gz = relocatable.bundlers.${system}.fixedLocationTarGz {
             drv = treeppl-unwrapped;
             tarName = "${treeppl-unwrapped.name}-${system}";
-            extraSetup = storePath: ''
-              for site in ${storePath}*/lib/ocaml/*/site-lib; do
+            extraSetup = dep: ''
+              for site in ${dep}/lib/ocaml/*/site-lib; do
                 OCAMLPATH="$site''${OCAMLPATH:+:''${OCAMLPATH}}"
               done
               export OCAMLPATH
-              for mcore in ${storePath}*/lib/mcore/*; do
+              for mcore in ${dep}/lib/mcore/*; do
                 MCORE_LIBS="$(basename "$mcore")=$mcore''${MCORE_LIBS:+:''${MCORE_LIBS}}"
               done
               export MCORE_LIBS
             '';
-            runtimeInputs = [pkgs.ocamlPackages.findlib pkgs.ocamlPackages.owl pkgs.stdenv.cc];
+            runtimeInputs = [pkgs.ocamlPackages.findlib pkgs.ocamlPackages.owl pkgs.stdenv.cc mdpkgs.miking-dppl-lib];
           };
         in
           rec {
