@@ -104,7 +104,7 @@ let continuePigeons : all a. Int -> Int -> (a -> JsonValue) -> (Int, Float, Opti
       match optWc with Some wc then
         let sampleStr = sample2string serializer sample [int2string idx] in
         printFile sampleStr wc
-      else printLn "Not writing sample" 
+      else () 
     else ()); 
     let optBeta = if (eqi 0 (modi idx exploreSteps)) then 
       listenPigeons weight priorWeight
