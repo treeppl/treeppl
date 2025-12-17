@@ -1,0 +1,127 @@
+// TreePPL script for inference of non-clock trees
+// under the Jukes Cantor model. It is naive in that
+// it assumes that belief propagation (pruning) is
+// implemented in the backend.
+
+// Data is a matrix of aligned DNA sequences, with
+// each row corresponding to the sequence for one
+// particular taxon. The first sequence is assumed
+// to be the outgroup, and used to direct the tree,
+// that is, the tree is "rooted" on the interior
+// node connecting to the outgroup leaf.
+//
+// States are represented by integers as follows:
+//   0: "A" for adenine
+//   1: "C" for cytosine
+//   2: "G" for guanine
+//   3: "T" for thymine
+//
+// For observed states, we use the codes above plus:
+//   4: "-" for gap (all states possible, from the alignment algorithm)
+//
+// For a completely general model, the observations should be converted to
+// categorical distributions on the state space, summarizing what the inference
+// from machine readings and alignment
+
+
+// How do we include the tree-stdlib???
+
+
+// Model functions
+// ===============
+
+// Create seed nonclock topology with three leaves and one (computation) root
+function seedTopology() => TopologyTree
+{
+    let newLeaf1 = Leaf{leafSet=LeafSet{[1]}}
+    let newLeaf2 = Leaf{leafSet=LeafSet{[2]}}
+    let newLeaf3 = Leaf{leafSet=LeafSet{[3]}}
+
+    return Root{leafSet=LeafSet{[1,2,3]}, left=newLeaf2, right=newLeaf3, side==newLeaf1}
+}
+
+// Function that inserts a new leaf in a specified place, expanding a topology
+function growTopology(  tree: TopologyTree,
+                        leafToAdd: Int,
+                        insertSet: LeafSet ) => TopologyTree
+{
+    if (tree.leafSet == insertSet) {
+
+        // We are the insert node!
+        // Without loss of generality, insert the leaf as right child
+        let newLeaf = Leaf{leafSet=LeafSet{[addIndex]}}
+        
+        // package in new node
+        return Node{leafSet=union(tree.leafSet,newLeaf.leafSet), left=tree, right=newLeaf}
+    }
+
+    if (tree is Node || tree is Root) {
+
+        if (insertSet %in% tree.left.leafSet) {
+
+            let newLeft = growTree(tree.left, leafToAdd, insertSet)
+
+            return Node{leafSet=union(newLeft.leafSet, tree.right.leafSet), left=newLeft, right=tree.right}
+
+        } else if (insertSet %in% tree.right.leafSet) {
+
+            let newRight = growTree(tree.right, leafToAdd, insertSet)
+            
+            return Node{leafSet=union(tree.left.leafSet,newRight.leafSet), left=tree.left, right=newRight}
+        }
+    }
+
+    if (tree is Root && insertLeafSet == tree.side.leafSet) {
+
+        // The insert node is the outgroup, we need to maintain the root
+        // so this case is a little more involved thant he ones above
+        // Without loss of generality, insert the new leaf as right child
+        // of root node (and not as ancestor of outgroup = side child)
+
+        let newNode = Node{leafSet=union(tree.left.leafSet,tree.right.leafSet), left=tree.left, right=tree.right}
+        let newLeaf = Leaf{leafSet=LeafSet{[leafToAdd]}}
+    
+        return Root{leafSet=tree.leafSet, left=newNode, right=newLeaf, side=tree.side}
+    }
+
+    return tree;
+}
+
+// Recursive function to build tree topology
+function buildTopologyTree( tree:SeqTree,
+                    data: Int[][],
+                    leaftoAdd: Int,
+                    pMat: function(Real)=>Matrix[Real],
+                    proposeStateProbs: Real[]) => SeqTree
+{
+    leafSets <- getLeafSets(tree)
+
+    assume index ~ DiscreteUniform(numNodes(tree))
+        
+    let newTree = growTree(tree, data, leafToAdd, leafSets[index])
+
+    if (leafToAdd < ntax)
+        return buildTree(newTree,leafToAdd+1)
+        
+    return newTree
+}
+
+// Function to evolve sequences
+function evolveSeqs(topTree: TopologyTree, pMat: function(Real)=>Matrix[Real], pi: Real) => SeqTree
+{
+
+}
+
+// Model function
+model function myModel(data: Int[][]) => SeqTree[]
+{
+    // Define stationary probs 
+    pi <- [0.25,0.25,0.25,0.25]
+
+    // Draw random topology
+    let treeTopology = buildTopology(seedTopology(), 4)
+
+    // Evolve sequences, generating a sequence tree (nonclock)
+    return evolveSeqs(treeTopology, pi, jcPMat)
+}
+
