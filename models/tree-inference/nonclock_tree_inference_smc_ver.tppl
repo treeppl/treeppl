@@ -55,7 +55,7 @@ function seedTree(  data: Int[][],
     for (i in 1 to nchar) observe newLeaf2.seq[i] ~ Categorical(ctmc(pR,rootSeq[i]))
     for (i in 1 to nchar) observe newLeaf3.seq[i] ~ Categorical(ctmc(pS,rootSeq[i]))
 
-    return Root{leafSet=LeafSet{[1 to nchar]}, seq=rootSeq, left=newLeaf2, right=newLeaf3, side==newLeaf1}
+    return Root{leafSet=LeafSet{[1,2,3]}, seq=rootSeq, left=newLeaf2, right=newLeaf3, side==newLeaf1}
 }
 
 // Function that inserts a new leaf in a specified place, updating necessary parts of the tree
@@ -66,6 +66,8 @@ function growTree(  tree: seqTree,
                     pMat: function(Real)=>Matrix[Real],
                     proposeStateProbs: Real[] ) => SeqTree
 {
+    let nchar = length(data[1])
+
     if (tree.leafSet == insertSet) {
 
         // We are the insert node!
@@ -118,17 +120,17 @@ function growTree(  tree: seqTree,
         }
     }
 
-    if (tree is Root && insertLeafSet == tree.side.leafSet) {
+    if (tree is Root && insertSet == tree.side.leafSet) {
 
         // The insert node is the outgroup, we need to maintain the root
-        // so this case is a little more involved thant he ones above
+        // so this case is a little more involved than the ones above
+
         // Without loss of generality, insert the new leaf as right child
         // of root node (and not as ancestor of outgroup = side child)
 
         let pL = pMat(tree.left.brlen)
         let pR = pMat(tree.right.brlen)
 
-        cancel tree.seq
         for i in 1 to nchar { propose seq[i]           ~ Categorical(proposeStateProbs) }
         for i in 1 to nchar { update tree.left.seq[i]  ~ Categorical(ctmc(seq[i], pL) }
         for i in 1 to nchar { update tree.right.seq[i] ~ Categorical(ctmc(seq[i], pR) }
@@ -141,13 +143,15 @@ function growTree(  tree: seqTree,
         let pRootS = pMat(tree.side.brlen)
 
         let newNode = Node{leafSet=union(tree.left.leafSet,tree.right.leafSet), seq=seq, brlen=v1, left=tree.left, right=tree.right}
-        let newLeaf = Leaf{leafSet=LeafSet{addIndex}, seq=data[addIndex], brlen=v2}
-    
+        let newLeaf = Leaf{leafSet=LeafSet{[addIndex]}, seq=data[addIndex], brlen=v2}
+  
+        // We do not cancel and re-propose the root sequence as it is drawn from pi,
+        // and no update is needed of this statement
         for i in 1 to nchar { update  newNode.seq[i]   ~ Categorical(ctmc(tree.seq[i], pRootL)) }
         for i in 1 to nchar { observe newLeaf.seq[i]   ~ Categorical(ctmc(tree.seq[i], pRootR)) }
         for i in 1 to nchar { observe tree.side.seq[i] ~ Categorical(ctmc(tree.seq[i], pRootS)) }
 
-        return Root{leafSet=tree.leafSet, seq=tree.seq, left=newNode, right=newLeaf, side=tree.side}
+        return Root{leafSet=union(tree.leafSet,newLeaf), seq=tree.seq, left=newNode, right=newLeaf, side=tree.side}
     }
 
     return tree;
