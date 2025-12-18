@@ -40,17 +40,17 @@ function seedTopology() => TopologyTree
     return Root{leafSet=LeafSet{[1,2,3]}, left=newLeaf2, right=newLeaf3, side==newLeaf1}
 }
 
-// Function that inserts a new leaf in a specified place, expanding a topology
+// Insert a new leaf in a specified place, expanding a topology
 function growTopology(  tree: TopologyTree,
                         leafToAdd: Int,
                         insertSet: LeafSet ) => TopologyTree
 {
     if (tree.leafSet == insertSet) {
 
-        // We are the insert node!
+        // We are the insert node
         // Without loss of generality, insert the leaf as right child
         let newLeaf = Leaf{leafSet=LeafSet{[addIndex]}}
-        
+
         // package in new node
         return Node{leafSet=union(tree.leafSet,newLeaf.leafSet), left=tree, right=newLeaf}
     }
@@ -71,57 +71,104 @@ function growTopology(  tree: TopologyTree,
         }
     }
 
-    if (tree is Root && insertLeafSet == tree.side.leafSet) {
+    if (tree is Root && insertSet == tree.side.leafSet) {
 
         // The insert node is the outgroup, we need to maintain the root
-        // so this case is a little more involved thant he ones above
+        // so this case is a little more involved than the ones above
+
         // Without loss of generality, insert the new leaf as right child
         // of root node (and not as ancestor of outgroup = side child)
 
         let newNode = Node{leafSet=union(tree.left.leafSet,tree.right.leafSet), left=tree.left, right=tree.right}
         let newLeaf = Leaf{leafSet=LeafSet{[leafToAdd]}}
     
-        return Root{leafSet=tree.leafSet, left=newNode, right=newLeaf, side=tree.side}
+        return Root{leafSet=union(newNode.leafSet,newLeaf.leafSet,tree.side.leafSet), left=newNode, right=newLeaf, side=tree.side}
     }
 
     return tree;
 }
 
 // Recursive function to build tree topology
-function buildTopologyTree( tree:SeqTree,
-                    data: Int[][],
-                    leaftoAdd: Int,
-                    pMat: function(Real)=>Matrix[Real],
-                    proposeStateProbs: Real[]) => SeqTree
+function buildTopologyTree( tree:TopologyTree,
+                            leaftoAdd: Int,
+                            nLeaves: Int ) => TopologyTree
 {
-    leafSets <- getLeafSets(tree)
-
-    assume index ~ DiscreteUniform(numNodes(tree))
+    assume insertSet ~ DiscreteUniform(getLeafSets(tree))
         
-    let newTree = growTree(tree, data, leafToAdd, leafSets[index])
+    let newTree = growTree(tree, leafToAdd, insertSet)
 
-    if (leafToAdd < ntax)
-        return buildTree(newTree,leafToAdd+1)
-        
-    return newTree
+    if (leafToAdd == nLeaves)
+        return newTree
+    else
+        return buildTopology(newTree,leafToAdd+1)
 }
 
-// Function to evolve sequences
-function evolveSeqs(topTree: TopologyTree, pMat: function(Real)=>Matrix[Real], pi: Real) => SeqTree
+// Function to draw a topology uniformly at random from all
+// possible topologies
+function getRandomTopology(nLeaves: Int) => TopologyTree
 {
+    assert(nLeaves>3)
 
+    return buildTopology(seedTopology(), 4, nLeaves)
+}
+
+// Evolve sequences on the topology, generating a SeqTree
+function evolveSeqs(topRoot: TopologyRoot,
+                    data: Int[][],
+                    pMat: function(Real)=>Matrix[Real],
+                    pi: Real) => SeqTree
+{
+        
+    for (i in 1 to length(datai[1])) { assume seq[i] ~ Categorical(pi) }
+        
+    let left  = evolveBranch(seq, topRoot.left,  data, pMat, pi)
+    let right = evolveBranch(seq, topRoot.right, data, pMat, pi)
+    let side  = evolveBranch(seq, topRoot.side,  data, pMat, pi)
+        
+    return Root{leafSet=topRoot.leafSet, seq=seq, left=left, right=right, side=side}
+}
+
+// Evolve sequence along a branch, generating
+// the corresponding SeqTree node in the process
+function evolveBranch(  ancSeq: Int[],
+                        topTree:TopologyTree,
+                        data: Int[][],
+                        pMat: function(Real)=>Matrix[Real],
+                        pi:Real) => SeqTree
+{
+    assume v ~ Exponential(10.0)
+
+    let p = pMat(v)
+
+    for (i in 1 to length(data[1])) { assume seq[i] ~ Categorical(ctmc(ancSeq[i],p)) }
+
+    if (tree is Leaf) {
+        let index = firstLeaf(topTree.leafSet)
+        for (i in 1 to nchar) { observe data[index][i] ~ DNARead(seq[i]) }
+        return Leaf{leafSet=topTree.leafSet, seq=rootSeq, brlen=v}
+    }
+
+    // tree is Node
+    let left  = evolveBranch(seq, topTree.left,  data, pMat, pi)
+    let right = evolveBranch(seq, topTree.right, data, pMat, pi)
+
+    return Node{leafSet=topTree.leafSet, seq=seq, left=left, right=right}
 }
 
 // Model function
 model function myModel(data: Int[][]) => SeqTree[]
 {
-    // Define stationary probs 
+    // Define stationary probs
     pi <- [0.25,0.25,0.25,0.25]
 
     // Draw random topology
-    let treeTopology = buildTopology(seedTopology(), 4)
+    // The assume below would be the natural way, using a custom distribution (in the stdlib)
+    // that potentially uses the code actually used here as its code for a random draw
+    // assume treeTopology ~ UniformTopology(length(data))
+
+    let treeTopology = getRandomTopology(length(data))
 
     // Evolve sequences, generating a sequence tree (nonclock)
-    return evolveSeqs(treeTopology, pi, jcPMat)
+    return evolveSeqs(treeTopology, data, pi, jcPMat)
 }
 
