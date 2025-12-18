@@ -1,0 +1,152 @@
+// TreePPL script for inference of non-clock trees
+// under the Jukes Cantor model. It is naive in that
+// it assumes that belief propagation (pruning) is
+// implemented in the backend.
+
+// Data is a matrix of aligned DNA sequences, with
+// each row corresponding to the sequence for one
+// particular taxon. The first sequence is assumed
+// to be the outgroup, and used to direct the tree,
+// that is, the tree is "rooted" on the interior
+// node connecting to the outgroup leaf.
+//
+// States are represented by integers as follows:
+//   0: "A" for adenine
+//   1: "C" for cytosine
+//   2: "G" for guanine
+//   3: "T" for thymine
+//
+// For observed states, we use the codes above plus:
+//   4: "-" for gap (all states possible, from the alignment algorithm)
+//
+// For a completely general model, the observations should be converted to
+// categorical distributions on the state space, summarizing what the inference
+// from machine readings and alignment
+
+// Types
+// =====
+//
+// Move to stdlib, I suggest...
+// Leaf and Node need to have different names in the different tree types??
+
+type TopTree = 
+  | Leaf {leafSet: LeafSet}
+  | Node {leafSet: LeafSet, left: TopTree, right: TopTree}
+  | Root {leafSet: LeafSet, left: TopTree, right: TopTree, side: TopTree}
+
+type SeqTree =
+  | Leaf {leafSet: LeafSet, seq: Int[], brlen: Real}
+  | Node {leafSet: LeafSet, seq: Int[], brlen: Real, left: SeqTree, right: SeqTree}
+  | Root {leafSet: LeafSet, seq: Int[], left: SeqTree, right: SeqTree, side: SeqTree}
+
+type ClockSeqTree =
+  | Leaf {leafSet: LeafSet, seq: Int[], age: 0.0}
+  | Node {leafSet: LeafSet, seq: Int[], age: Real, left: ClockSeqTree, right: ClockSeqTree}
+
+
+// Library functions
+// =================
+//
+// Move to stdlib, I suggest...
+//
+
+// Compute Jukes Cantor instantaneous rate matrix
+function jcQMat() => Real[][]
+{
+    let q = mtxCreate(4,4,
+                [     -1.0, (1.0/3.0), (1.0/3.0), (1.0/3.0),
+                 (1.0/3.0),      -1.0, (1.0/3.0), (1.0/3.0),
+                 (1.0/3.0), (1.0/3.0),      -1.0, (1.0/3.0),
+                 (1.0/3.0), (1.0/3.0), (1.0/3.0),      -1.0]
+            );
+
+    return q;
+}
+
+// Compute Jukes Cantor transition probability matrix
+// for a particular branch length v
+function jcPMat(v: Real) => Matrix[Real]
+{
+    let p_ii = 0.25 - 0.25 * exp(-4.0*v/3.0)
+    let p_ij = 0.25 + 0.75 * exp(-4.0*v/3.0)
+
+    let p = mtxCreate(4,4,
+                      [p_ii, p_ij, p_ij, p_ij,
+                       p_ij, p_ii, p_ij, p_ij,
+                       p_ij, p_ij, p_ii, p_ij,
+                       p_ij, p_ij, p_ij, p_ii]
+                     );
+
+    return p;
+}
+
+// Continuous-Time Markov Chain: implemented as a function
+// that takes the transition probability matrix (p_mat) and
+// then uses it to convert an initial state (startState) to
+// probabilities on states to be used in a Categorical distribution
+function ctmc(startState: Int, p_mat: Matrix[Real]) => Real[]
+{
+    return p_mat[][startState]  // Is this the right way to slice a matrix?
+}
+
+// Build initial forest (leaf set) recursively for clock trees
+function createLeafVec(data: Int[][], index: Int) => ClockSeqTree[]
+{
+    let newLeaf = Leaf{age=0.0, seq=data[index]};
+
+    if (index == 1)
+        return [newLeaf];
+    else
+        return snoc(newLeaf, createLeafVec(data, index-1);  // snoc puts the new element at the end
+}
+
+// Get a postorder traversal list
+function getPostorderList(tree: SeqTree) => SeqTree[]
+{
+    if (tree is Leaf)
+        return [tree]
+    
+    if (tree is Node)
+        return concat(getPostorderList(tree.left),getPostorderList(tree.right),[tree])
+
+    // tree is Root
+    return concat(getPostorderList(tree.left),getPostorderList(tree.right),getPostorderList(tree.side),[tree])
+}
+
+// Get a preorder traversal list
+function getPreorderList(tree: SeqTree) => SeqTree[]
+{
+    if (tree is Leaf)
+        return [tree]
+
+    if (tree is Node)
+        return concat([tree],getPreorderList(tree.left),getPreorderList(tree.right))
+
+    // tree is Root
+    return concat([tree],getPreorderList(tree.left),getPreorderList(tree.right),getPreorderList(tree.side))
+}
+
+// Get an inorder traversal list
+function getInorderList(tree: SeqTree) => SeqTree[]
+{
+    if (tree is Leaf)
+        return [tree]
+
+    if (tree is Node)
+        return concat(getPreorderList(tree.left),[tree],getPreorderList(tree.right))
+
+    // tree is Root
+    return concat(getPreorderList(tree.left),[tree],getPreorderList(tree.right),getPreorderList(tree.side))
+}
+
+// Get the leaf sets in a tree
+function getLeafSets(tree:seqTree) => LeafSet[]
+{
+    if (tree is Leaf)
+        return [tree.leafSet]
+
+    let leafSets = concat(getLeafSets(tree.left),getLeafSets(tree.right))
+
+    return snoc(tree,leafSets)
+}
+
