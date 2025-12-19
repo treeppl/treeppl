@@ -1,0 +1,109 @@
+type Globals = Globals {
+  lambda : Real,
+  mu : Real,
+  sigma : Real,
+  log_alpha : Real,
+  rho : Real
+}
+
+type SpecTree =
+  | Node {left : SpecTree, right : SpecTree, age : Real}
+  | Leaf {age : Real}
+
+function countLeaves(tree: SpecTree) => Real {
+  if tree is Node {
+    return countLeaves(tree.left) + countLeaves(tree.right);
+  }
+  return 1.0;
+}
+
+function logFactorial(n: Real) => Real {
+  if n <= 0.0 {
+    return 0.0;
+  }
+  return log(n) + logFactorial(n - 1.0);
+}
+
+//------------------------------------///
+
+function survives(g: Globals, tBeg: Real, multiplier: Real) => Bool {
+  assume newRate ~ Gaussian(g.log_alpha, g.sigma);
+  let multiplier = multiplier * exp(newRate);
+  if (multiplier < 1e-5) || (multiplier > 1e5) {
+    return true;
+  }
+  assume tEvent ~ Exponential(multiplier * (g.lambda + g.mu));
+  let t = tBeg - tEvent;
+  if t < 0.0 {
+    assume obs ~ Bernoulli(g.rho);
+    return obs;
+  }
+  assume surv ~ (Bernoulli (g.lambda/(g.lambda + g.mu)));
+  if surv {
+    //Speciation
+    if survives(g,t,multiplier) {
+      return true;
+    } else {
+      return survives(g,t,multiplier);
+    }
+  } else {
+    //Extinction
+    return false;
+  }
+}
+
+function simHiddenSpeciation(g: Globals, nodeAge: Real, tBeg:Real, multiplier: Real) => Real {
+  assume newRate ~ Gaussian(g.log_alpha, g.sigma);
+  let multiplier = multiplier * exp(newRate);
+  if (multiplier < 1e-5) || (multiplier > 1e5) {
+      weight 0.0;
+      return multiplier;
+  }
+  assume t ~ Exponential(multiplier * (g.lambda + g.mu));
+  if t > nodeAge {
+    if survives(g, t,multiplier) {
+      weight 0.0;
+      return multiplier;
+    } else {
+      observe 0 ~ (Poisson(multiplier * g.mu * (tBeg - t)));
+      weight (log(2.));
+      return simHiddenSpeciation(g, nodeAge,t,multiplier);
+    }
+  } else {
+    observe 0 ~ (Poisson(multiplier * g.mu * (tBeg - nodeAge)));
+    return multiplier;
+  }
+}
+
+function walk(g: Globals, node: SpecTree, parentAge: Real, multiplier:Real) {
+    let nodeAge = node.age;
+    let multiplier = simHiddenSpeciation(g, nodeAge, parentAge, multiplier);
+    resample;
+     if node is Node {
+      observe 0. ~ (Exponential (multiplier*g.lambda));
+      walk(g, node.left, nodeAge, multiplier);
+      walk(g, node.right, nodeAge, multiplier);
+    } else {
+      observe true ~ (Bernoulli(g.rho));
+      resample;
+  }
+}
+
+model function top(tree: SpecTree, rho: Real) => Real {
+  assume lambda ~ Exponential(1.0);
+  assume mu ~ Uniform(0.0, lambda);
+  let sigma = 0.;
+  let log_alpha = 0.;
+  let numLeaves = countLeaves(tree);
+  logWeight log(2.0) * (numLeaves - 1.0) - logFactorial(numLeaves);
+  let g = Globals {
+    lambda = lambda,
+    mu = mu,
+    sigma = sigma,
+    log_alpha = log_alpha,
+    rho = rho
+  };
+  walk(g, tree.left, tree.age, 1.);
+  walk(g, tree.right, tree.age, 1.);
+  return lambda;
+}
