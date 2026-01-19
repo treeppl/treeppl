@@ -9,6 +9,15 @@ src_path=${HOME}/.local/src/treeppl/
 tppl_src=src/.
 tppl_models=models
 
+mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
+current_dir := $(dir $(mkfile_path))
+ifdef MCORE_LIBS
+MCORE_LIBS:=treeppl=$(current_dir)/src:$(MCORE_LIBS)
+else
+MCORE_LIBS:=treeppl=$(current_dir)/src
+endif
+export MCORE_LIBS
+
 build/${tppl_name}: src/treeppl-ast.mc $(shell find src -path 'src/lib' -prune -o \( -name "*.mc" -o -name "*.syn" \) -print)
 	mkdir -p build
 	time mi compile src/tpplc.mc --output $@
@@ -72,12 +81,23 @@ MODEL_CONFIGS := $(foreach model,$(MODELS),$(foreach config,$(TEST_CONFIGURATION
 .PHONY: $(MODEL_CONFIGS)
 $(MODEL_CONFIGS):
 	@set -ue; \
+	output_result () { \
+	  if [ -n "$(COMPACT)" ]; then \
+	    echo "$$1,$$2,$$3,$$4"; \
+	  else \
+	    echo -e "$$3\t$$1\t$$2:"; \
+	    if [ 0 -ne "$$4" ]; then \
+	      misc/scripts/elide-cat stdout $$5; \
+	      misc/scripts/elide-cat stderr $$6; \
+	    fi \
+	  fi \
+	}; \
 	path=$(firstword $(subst @, ,$@)); \
 	conf="$(subst _, ,$(lastword $(subst @, ,$@)))"; \
 	mkdir -p build/$$(dirname $$path); \
-	build/${tppl_name} $$conf $$path -p 2 --debug-phases --output build/$@ > build/$@.c.out 2> build/$@.c.err || { st=$$?; echo "$$path,$$conf,compile failure,$$st"; exit $$st; }; \
-	build/$@ $$(dirname $$path)"/data/testdata_"$$(basename -s ".tppl" $$path)".json" > build/$@.r.out 2> build/$@.r.err || { st=$$?; echo "$$path,$$conf,run failure,$$st"; exit $$st; }; \
-	echo "$$path,$$conf,success,0"
+	build/${tppl_name} $$conf $$path -p 2 --debug-phases --output build/$@ > build/$@.c.out 2> build/$@.c.err || { st=$$?; output_result "$$path" "$$conf" "compile failure" "$$st" build/$@.c.out build/$@.c.err; exit $$st; }; \
+	build/$@ $$(dirname $$path)"/data/testdata_"$$(basename -s ".tppl" $$path)".json" > build/$@.r.out 2> build/$@.r.err || { st=$$?; output_result "$$path" "$$conf" "run failure" "$$st" build/$@.r.out build/$@.r.err; exit $$st; }; \
+	output_result "$$path" "$$conf" "success" 0
 
 .PHONY: test-models
 test-models: $(MODEL_CONFIGS)
