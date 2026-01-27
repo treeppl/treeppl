@@ -26,7 +26,7 @@ use TreePPLThings in
 
 let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod)) =
   let mk =
-    lam pigeonsInfo.  
+    lam pigeonsInfo.
     lam debugIterations. lam samplingPeriod. lam incrementalPrinting. lam iterations. lam globalProb.
     lam driftKernel. lam driftScale. lam cps.
     lam align. lam debugAlignment.
@@ -52,7 +52,7 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
     match (
     -- The order here is important since the pigeons option uses the incremental
     -- printing flag too.
-    if pigeons then 
+    if pigeons then
       match pigeonsInfo with Some (pigeonsGlobal, pigeonsExploreSteps) in
       ( appf3_ (nvar_ (_getVarExn "continuePigeons" lwEnv)) (int_ pigeonsExploreSteps)
       , appf1_ (nvar_ (_getVarExn "accInitPigeons" lwEnv)) (bool_ incrementalPrinting)
@@ -65,7 +65,7 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
       , ulam_ "" (float_ 1.0)
       , ulam_ "" (float_ globalProb)
       )
-    else 
+    else
       ( lam. lam. appf1_ (nvar_ (_getVarExn "continueBase" lwEnv)) (int_ iterations)
       , nvar_ (_getVarExn "accInitBase" lwEnv)
       , ulam_ "" (float_ 1.0)
@@ -110,7 +110,7 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
       } in
     (loader, method) in
   let debugIterations = optFlag
-    { optFlagDef with long = "debug-iterations"
+    { optFlagDef with long = "debug-mcmc"
     , description = "Output various debug information each iteration."
     } in
   let samplingPeriod =
@@ -148,14 +148,14 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
         optApply (
           optApply (
             optApply (
-              optMap5 mk pigeonsOptions debugIterations samplingPeriod incrementalPrinting _particles
+              optMap5 mk pigeonsOptions debugIterations samplingPeriod incrementalPrinting _iterations
             ) _mcmcLightweightGlobalProb
           ) _driftKernel
         ) _driftScale
       ) _cps
     ) _align
   ) _debugAlignment in
-  optMap2 (lam. lam x. x) (_methodFlag false "mcmc-lightweight") res in
+  optMap2 (lam. lam x. x) (_methodFlag false "mcmc") res in
 
 let wrapSimpleInferenceMethod
   : OptParser InferMethod -> OptParser (Type -> Loader -> (Loader, InferMethod))
@@ -163,10 +163,10 @@ let wrapSimpleInferenceMethod
 
 let options : OptParser (TpplFrontendOptions, TransformationOptions, Type -> Loader -> (Loader, InferMethod)) =
   let inference = foldl1 optOr
-    [ mcmcLightweightOptions
-    , wrapSimpleInferenceMethod isLwOptions
+    [ wrapSimpleInferenceMethod isLwOptions
     , wrapSimpleInferenceMethod smcApfOptions
     , wrapSimpleInferenceMethod smcBpfOptions
+    , mcmcLightweightOptions
     , wrapSimpleInferenceMethod mcmcNaiveOptions
     , wrapSimpleInferenceMethod mcmcTraceOptions
     , wrapSimpleInferenceMethod pmcmcPimhOptions
