@@ -1088,6 +1088,7 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
   + BPFCompilerPicker + APFCompilerPicker + ImportanceCompilerPicker
   + NaiveMCMCCompilerPicker + TraceMCMCCompilerPicker + PIMHCompilerPicker
   + LightweightMCMCCompilerPicker
+  + UnboundErrorAttr + DefinedAttr + WithoutInfoAttr
 
   syn FileType =
   | FTreePPL ()
@@ -1233,7 +1234,7 @@ let tpplFrontendOptions : OptParser TpplFrontendOptions =
 
 let compileTpplToExecutable = lam frontend. lam transformations. lam mkInferenceMethod.
   use TreePPLThings in
-  let log = mkPhaseLogState transformations.debugDumpPhases transformations.debugPhases in
+  let log = mkPhaseLogState transformations.debugDumpPhases transformations.debugPhases transformations.invariantsToCheck in
   let loader = mkLoader symEnvDefault typcheckEnvDefault [StripUtestHook ()] in
   let loader = enableCPPLCompilation transformations loader in
   let loader = enableEqGeneration loader in
