@@ -179,10 +179,12 @@ function isDetected(g: Globals, tBegin: Real, multiplier: Real) => Bool {
 
     // Let the diversification rates shift
     let multiplier = shiftDivRates(g, b.timeFrame)*multiplier;
+    /*
     if (multiplier < 1e-4 || multiplier > 1e4) {
         printLn(concat("Multiplier hit limit in isDetected: ",real2string(multiplier)));
         return true;
     }
+    */
 
     // Catch deltaT smallest
     if (b.case == 1) {
@@ -218,11 +220,13 @@ function simHiddenSpeciation(g: Globals, tBegin:Real, tEnd: Real, multiplier: Re
 
      // Let the diversification rates shift
     let multiplier = shiftDivRates(g, b.timeFrame)*multiplier;
+    /*
     if (multiplier < 1e-4 || multiplier > 1e4) {
         printLn(concat("Multiplier hit limit in simHiddenSpeciation: ",real2string(multiplier)));
         weight 0.0;
         return multiplier;
     }
+    */
 
     // Test for termination case (end of branch)
     if (b.case == 3) {
