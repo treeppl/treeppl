@@ -1,0 +1,287 @@
+type Tree =
+  | Node {left: Tree, right: Tree, age: Real}
+  | Leaf {age: Real}
+
+type GammaDist = GammaDist {
+    alpha : Real,
+    beta  : Real
+}
+
+type GammaExpDraw = GammaExpDraw {
+    gdist: GammaDist,
+    rv   : Real
+}
+
+type GammaPoissonDraw = GammaPoissonDraw {
+    gdist: GammaDist,
+    rv   : Int
+}
+
+type GammaBool = GammaBool {
+    gdist      : GammaDist,
+    undetected : Bool
+}
+
+function lomaxLogPDF(x: Real, alpha: Real, lambda: Real) => Real {
+
+    return log(alpha) + alpha*log(lambda) - (alpha+1.0)*log(x+lambda);
+}
+
+function lomaxRv(alpha: Real, lambda: Real) => Real {
+
+    assume u ~ Uniform(0.0,1.0);
+
+    // Applying inverse CDF 
+    let x = lambda*((u^(-1.0/alpha)) - 1.0);
+
+    return x;
+}
+
+function observeGammaExponential(x: Real, gdist: GammaDist, multiplier: Real) => GammaDist {
+
+    // If x is drawn from Exponential(lambda*multiplier) then multiplier*x is drawn from Exponential(lambda)
+    let x = x*multiplier;
+
+    // Weight according to Lomax distribution (posterior predictive)
+    // Note the Jacobian resulting from the multiplier scaling (the log(multiplier) part)
+    let logProb = lomaxLogPDF(x, gdist.alpha, gdist.beta) + log(multiplier);
+    printLn(concat("In observeGammaExponential, logProb:",real2string(logProb)));
+    logWeight logProb;
+
+    return GammaDist {
+        alpha = gdist.alpha + 1.0,
+        beta  = gdist.beta + x
+    };
+}
+
+function drawGammaExponential(gdist: GammaDist, multiplier: Real) => GammaExpDraw {
+
+    let x = lomaxRv(gdist.alpha, gdist.beta);
+
+    return GammaExpDraw {
+        gdist = GammaDist {
+                    alpha = gdist.alpha + 1.0,
+                    beta  = gdist.beta + x
+                },
+        rv = x/multiplier
+    };
+}
+
+function negbinomialLogPMF(x: Int, r: Real, p: Real) => Real {
+
+    let k = int2real(x);
+    return lnGamma(k+r-1.0) - lnGamma(r-1.0) - lnGamma(k) + k*log(1.0-p) + r*log(p);
+}
+
+function negbinomialRv(r: Real, p: Real) => Int {
+
+    let theta = (1.0-p)/p;
+    assume lambda ~ Gamma(r, theta);
+    assume x ~ Poisson(lambda);
+    
+    return x;
+}
+
+function observeGammaPoisson(x: Int, gdist: GammaDist, multiplier: Real) => GammaDist {
+  
+    // If lambda distas Gamma(alpha, lambda) then c*lambda distas Gamma(alpha,lambda/c)
+    // c*lambda is the parameter of the Poisson we are observing from
+
+    // Weight according to negative binomial distribution (posterior predictive)
+    // Scale the gdist parameters (current posterior on lambda) appropriately
+    let p = gdist.beta/(gdist.beta + multiplier);
+    let logProb = negbinomialLogPMF(x, gdist.alpha, p);
+    printLn(concat("In observeGammaPoisson, logProb:",real2string(logProb)));
+    logWeight logProb;
+
+    // Update the posterior on lambda, taking scaling into account
+    return GammaDist {
+        alpha = gdist.alpha + int2real(x),
+        beta  = gdist.beta + multiplier
+    };
+}
+
+function drawGammaPoisson(gdist: GammaDist, multiplier: Real) => GammaPoissonDraw {
+  
+    // If lambda distas Gamma(alpha, beta) then c*lambda distas Gamma(alpha,beta/c)
+    // c*lambda is the parameter of the Poisson we are drawing from
+
+    let p = gdist.beta/(gdist.beta + multiplier);
+    let x = negbinomialRv(gdist.alpha, p);
+
+    return GammaPoissonDraw {
+        gdist = GammaDist {
+            alpha = gdist.alpha + int2real(x),
+            beta  = gdist.beta + multiplier
+        },
+        rv = x
+    };
+}
+
+function countLeaves(tree: Tree) => Real {
+  if tree is Node {
+    return countLeaves(tree.left) + countLeaves(tree.right);
+  }
+  return 1.0;
+}
+
+function logFactorial(n: Real) => Real {
+  if n <= 1.0 {
+    return 0.0;
+  }
+  return log(n) + logFactorial(n - 1.0);
+}
+
+function lnGamma(z: Real) => Real {
+
+    let pi = 3.14159265358979;
+    let lanczos_g = 7.0;
+    let lanczos_n = 9;
+    let lanczos_c = [
+        0.99999999999980993,
+        676.5203681218851,
+       -1259.1392167224028,
+        771.32342877765313,
+       -176.61502916214059,
+        12.507343278686905,
+       -0.13857109526572012,
+        9.9843695780195716e-6,
+        1.5056327351493116e-7];
+
+    /* ---- Poles at non‑positive integers -------------------------------- */
+    // if (z <= 0.0) && (fabs(z - round(z)) < 1e-12) { return -Inf; }
+    if (z <= 0.0) {
+        return -1e-12;    // This case should not occur in the model
+    }
+
+    /* ---- Use reflection for negative arguments (z < 0.5) --------------- */
+    if (z < 0.5) {
+        /* Recursively evaluate lnGamma(1‑z) which lies in (0.5, ifty) */
+        // return log(pi) - log(sin(pi * z)) - lnGamma(1.0 - z);
+        return -1e-12; // This case should not occur in the model
+    }
+
+    /* ---- Shift the argument (Lanczos works with z‑1) ------------------- */
+    let zz = z - 1.0;
+    let x  = lanczos_c[1];             /* c1 */
+
+    for i in 2 to lanczos_n {
+        let x = x + lanczos_c[i] / (zz + int2real(i-1));
+    }
+
+    let t = zz + lanczos_g + 0.5;
+
+    /* Final lnGamma formula */
+    return 0.5 * log(2.0 * pi) + (zz + 0.5) * log(t) - t + log(x);
+}
+
+
+// Model functions
+function numTrialsUntilMRCADetection(gdist: GammaDist, epsilon: Real, rho: Real, tBegin: Real, max_m: Int) => Int {
+
+    // We have used up the number of trials. Conditioning on max_m makes more
+    // sense the killing this simulation altogether. A user might want to monitor
+    // how often this condition is hit, though. If it is hit frequently, the
+    // inference is biased towards parameter values that increase the likelihood of
+    // detection, and max_m needs to be increased.
+    if (max_m == 0) {
+        return 0;
+    }
+
+    let ret = simulateSubtree(tBegin, gdist, epsilon, rho);
+    if (ret.undetected) {
+        return (1 + numTrialsUntilMRCADetection(gdist, epsilon, rho, tBegin, max_m-1));
+    }
+
+    let ret = simulateSubtree(tBegin, ret.gdist, epsilon, rho);
+    if (!ret.undetected) {
+        return 1; // We are detected, terminate
+    }
+
+    // MRCA is not detected, continue recursion
+    return (1 + numTrialsUntilMRCADetection(gdist, epsilon, rho, tBegin, max_m-1));
+}
+
+function simulateSubtree(time: Real, gdist: GammaDist, epsilon: Real, rho: Real) => GammaBool {
+  let ret = drawGammaExponential(gdist, 1.0 + epsilon);
+  let gdist = ret.gdist;
+  let waitingTime = ret.rv;
+  if waitingTime > time {
+    assume undetected ~ Bernoulli(1.0 - rho);
+    return GammaBool {
+            gdist = gdist,
+            undetected = undetected
+           };
+  }
+  assume isSpeciation ~ Bernoulli(1.0 / (1.0 + epsilon));
+  if isSpeciation {
+    let ret = simulateSubtree(time - waitingTime, gdist, epsilon, rho);
+    if (ret.undetected) {
+      return simulateSubtree(time - waitingTime, gdist, epsilon, rho);
+    } else {
+      return ret;
+    }
+  }
+  return GammaBool {
+            gdist = gdist,
+            undetected = true
+           };
+}
+
+function walk(node: Tree, time:Real, gdist: GammaDist, epsilon: Real, rho: Real) => GammaDist {
+  let ret = drawGammaExponential(gdist, 1.0);
+  let gdist = ret.gdist;
+  let waitingTime = ret.rv;
+  if time - waitingTime > node.age {
+    let ret = simulateSubtree(time - waitingTime, gdist, epsilon, rho);
+    if (ret.undetected) {
+      weight 2.0;
+      let gdist = observeGammaPoisson(0, ret.gdist, epsilon*waitingTime);
+      return walk(node, time - waitingTime, gdist, epsilon, rho);
+    }
+    weight 0.0;
+    resample;
+    return gdist;
+  }
+  let gdist = observeGammaPoisson(0, gdist, epsilon*(time-node.age));
+  if node is Node {
+    let gdist = observeGammaExponential(0.0, gdist, 1.0);
+    resample;
+    let gdist = walk(node.left, node.age, gdist, epsilon, rho);
+    return walk(node.right, node.age, gdist, epsilon, rho);
+  }
+  observe true ~ Bernoulli(rho);
+  resample;
+  return gdist;
+}
+
+model function crbd(tree: Tree, rho: Real) => Real[] {
+
+  // Set priors such that net diversification (lambda - mu) is likely
+  // to generate a tree of the observed size.
+  let leaves = countLeaves(tree);
+  let expectedTotalLeaves = leaves / rho;
+  let meanLambdaPrior = 2.0 * log(expectedTotalLeaves) / tree.age;
+
+  // Define the priors
+  // assume lambda ~ Gamma(1.0, meanLambdaPrior);
+  let gdist = GammaDist {
+    alpha = 1.0,
+    beta  = 1.0/meanLambdaPrior
+  };
+  assume epsilon ~ Uniform(0.0,1.0);
+  // let mu = epsilon*lambda;
+
+  logWeight log(2.0) * (leaves - 1.0) - logFactorial(leaves);
+  let gdist = walk(tree.left, tree.age, gdist, epsilon, rho);
+  let gdist = walk(tree.right, tree.age, gdist, epsilon, rho);
+
+//  let m = numTrialsUntilMRCADetection(gdist, epsilon, rho, tree.age, 1000);
+//  weight int2real(m);
+
+  let lambda = gdist.alpha/gdist.beta;
+  let mu = epsilon*lambda;
+
+  return [gdist.alpha, gdist.beta, epsilon, lambda, mu];
+}
+
