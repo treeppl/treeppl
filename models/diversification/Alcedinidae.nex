@@ -1,0 +1,121 @@
+#NEXUS
+[R-package APE, Fri Jan 31 15:04:46 2020]
+
+BEGIN TAXA;
+	DIMENSIONS NTAX = 54;
+	TAXLABELS
+		Alcedo_vintsioides
+		Alcedo_cristata
+		Alcedo_leucogaster
+		Ceyx_madagascariensis
+		Ceyx_lecontei
+		Ceyx_pictus
+		Alcedo_meninting
+		Alcedo_hercules
+		Alcedo_semitorquata
+		Alcedo_quadribrachys
+		Alcedo_coerulescens
+		Alcedo_atthis
+		Alcedo_euryzona
+		Alcedo_azurea
+		Alcedo_websteri
+		Alcedo_pusilla
+		Ceyx_rufidorsa
+		Ceyx_erithaca
+		Alcedo_argentata
+		Alcedo_cyanopectus
+		Ceyx_lepidus
+		Ceyx_melanurus
+		Ceyx_fallax
+		Lacedo_pulchella
+		Halcyon_badia
+		Halcyon_malimbica
+		Halcyon_senegalensis
+		Halcyon_leucocephala
+		Pelargopsis_capensis
+		Halcyon_coromanda
+		Dacelo_leachii
+		Dacelo_novaeguineae
+		Dacelo_gaudichaud
+		Clytoceyx_rex
+		Melidora_macrorrhina
+		Cittura_cyanotis
+		Tanysiptera_galatea
+		Actenoides_concretus
+		Actenoides_lindsayi
+		Todiramphus_winchelli
+		Todiramphus_leucopygius
+		Todiramphus_sanctus
+		Todiramphus_chloris
+		Todiramphus_macleayii
+		Todiramphus_tutus
+		Syma_torotoro
+		Megaceryle_maxima
+		Megaceryle_alcyon
+		Megaceryle_torquata
+		Ceryle_rudis
+		Chloroceryle_amazona
+		Chloroceryle_aenea
+		Chloroceryle_americana
+		Chloroceryle_inda
+	;
+END;
+BEGIN TREES;
+	TRANSLATE
+		1	Alcedo_vintsioides,
+		2	Alcedo_cristata,
+		3	Alcedo_leucogaster,
+		4	Ceyx_madagascariensis,
+		5	Ceyx_lecontei,
+		6	Ceyx_pictus,
+		7	Alcedo_meninting,
+		8	Alcedo_hercules,
+		9	Alcedo_semitorquata,
+		10	Alcedo_quadribrachys,
+		11	Alcedo_coerulescens,
+		12	Alcedo_atthis,
+		13	Alcedo_euryzona,
+		14	Alcedo_azurea,
+		15	Alcedo_websteri,
+		16	Alcedo_pusilla,
+		17	Ceyx_rufidorsa,
+		18	Ceyx_erithaca,
+		19	Alcedo_argentata,
+		20	Alcedo_cyanopectus,
+		21	Ceyx_lepidus,
+		22	Ceyx_melanurus,
+		23	Ceyx_fallax,
+		24	Lacedo_pulchella,
+		25	Halcyon_badia,
+		26	Halcyon_malimbica,
+		27	Halcyon_senegalensis,
+		28	Halcyon_leucocephala,
+		29	Pelargopsis_capensis,
+		30	Halcyon_coromanda,
+		31	Dacelo_leachii,
+		32	Dacelo_novaeguineae,
+		33	Dacelo_gaudichaud,
+		34	Clytoceyx_rex,
+		35	Melidora_macrorrhina,
+		36	Cittura_cyanotis,
+		37	Tanysiptera_galatea,
+		38	Actenoides_concretus,
+		39	Actenoides_lindsayi,
+		40	Todiramphus_winchelli,
+		41	Todiramphus_leucopygius,
+		42	Todiramphus_sanctus,
+		43	Todiramphus_chloris,
+		44	Todiramphus_macleayii,
+		45	Todiramphus_tutus,
+		46	Syma_torotoro,
+		47	Megaceryle_maxima,
+		48	Megaceryle_alcyon,
+		49	Megaceryle_torquata,
+		50	Ceryle_rudis,
+		51	Chloroceryle_amazona,
+		52	Chloroceryle_aenea,
+		53	Chloroceryle_americana,
+		54	Chloroceryle_inda
+	;
+	TREE * UNTITLED = [&R] ((((((1:4.788021775,2:4.788021775):2.807879302,3:7.595901077):1.840724236,4:9.436625313):2.907462622,(5:5.635787971,6:5.635787971):6.708299964):1.128798874,((((7:3.934203877,8:3.934203877):3.881486094,((9:3.151799953,10:3.151799953):3.133096404,(11:5.054547857,12:5.054547857):1.230348501):1.530793613):2.506740623,13:10.32243059):2.229493501,((((14:1.519406055,15:1.519406055):3.467632109,16:4.987038163):3.278445089,(((17:0.6302632958,18:0.6302632958):4.963043774,((19:1.962579854,20:1.962579854):1.77035215,21:3.732932004):1.860375066):0.5031459505,22:6.096453021):2.169030232):2.602871595,23:10.86835485):1.683569247):0.9209627144):21.46725228,((24:23.74299959,((((25:8.451051062,(26:4.220057646,27:4.220057646):4.230993416):3.089675212,28:11.54072627):3.74766945,29:15.28839572):5.079713983,(((30:12.61785812,((((31:1.900561313,32:1.900561313):1.199588818,33:3.100150132):2.943500596,34:6.043650727):6.3388744,35:12.38252513):0.2353329916):2.778867612,(36:11.15685875,37:11.15685875):4.239866986):1.431678775,((38:8.614086751,39:8.614086751):6.394418017,((40:8.788450495,(41:3.786162534,((42:0.9841688636,43:0.9841688636):0.7298910596,(44:1.04896206,45:1.04896206):0.6650978634):2.072102611):5.002287961):2.270011677,46:11.05846217):3.950042596):1.819899738):3.539705202):3.374889887):8.402877069,((47:12.46869821,(48:4.534421013,49:4.534421013):7.934277201):10.3575263,(50:20.68766993,(51:13.85876825,(52:9.40050129,(53:6.306427821,54:6.306427821):3.094073469):4.458266963):6.828901682):2.138554581):9.319652147):2.794262429);
+END;
