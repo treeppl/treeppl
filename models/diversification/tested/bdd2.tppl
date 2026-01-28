@@ -1,0 +1,328 @@
+// BDD2 model script
+
+// BDD2 (Birth-Death Diffusion model, aka AnaDS in our group, that is, Anagenetic
+// Diversification Shift model) is a model that mimics the ClaDS2 model in that
+// mu is a constant fraction of lambda. This fraction is referred to as epsilon
+// in earlier work by us on ClaDS2.
+
+// Type for global model parameters
+type Globals = Globals {
+  lambda   : Real,
+  mu       : Real,
+  sigma    : Real,
+  logAlpha : Real,
+  rho      : Real,
+  deltaT   : Real
+}
+
+// Basic tree type
+// TODO: Seems extremely dangerous not to
+// index the leaves. Consider estimating
+// branch rates in the tree, for instance,
+// and returning a different tree structure
+// where nodes might have been rotated.
+type SpecTree =
+  | Node {left : SpecTree, right : SpecTree, age : Real}
+  | Leaf {age : Real}
+
+
+// Type for capturing BDD time segment cases
+// We arbitrarily set the cases as follows:
+// 1: timeFrame is deltaT
+// 2: timeFrame is time until the next event
+// 3: timeFrame is time until end of branch
+type BDDCase = BDDCase {
+    timeFrame : Real,
+    case      : Int
+}
+
+// Help function to predict prob of undetected tree
+function predictHiddenProb(g: Globals, time: Real, multiplier: Real) => Real {
+
+    // Effective time
+    let effectiveTime = time * exp(g.logAlpha) / 2.0;
+
+    // Expected number of leaves
+    let expectedLeaves = exp(effectiveTime*multiplier*(g.lambda-g.mu));
+
+    // All leaves need to go extinct
+    return ((1.0-g.rho)^expectedLeaves);
+}
+
+
+// Help function to let lambda and mu change according to
+// Brownian motion on the log scale
+function shiftDivRates(g: Globals, timeFrame: Real) => Real {
+
+    assume deltaLogRate ~ Gaussian(g.logAlpha*timeFrame, g.sigma*sqrt(timeFrame));
+    return exp(deltaLogRate);
+}
+
+
+// Help function to determine BDD case
+function bddCase(timeSegment: Real, waitingTime: Real, deltaT: Real) => BDDCase {
+
+    // Take most common case first to promote branch prediction
+    if ((deltaT < waitingTime) && (deltaT < timeSegment)) {
+        return (BDDCase{ timeFrame=deltaT, case=1 });
+    }
+
+    // Now separate the other cases
+    if (waitingTime < timeSegment) {
+        return (BDDCase{ timeFrame=waitingTime, case=2 });
+    }
+
+    return (BDDCase{ timeFrame=timeSegment, case=3 });
+}
+
+// Generic help functions
+// TODO: Move to standard library
+
+// min
+function min(a: Real, b: Real) => Real {
+  if a <= b {
+    return a;
+  }
+  return b;
+}
+
+// max
+function max(a: Real, b: Real) => Real {
+  if a <= b {
+    return b;
+  }
+  return a;
+}
+
+// Count leaves in a tree
+function countLeaves(tree: SpecTree) => Int {
+  if tree is Node {
+    return countLeaves(tree.left) + countLeaves(tree.right);
+  }
+  return 1;
+}
+
+// Compute log factorial
+function logFactorial(n: Real) => Real {
+  if n <= 0.0 {
+    return 0.0;
+  }
+  return log(n) + logFactorial(n - 1.0);
+}
+
+
+/////////////// Model functions //////////////////////
+
+// Forward simulation sampling the number of times until the
+// MRCA (most recent common ancestor, root of the tree) would
+// have been detected given current parameter settings.
+// We are essentially drawing from a Poisson distribution, and
+// the number of trials until "success" can be used as an estimate
+// of the probability of detection, which can then be used in
+// conditioning the inference on detection of the MRCA. See the
+// concept paper for more detailed explanation.
+function numTrialsUntilMRCADetection(g: Globals, tBegin: Real, max_m: Int) => Int {
+
+    // We have used up the number of trials. Conditioning on max_m makes more
+    // sense than killing this simulation altogether. A user might want to monitor
+    // how often this condition is hit, though. If it is hit more than occasionally,
+    // the inference is biased towards parameter values that increase the likelihood
+    // of detection, and max_m needs to be increased to avoid this bias.
+    if (max_m == 0) {
+        printLn("Hit max_m in getting number of trials until MRCA detection");
+        return 0;
+    }
+
+    if (isDetected(g, tBegin, 1.0) && isDetected(g, tBegin, 1.0)) {
+        // MRCA is detected, terminate (and add failures in backward recursion)
+        return 1;    // We are detected, terminate!
+    } else {
+        // MRCA is not detected, continue recursion
+        return (1 + numTrialsUntilMRCADetection(g, tBegin, max_m-1)); 
+    }
+}
+
+
+// Forward simulation determining whether a tree survives and is detected
+function isDetected(g: Globals, tBegin: Real, multiplier: Real) => Bool {
+
+    // Is further simulation worthwhile?
+    if (predictHiddenProb(g, tBegin, multiplier) < 1e-6) {
+        printLn("Predicted hidden prob < limit");
+        return true;
+    }
+
+    // Is process near critical? Use expectation in this case
+    // rather than a computationally expensive simulation
+    if (multiplier*(g.lambda-g.mu) < (1e-6)*tBegin) {
+        printLn("Used critical process approximation");
+        printLn(concat("multiplier = ",real2string(multiplier)));
+        printLn(concat("g.lambda = ",real2string(g.lambda)));
+        printLn(concat("g.mu = ",real2string(g.mu)));
+        printLn(concat("tBegin = ",real2string(tBegin)));
+        assume obs ~ Bernoulli(g.rho);  // One lineage is expected to survive
+        return obs;
+    }
+    
+    // We always need to consider the possibility of an event
+    assume waitingTime ~ Exponential(multiplier*(g.lambda+g.mu));
+ 
+    // Find out BDD case and time frame we will be considering
+    // Note that tEnd is 0, so tSegment=(tBegin-0)=tBegin
+    let b = bddCase(tBegin, waitingTime, g.deltaT);
+
+    // Catch survival until recent (we have no interest in the multiplier)
+    if (b.case == 3) {
+        assume obs ~ Bernoulli(g.rho);
+        return obs;
+    }
+
+    // Let the diversification rates shift
+    let multiplier = shiftDivRates(g, b.timeFrame)*multiplier;
+    if (multiplier < 1e-4 || multiplier > 1e4) {
+        printLn(concat("Multiplier hit limit in isDetected: ",real2string(multiplier)));
+        return true;
+    }
+
+    // Catch deltaT smallest
+    if (b.case == 1) {
+        return isDetected(g, tBegin-b.timeFrame, multiplier);
+    }
+   
+    // We have a speciation or extinction (case 2)
+    assume speciation ~ Bernoulli(g.lambda/(g.lambda+g.mu));
+
+    if (speciation) {
+        if (isDetected(g, tBegin-b.timeFrame, multiplier)) {
+            return true;
+        }
+        return isDetected(g, tBegin-b.timeFrame, multiplier);
+    }
+
+    // We died...
+    return false;
+}
+
+
+// Simulate hidden speciation process
+function simHiddenSpeciation(g: Globals, tBegin:Real, tEnd: Real, multiplier: Real) => Real {
+
+    // We always need to consider the possibility of speciation
+    assume waitingTime ~ Exponential(multiplier*g.lambda);
+
+    // Find out BDD case and time frame we will be considering
+    let b = bddCase(tBegin-tEnd, waitingTime, g.deltaT);
+
+    // We cannot die during this time frame
+    observe 0 ~ Poisson(multiplier*g.mu*b.timeFrame);
+
+     // Let the diversification rates shift
+    let multiplier = shiftDivRates(g, b.timeFrame)*multiplier;
+    if (multiplier < 1e-4 || multiplier > 1e4) {
+        printLn(concat("Multiplier hit limit in simHiddenSpeciation: ",real2string(multiplier)));
+        weight 0.0;
+        return multiplier;
+    }
+
+    // Test for termination case (end of branch)
+    if (b.case == 3) {
+        return multiplier;
+    }
+    
+    // If waitingTime is smallest, there is the hidden subtree resulting from
+    // the speciation event to consider 
+    if (b.case == 2) {
+        if isDetected(g, tBegin-b.timeFrame, multiplier) {
+            weight 0.0;
+            return multiplier;
+        }
+        weight 2.0; // Double the weight because of the rotational symmetry
+    }
+
+    // Continue the simulation (deltaT or waitingTime smallest)
+    return simHiddenSpeciation(g, tBegin-b.timeFrame, tEnd, multiplier);
+}
+
+
+// Simulate ("walk") along the reconstructed tree
+function walk(g: Globals, parentAge: Real, node: SpecTree, multiplier: Real) {
+
+    // Simulate hidden speciation on the ancestral branch
+    let nodeAge = node.age;
+    let multiplier = simHiddenSpeciation(g, parentAge, nodeAge, multiplier);
+    resample;
+
+    // Deal with the end of the branch
+    if (node is Node) {
+        observe 0.0 ~ Exponential (multiplier*g.lambda);
+        walk(g, nodeAge, node.left,  multiplier);
+        walk(g, nodeAge, node.right,  multiplier);
+    } else {
+      observe true ~ Bernoulli(g.rho);
+      resample;
+    }
+}
+
+
+// Model function for BDD2
+model function bdd2(tree: SpecTree, rho: Real, numIntervals: Int) => Real[] {
+  
+//    printLn("-------BEGIN-------");
+
+    // Compute the time for one of the intervals
+    let deltaT = tree.age / int2real(numIntervals);
+
+    // Set priors such that net diversification (lambda - mu) is likely
+    // to generate a tree of the expected size.
+    let numLeaves = int2real(countLeaves(tree));
+    let expectedTotalLeaves = numLeaves / rho;
+    let meanLambdaPrior = 2.0 * log(expectedTotalLeaves) / tree.age;
+
+    // ClaDS2-like settings (priors as in concept paper except that mean of lambda is data dependent)
+    assume lambda ~ Gamma(1.0, meanLambdaPrior)     drift Uniform(lambda/1.1,lambda*1.1);               // Multiplier probably more efficient, tuning param 1.1
+    assume epsilon ~ Uniform(0.0, 1.0)              drift Uniform(max(epsilon-0.1,0.0),min(epsilon+0.1,1.0));  // Sliding window, tuning param width=0.2 
+    let mu = epsilon*lambda;
+    assume sigma_x ~ Gamma(1.0, 1.0)                drift Gamma(sigma_x/1.1,sigma_x*1.1);               // Multiplier probably more efficient, tuning param 1.1
+    let sigma = sqrt(0.2 / sigma_x);
+    let sigma = sigma * sqrt(meanLambdaPrior);      // Measure sigma^2 by expectation of speciation time, to scale to ClaDS2
+    assume logAlpha ~ Gaussian(0.0, sigma)          drift Uniform(logAlpha-0.05,logAlpha+0.05);         // Sliding window, tuning param width=0.1 
+    let logAlpha = logAlpha * meanLambdaPrior;      // Measure logAlpha by expectation of speciation time, to scale to ClaDS2
+
+    // Package global model variables in one data type
+    let g = Globals {
+        lambda   = lambda,
+        mu       = mu,
+        sigma    = sigma,
+        logAlpha = logAlpha,
+        rho      = rho,
+        deltaT   = deltaT
+    };
+
+//    printLn("----Global model params ----");
+//    printLn(concat("lambda   : ", real2string(g.lambda)));
+//    printLn(concat("mu       : ", real2string(g.mu)));
+//    printLn(concat("sigma    : ", real2string(g.sigma)));
+//    printLn(concat("logAlpha : ", real2string(g.logAlpha)));
+//    printLn(concat("rho      : ", real2string(g.rho)));
+//    printLn(concat("deltaT   : ", real2string(g.deltaT)));
+    
+    // Correct for tip labels and rotations
+    logWeight log(2.0) * (numLeaves - 1.0) - logFactorial(numLeaves);
+    
+    // Walk over tree
+//    printLn("----Branch----");
+    walk(g, tree.age, tree.left, 1.0);
+//    printLn("----Middle----");
+    walk(g, tree.age, tree.right, 1.0);
+//    printLn("----End----");
+
+//    printLn("----Condition on survival----");
+    // Condition on MRCA detection
+    // 1/m generates a valid estimate of the conditional probability
+    let m = numTrialsUntilMRCADetection(g, tree.age, 1000);
+    weight int2real(m);
+    
+//    printLn("----Return sample----");
+    return [lambda, mu, sigma, logAlpha, int2real(m)];
+}
+
