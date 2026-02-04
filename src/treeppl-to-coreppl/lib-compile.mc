@@ -42,6 +42,13 @@ let serializeResult: all a. (a -> JsonValue) -> Dist(a) -> JsonValue =
         (mapInsert "weights" (JsonArray (map jsonSerializeFloat weights))
         (mapEmpty cmpString))))
 
+let outputInferTime: all a. (() -> a) -> a = lam f.
+  let beginT = wallTimeMs () in
+  let inf = f () in
+  let endT = wallTimeMs () in
+  print "{\"Inference time\":"; print (float2string (subf endT beginT)); printLn "}";
+  inf
+
 let particles = if leqi (length argv) 2 then 10 else string2int (get argv 2)
 
 let sweeps    = if leqi (length argv) 3 then 1 else string2int (get argv 3)

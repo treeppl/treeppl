@@ -54,6 +54,7 @@ lang TreePPLCompile
   -- a type with useful information passed down from compile
   type TpplCompileContext = {
     serializeResult: Name,
+    outputInferTime: Name,
     logName: Name, expName: Name,
     printJsonLn: Name,
     particles: Name, sweeps: Name, input: Name, some: Name,
@@ -196,8 +197,8 @@ lang TreePPLCompile
 
   | NothingTypeTppl x -> tyunit_
 
-  sem compileModelInvocation : TpplCompileContext -> (Type -> Loader -> (Loader, InferMethod)) -> Loader -> SymEnv -> DeclTppl -> Option (Loader, SymEnv, Expr)
-  sem compileModelInvocation context mkInferenceMethod loader fileEnv =
+  sem compileModelInvocation : TpplCompileContext -> TpplFrontendOptions -> (Type -> Loader -> (Loader, InferMethod)) -> Loader -> SymEnv -> DeclTppl -> Option (Loader, SymEnv, Expr)
+  sem compileModelInvocation context frontend mkInferenceMethod loader fileEnv =
   | FunDeclTppl (x & {model = Some modelInfo}) ->
     -- TODO(vipa, 2024-12-13): We could technically shadow a model
     -- function, in which case the generated code will refer to the
@@ -250,8 +251,11 @@ lang TreePPLCompile
       (ulam_ ""
         (app_ (nvar_ context.printJsonLn)
           (appf2_ (nvar_ context.serializeResult) outputSer.serializer
-            (infer_ inferenceMethod
-              (ulam_ "" invocation)))))
+            (if frontend.inferTime then
+              app_ (nvar_ context.outputInferTime) (ulam_ "" (infer_ inferenceMethod (ulam_ "" invocation)))
+            else
+              (infer_ inferenceMethod (ulam_ "" invocation)))
+          )))
       (nvar_ context.sweeps) in
     Some (loader, fileEnv, inferCode)
   | _ -> None ()
@@ -1040,6 +1044,12 @@ lang TreePPLCompile
     }
 end
 
+type TpplFrontendOptions =
+  { input : String
+  , output : String
+  , outputMl : Option String
+  , inferTime : Bool
+  }
 
 lang TreePPLThings = TreePPLAst + TreePPLCompile
   + ProjMatchTypeCheck + ProjMatchPprint + MExprAst
@@ -1064,7 +1074,7 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
   | FTreePPL ()
 
   syn Hook =
-  | TreePPLHook { mkInferenceMethod : Type -> Loader -> (Loader, InferMethod) }
+  | TreePPLHook {frontend : TpplFrontendOptions , mkInferenceMethod : Type -> Loader -> (Loader, InferMethod)}
 
   sem _fileType = | _ ++ ".tppl" -> FTreePPL ()
   sem _loadFile path = | (FTreePPL _, loader & Loader x) ->
@@ -1103,6 +1113,7 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
       , particles = _getVarExn "particles" compileLibEnv
       , sweeps = _getVarExn "sweeps" compileLibEnv
       , input = _getVarExn "input" compileLibEnv
+      , outputInferTime = _getVarExn "outputInferTime" compileLibEnv
       , logName = _getVarExn "externalLog" mathEnv
       , expName = _getVarExn "externalExp" mathEnv
       , pow = _getVarExn "pow" mathEnv
@@ -1129,7 +1140,7 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
 
     -- 3. Model invocations.
     let work = lam loader. lam decl.
-      match compileModelInvocation context hook.mkInferenceMethod loader fileEnv decl with Some (loader, fileEnv, invocation) then
+      match compileModelInvocation context hook.frontend hook.mkInferenceMethod loader fileEnv decl with Some (loader, fileEnv, invocation) then
         let decl = DeclLet
           { body = invocation
           , ident = nameSym ""
@@ -1172,17 +1183,12 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
     loader
 end
 
-type TpplFrontendOptions =
-  { input : String
-  , output : String
-  , outputMl : Option String
-  }
-
 let tpplFrontendOptions : OptParser TpplFrontendOptions =
-  let mk = lam input. lam output. lam outputMl.
+  let mk = lam input. lam output. lam outputMl. lam inferTime.
     { input = input
     , output = output
     , outputMl = outputMl
+    , inferTime = inferTime
     } in
   let input = optPos
     { optPosDefString with arg = "<program>"
@@ -1200,7 +1206,11 @@ let tpplFrontendOptions : OptParser TpplFrontendOptions =
     { optArgDefString with long = "output-ml"
     , description = "Output the intermediate .ml file to this path."
     }) in
-  optMap3 mk input output outputMl
+  let inferTime = optFlag
+    { optFlagDef with long = "infer-time"
+    , description = "Inference time is printed with the output."
+    } in
+  optMap4 mk input output outputMl inferTime
 
 let compileTpplToExecutable = lam frontend. lam transformations. lam mkInferenceMethod.
   use TreePPLThings in
@@ -1212,7 +1222,7 @@ let compileTpplToExecutable = lam frontend. lam transformations. lam mkInference
   let loader = enableJsonSerialization loader in
   let loader = enableDPrintViaPprint loader in
   let loader = registerMatrixFunctions loader in
-  let loader = addHook loader (TreePPLHook {mkInferenceMethod = mkInferenceMethod}) in
+  let loader = addHook loader (TreePPLHook {frontend = frontend, mkInferenceMethod = mkInferenceMethod}) in
   let loader = addHook loader (LowerUncurryHook ()) in
   endPhaseStatsExpr log "mk-cppl-loader" unit_;
   let loader = (includeFileExn "." frontend.input loader).1 in
