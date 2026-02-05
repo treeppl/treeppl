@@ -54,7 +54,7 @@ lang TreePPLCompile
   -- a type with useful information passed down from compile
   type TpplCompileContext = {
     serializeResult: Name,
-    outputInferTime: Name,
+    outputinferTimeMs: Name,
     logName: Name, expName: Name,
     printJsonLn: Name,
     particles: Name, sweeps: Name, input: Name, some: Name,
@@ -251,8 +251,8 @@ lang TreePPLCompile
       (ulam_ ""
         (app_ (nvar_ context.printJsonLn)
           (appf2_ (nvar_ context.serializeResult) outputSer.serializer
-            (if frontend.inferTime then
-              app_ (nvar_ context.outputInferTime) (ulam_ "" (infer_ inferenceMethod (ulam_ "" invocation)))
+            (if frontend.inferTimeMs then
+              app_ (nvar_ context.outputinferTimeMs) (ulam_ "" (infer_ inferenceMethod (ulam_ "" invocation)))
             else
               (infer_ inferenceMethod (ulam_ "" invocation)))
           )))
@@ -1048,7 +1048,7 @@ type TpplFrontendOptions =
   { input : String
   , output : String
   , outputMl : Option String
-  , inferTime : Bool
+  , inferTimeMs : Bool
   }
 
 lang TreePPLThings = TreePPLAst + TreePPLCompile
@@ -1113,7 +1113,7 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
       , particles = _getVarExn "particles" compileLibEnv
       , sweeps = _getVarExn "sweeps" compileLibEnv
       , input = _getVarExn "input" compileLibEnv
-      , outputInferTime = _getVarExn "outputInferTime" compileLibEnv
+      , outputinferTimeMs = _getVarExn "outputinferTimeMs" compileLibEnv
       , logName = _getVarExn "externalLog" mathEnv
       , expName = _getVarExn "externalExp" mathEnv
       , pow = _getVarExn "pow" mathEnv
@@ -1184,11 +1184,11 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
 end
 
 let tpplFrontendOptions : OptParser TpplFrontendOptions =
-  let mk = lam input. lam output. lam outputMl. lam inferTime.
+  let mk = lam input. lam output. lam outputMl. lam inferTimeMs.
     { input = input
     , output = output
     , outputMl = outputMl
-    , inferTime = inferTime
+    , inferTimeMs = inferTimeMs
     } in
   let input = optPos
     { optPosDefString with arg = "<program>"
@@ -1206,11 +1206,11 @@ let tpplFrontendOptions : OptParser TpplFrontendOptions =
     { optArgDefString with long = "output-ml"
     , description = "Output the intermediate .ml file to this path."
     }) in
-  let inferTime = optFlag
+  let inferTimeMs = optFlag
     { optFlagDef with long = "infer-time"
     , description = "Inference time is printed with the output."
     } in
-  optMap4 mk input output outputMl inferTime
+  optMap4 mk input output outputMl inferTimeMs
 
 let compileTpplToExecutable = lam frontend. lam transformations. lam mkInferenceMethod.
   use TreePPLThings in

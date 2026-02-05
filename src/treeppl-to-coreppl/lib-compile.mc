@@ -42,7 +42,7 @@ let serializeResult: all a. (a -> JsonValue) -> Dist(a) -> JsonValue =
         (mapInsert "weights" (JsonArray (map jsonSerializeFloat weights))
         (mapEmpty cmpString))))
 
-let outputInferTime: all a. (() -> a) -> a = lam f.
+let outputinferTimeMs: all a. (() -> a) -> a = lam f.
   let beginT = wallTimeMs () in
   let inf = f () in
   let endT = wallTimeMs () in
