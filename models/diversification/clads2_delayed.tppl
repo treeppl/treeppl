@@ -1,0 +1,172 @@
+// Script for ClaDS2 with delayed sampling
+
+import "math.tppl"
+import "distributions.tppl"
+import "trees.tppl"
+
+
+// Types
+// -----
+
+type Tree = ClockTree;
+
+type Globals = Globals {
+    gdist:      GammaDist,
+    nigdist:    NormalInverseGammaDist,
+    epsilon:    Real,
+    rho:        Real,
+    multiplier: Real
+}
+
+type GlobalsBool = GlobalsBool {
+    g        : Globals,
+    detected : Bool
+}
+
+
+// Model functions
+// ---------------
+
+function numTrialsUntilMRCADetection(g: Globals, tBegin: Real, max_m: Int) => Int {
+
+    // We have used up the number of trials. Conditioning on max_m makes more
+    // sense than killing this simulation altogether. A user might want to monitor
+    // how often this condition is hit, though. If it is hit frequently, the
+    // inference is biased towards parameter values that increase the likelihood of
+    // detection, and max_m needs to be increased.
+    if (max_m == 0) {
+        return 0;
+    }
+
+    let ret = isDetected(g, tBegin);
+    if (ret.detected) {
+        let ret = isDetected(ret.g, tBegin);
+        if (ret.detected) {
+            return 1; // We are detected, terminate
+        }
+    }
+
+    // MRCA is not detected, continue recursion
+    return (1 + numTrialsUntilMRCADetection(g, tBegin, max_m-1));
+}
+
+
+function isDetected(g: Globals, time: Real, multiplier: Real) => GlobalsBool {
+
+    let ret1 = drawNormalInverseGammaGaussian(g.nigdist);
+    let g.multiplier = exp(ret1.rv) * multiplier;
+    let g.nigdist = ret1.nigdist;
+
+    let ret2 = drawGammaExponential(g.gdist, 1.0 + g.epsilon, multiplier);
+    let waitingTime = ret2.rv;
+    let g.gdist = ret2.gdist;
+
+    if (waitingTime > time) {
+        assume detected ~ Bernoulli(rho);
+        return GlobalsBool { g=g, detected=detected };
+    }
+
+    assume isSpeciation ~ Bernoulli(1.0 / (1.0 + g.epsilon));
+
+    if (isSpeciation) {
+        let ret = isDetected(g, time - waitingTime, multiplier);
+        if (ret.detected) {
+            return ret;
+        }
+        return isDetected(g, time - waitingTime, multiplier);
+    }
+
+    // Extinction
+    return GlobalsBool { g = g, detected = false };
+}
+
+
+function simHiddenSpeciation(g: Globals, startTime: Real, endTime: Real) => Globals {
+  
+    ret1 = drawNormalInverseGammaGaussian(g.nigdist);
+    let g.multiplier = exp(ret1.rv) * g.multiplier;
+    let g.nigdist = ret1.nigdist;
+
+    let ret2 = drawGammaExponential(g.gdist, 1.0);
+    let t = startTime - ret2.rv;
+    let g.gdist = ret2.gdist;
+    
+    // Passed the end, we are done
+    if (t > endTime) { return g; }
+            
+    // Hidden speciation event
+    let ret = isDetected(g, time - waitingTime);
+    if (ret.detected) {
+        weight 0.0;
+        resample;
+        return g;
+    }
+    weight 2.0;
+    return simHiddenSpeciation(ret.g, t, endTime);
+}
+
+
+function walk(g: Globals, node: SpecTree, parentAge: Real) => Globals {
+    
+    let g = simHiddenSpeciation(g, parentAge, node.age);
+    resample;
+
+    if (node is Node) {
+        let g.gdist = observeGammaExponential(0.0, g.gdist, multiplier);
+        resample;
+        let g = walk(g, node.left, nodeAge);
+        return walk(g, node.right, nodeAge);
+    }
+    observe true ~ Bernoulli(g.rho);
+    resample;
+    return g;
+}
+
+
+model function clads2(tree: Tree, rho: Real) => Real[] {
+
+    // Set priors such that net diversification (lambda - mu) is likely
+    // to generate a tree of the observed size.
+    let numLeaves = int2real(countLeaves(tree));
+    let expectedTotalLeaves = numLeaves / rho;
+    let meanLambdaPrior = 2.0 * log(expectedTotalLeaves) / tree.age;
+
+    // Define the priors
+    let gdist = GammaDist {
+        alpha = 1.0,
+        beta  = 1.0/meanLambdaPrior
+    };
+
+    assume epsilon ~ Uniform(0.0,1.0)               drift Uniform(max(epsilon-0.05,0.0),min(epsilon+0.05,1.0));
+    
+    let nigdist = NormalInverseGammaDist {
+        mu0    = 0.0,
+        lambda = 1.0,
+        alpha  = 1.0,
+        beta   = 0.2
+    }
+
+    let g = Globals {
+        gdist   = gdist,
+        nigdist = nigdist,
+        epsilon = epsilon,
+        rho     = rho,
+        multiplier = 1.0
+    }
+    
+    logWeight ((log(2.0) * (numLeaves - 1.0)) - logFactorial(numLeaves));
+
+    let g = walk(g, tree.left,  tree.age);
+    let g = walk(g, tree.right, tree.age);
+
+    let m = numTrialsUntilMRCADetection(g, tree.age, 1000);
+    weight int2real(m);
+
+    let lambda   = g.gdist.alpha/g.gdist.beta;
+    let mu       = g.epsilon*lambda;
+    let logAlpha = g.nigdist.mu0;
+    let sigma    = sqrt(g.nigdist.beta/((g.nigdist.alpha-1.0)*g.nigdist.lambda));
+
+    return [lambda, mu, logAlpha, sigma, int2real(m)];
+}
+
