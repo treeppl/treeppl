@@ -1,0 +1,20 @@
+// Tree-related stuff
+
+// Tree types
+// ----------
+
+type ClockTree =
+  | Node {left: Tree, right: Tree, age: Real}
+  | Leaf {age: Real}
+
+
+// Tree functions
+// --------------
+
+function countLeaves(tree: Tree) => Int {
+  if tree is Node {
+    return countLeaves(tree.left) + countLeaves(tree.right);
+  }
+  return 1;
+}
+

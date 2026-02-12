@@ -1,0 +1,164 @@
+// Distributions
+
+// Distribution types (for prior distribution parameters
+// and draws from conjugate distributions with updates of
+// of those prior distribution parameters)
+// -----------------------------------------------------
+
+type GammaDist = GammaDist {
+    alpha : Real,
+    beta  : Real
+}
+
+type GammaExpDraw = GammaExpDraw {
+    gdist: GammaDist,
+    rv   : Real
+}
+
+type GammaPoissonDraw = GammaPoissonDraw {
+    gdist: GammaDist,
+    rv   : Int
+}
+
+type NormalInverseGammaDist = NormalInverseGammaDist {
+    mu0    : Real,
+    lambda : Real,
+    alpha  : Real,
+    beta   : Real
+}
+
+type NormalInversGammaGaussianDraw = NormalInverseGammaGaussianDraw {
+    nig : NormalInverseGammaDist,
+    rv  : Real
+}
+
+
+// Distribution functions
+// ----------------------
+
+
+function lomaxLogPDF(x: Real, alpha: Real, lambda: Real) => Real {
+
+    return log(alpha) + alpha*log(lambda) - (alpha+1.0)*log(x+lambda);
+}
+
+
+function lomaxRv(alpha: Real, lambda: Real) => Real {
+
+    assume u ~ Uniform(0.0,1.0);
+
+    // Applying inverse CDF 
+    let x = lambda*((u^(-1.0/alpha)) - 1.0);
+
+    return x;
+}
+
+function observeGammaExponential(x: Real, gdist: GammaDist, multiplier: Real) => GammaDist {
+
+    // If x is drawn from Exponential(lambda*multiplier) then multiplier*x is drawn from Exponential(lambda)
+    let x = x*multiplier;
+
+    // Weight according to Lomax distribution (posterior predictive)
+    // Note the Jacobian resulting from the multiplier scaling (the log(multiplier) part)
+    let logProb = lomaxLogPDF(x, gdist.alpha, gdist.beta) + log(multiplier);
+    // printLn(concat("In observeGammaExponential, logProb:",real2string(logProb)));
+    logWeight logProb;
+
+    return GammaDist {
+        alpha = gdist.alpha + 1.0,
+        beta  = gdist.beta + x
+    };
+}
+
+function drawGammaExponential(gdist: GammaDist, multiplier: Real) => GammaExpDraw {
+
+    let x = lomaxRv(gdist.alpha, gdist.beta);
+
+    return GammaExpDraw {
+        gdist = GammaDist {
+                    alpha = gdist.alpha + 1.0,
+                    beta  = gdist.beta + x
+                },
+        rv = x/multiplier
+    };
+}
+
+function negbinomialLogPMF(x: Int, r: Real, p: Real) => Real {
+
+    let k = int2real(x);
+    return lnGamma(k+r-1.0) - lnGamma(r-1.0) - lnGamma(k) + k*log(1.0-p) + r*log(p);
+}
+
+function negbinomialRv(r: Real, p: Real) => Int {
+
+    let theta = (1.0-p)/p;
+    assume lambda ~ Gamma(r, theta);
+    assume x ~ Poisson(lambda);
+    
+    return x;
+}
+
+function observeGammaPoisson(x: Int, gdist: GammaDist, multiplier: Real) => GammaDist {
+  
+    // If lambda distas Gamma(alpha, lambda) then c*lambda distas Gamma(alpha,lambda/c)
+    // c*lambda is the parameter of the Poisson we are observing from
+
+    // Weight according to negative binomial distribution (posterior predictive)
+    // Scale the gdist parameters (current posterior on lambda) appropriately
+    let p = gdist.beta/(gdist.beta + multiplier);
+    let logProb = negbinomialLogPMF(x, gdist.alpha, p);
+    // printLn(concat("In observeGammaPoisson, logProb:",real2string(logProb)));
+    logWeight logProb;
+
+    // Update the posterior on lambda, taking scaling into account
+    return GammaDist {
+        alpha = gdist.alpha + int2real(x),
+        beta  = gdist.beta + multiplier
+    };
+}
+
+function drawGammaPoisson(gdist: GammaDist, multiplier: Real) => GammaPoissonDraw {
+  
+    // If lambda distas Gamma(alpha, beta) then c*lambda distas Gamma(alpha,beta/c)
+    // c*lambda is the parameter of the Poisson we are drawing from
+
+    let p = gdist.beta/(gdist.beta + multiplier);
+    let x = negbinomialRv(gdist.alpha, p);
+
+    return GammaPoissonDraw {
+        gdist = GammaDist {
+            alpha = gdist.alpha + int2real(x),
+            beta  = gdist.beta + multiplier
+        },
+        rv = x
+    };
+}
+
+function drawNormalInverseGammaGaussian(nig: NormalInverseGamma) => NormalInverseGammaGaussianDraw {
+
+    let k = 2.0*nig.alpha;
+    let v = 2.0*nig.beta*(1.0 + (1.0/nig.lambda));
+    assume u1 ~ Gaussian(0.0, sqrt(v/k));
+    assume u2 ~ Chi2(round(k));
+
+    let value = nig.mu0 + u1/sqrt(u2/k);
+    let z = value - nig.mu0;
+
+//    Alternative derivation, from Student t to the distribution we want
+//    (mathematically identical, is it less numerically stable or slower?)
+//    let k = 2.0*nig.alpha;
+//    assume u1 ~ Gaussian(0,1);
+//    assume u2 ~ Chi2(round(k));
+//    let value = nig.mu0 + u1*sqrt(k/u2)*sqrt(nig.beta*(1.0+1.0/nig.lambda)/nig.alpha));
+
+    let nig = NormalInverseGammaDist {
+        alpha  = 0.5 + nig.alpha;
+        beta   = nig.beta + 0.5*(nig.lambda/(1.0+nig.lambda))*z*z;
+        mu0    = (nig.mu0*nig.lambda + value)/(1.0+nig.lambda);
+        lambda = 1.0 + nig.lambda
+    }
+
+    return NormalInverseGammaGaussianDraw{ rv=value, nig=nig };
+}
+
+
