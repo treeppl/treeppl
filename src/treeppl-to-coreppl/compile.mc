@@ -1208,7 +1208,7 @@ let tpplFrontendOptions : OptParser TpplFrontendOptions =
     }) in
   let inferTimeMs = optFlag
     { optFlagDef with long = "infer-time"
-    , description = "Inference time is printed with the output."
+    , description = "Inference time (ms) is printed with the output."
     } in
   optMap4 mk input output outputMl inferTimeMs
 

@@ -46,7 +46,7 @@ let outputinferTimeMs: all a. (() -> a) -> a = lam f.
   let beginT = wallTimeMs () in
   let inf = f () in
   let endT = wallTimeMs () in
-  print "{\"Inference time\":"; print (float2string (subf endT beginT)); printLn "}";
+  print "{\"Inference time (ms) \":"; print (float2string (subf endT beginT)); printLn "}";
   inf
 
 let particles = if leqi (length argv) 2 then 10 else string2int (get argv 2)
