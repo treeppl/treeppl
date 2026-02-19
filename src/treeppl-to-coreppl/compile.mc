@@ -541,33 +541,61 @@ lang TreePPLCompile
       info = d.info
     }
 
-  | GaussianExprTppl d ->
+  | BetaExprTppl d ->
     TmDist {
-      dist = DGaussian {
-        mu = compileExprTppl context d.mean,
-        sigma = compileExprTppl context d.dev
+      dist = DBeta {
+        a = compileExprTppl context d.a,
+        b = compileExprTppl context d.b
       },
       ty = tyunknown_,
       info = d.info
     }
 
-  | GeometricExprTppl d ->
+  | BinomialExprTppl d ->
     TmDist {
-      dist = DGeometric {
+      dist = DBinomial {
+        n = compileExprTppl context d.n,
         p = compileExprTppl context d.prob
       },
       ty = tyunknown_,
       info = d.info
   }
 
-  | PoissonExprTppl d ->
+  | CategoricalExprTppl d ->
     TmDist {
-      dist = DPoisson {
-        lambda = compileExprTppl context d.rate
+      dist = DCategorical {
+        p = compileExprTppl context d.probs
       },
       ty = tyunknown_,
       info = d.info
-    }
+  }
+
+  | Chi2ExprTppl d ->
+    TmDist {
+      dist = DChi2 {
+        df = compileExprTppl context d.df
+      },
+      ty = tyunknown_,
+      info = d.info
+  }
+
+  | DirichletExprTppl d ->
+    TmDist {
+      dist = DDirichlet {
+        a = compileExprTppl context d.alphas
+      },
+      ty = tyunknown_,
+      info = d.info
+  }
+
+  | EmpiricalExprTppl d ->
+    TmDist {
+      dist = DEmpirical {
+        samples = compileExprTppl context d.samples
+      },
+      ty = tyunknown_,
+      info = d.info
+  }
 
   | ExponentialExprTppl d ->
     TmDist {
@@ -588,30 +616,20 @@ lang TreePPLCompile
       info = d.info
     }
 
-  | CategoricalExprTppl d ->
+  | GaussianExprTppl d ->
     TmDist {
-      dist = DCategorical {
-        p = compileExprTppl context d.probs
-      },
-      ty = tyunknown_,
-      info = d.info
-  }
-
-  | BetaExprTppl d ->
-    TmDist {
-      dist = DBeta {
-        a = compileExprTppl context d.a,
-        b = compileExprTppl context d.b
+      dist = DGaussian {
+        mu = compileExprTppl context d.mean,
+        sigma = compileExprTppl context d.dev
       },
       ty = tyunknown_,
       info = d.info
     }
-
-  | UniformExprTppl d ->
+  
+  | GeometricExprTppl d ->
     TmDist {
-      dist = DUniform {
-        a = compileExprTppl context d.a,
-        b = compileExprTppl context d.b
+      dist = DGeometric {
+        p = compileExprTppl context d.prob
       },
       ty = tyunknown_,
       info = d.info
@@ -627,29 +645,30 @@ lang TreePPLCompile
       info = d.info
   }
 
-  | EmpiricalExprTppl d ->
+  | PoissonExprTppl d ->
     TmDist {
-      dist = DEmpirical {
-        samples = compileExprTppl context d.samples
+      dist = DPoisson {
+        lambda = compileExprTppl context d.rate
+      },
+      ty = tyunknown_,
+      info = d.info
+    }
+
+  | UniformExprTppl d ->
+    TmDist {
+      dist = DUniform {
+        a = compileExprTppl context d.a,
+        b = compileExprTppl context d.b
       },
       ty = tyunknown_,
       info = d.info
   }
 
-  | DirichletExprTppl d ->
+  | UniformDiscreteExprTppl d ->
     TmDist {
-      dist = DDirichlet {
-        a = compileExprTppl context d.alphas
-      },
-      ty = tyunknown_,
-      info = d.info
-  }
-
-  | BinomialExprTppl d ->
-    TmDist {
-      dist = DBinomial {
-        n = compileExprTppl context d.n,
-        p = compileExprTppl context d.prob
+      dist = DUniformDiscrete {
+        a = compileExprTppl context d.a,
+        b = compileExprTppl context d.b
       },
       ty = tyunknown_,
       info = d.info
