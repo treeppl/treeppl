@@ -23,10 +23,10 @@ type Globals =
 
 // Model functions
 
-// Get an estimate of the probability of the MRCA being detected under current parameter values
+// Get an estimate of the probability of the MRCA being detected under given parameter values
 function numTrialsUntilMRCADetection(g: Globals, gdist: GammaDist, tRoot: Real, max_m: Int) => Int {
 
-    // Check if we used up the number of trials. In that case, onditioning on max_m
+    // Check if we used up the number of trials. In that case, conditioning on max_m
     // makes more sense than killing the simulation altogether. A user might want to
     // monitor how often this condition is hit, though. If it is hit frequently, the
     // inference is biased towards parameter values that increase the likelihood of
@@ -38,7 +38,9 @@ function numTrialsUntilMRCADetection(g: Globals, gdist: GammaDist, tRoot: Real, 
     let ret = isDetected(g, gdist, tRoot);
     if (ret.detected) {
         let ret = isDetected(g, ret.gdist, tRoot);
-        if (ret.detected) { return 1; }
+        if (ret.detected) { 
+            return 1;       // We are detected, terminate
+        }
     }
 
     // MRCA is not detected, continue recursion
@@ -49,9 +51,9 @@ function numTrialsUntilMRCADetection(g: Globals, gdist: GammaDist, tRoot: Real, 
 // whether any descendant will be detected at present (at t = 0.0)
 function isDetected(g: Globals, gdist: GammaDist, time: Real) => GammaBool {
   
-    let ret1 = drawGammaExponential(gdist, 1.0 + g.epsilon);
-    let gdist = ret1.gdist;
-    let waitingTime = ret1.rv;
+    let ret = drawGammaExponential(gdist, 1.0 + g.epsilon);
+    let gdist = ret.gdist;
+    let waitingTime = ret.rv;
   
     if (waitingTime > time) {
         assume detected ~ Bernoulli(g.rho);
@@ -62,15 +64,18 @@ function isDetected(g: Globals, gdist: GammaDist, time: Real) => GammaBool {
     }
   
     assume isSpeciation ~ Bernoulli(1.0 / (1.0 + g.epsilon));
+
     if (isSpeciation) {
-        let ret2 = isDetected(g, gdist, time - waitingTime);
-        if (ret2.detected) { return ret2; }
-        return isDetected(g, ret2.gdist, time - waitingTime);
+        let ret = isDetected(g, gdist, time - waitingTime);
+        if (ret.detected) {
+            return ret;
+        }
+        return isDetected(g, ret.gdist, time - waitingTime);
     }
 
     // Extinction
     return GammaBool {
-        gdist = gdist,
+        gdist    = gdist,
         detected = false
     };
 }
@@ -144,6 +149,7 @@ model function crbd(tree: Tree, rho: Real) => Real[] {
     let gdist = walk(g, gdist, tree.left,  tree.age);
     let gdist = walk(g, gdist, tree.right, tree.age);
 
+    // Estimate effect of conditioning on survival
     let m = numTrialsUntilMRCADetection(g, gdist, tree.age, 1000);
     weight int2real(m);
 
