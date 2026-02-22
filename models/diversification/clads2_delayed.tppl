@@ -1,8 +1,8 @@
-// Script for ClaDS2 with delayed sampling
+// ClaDS2 model with hard-coded delayed sampling
 
+import "trees.tppl"
 import "math.tppl"
 import "distributions.tppl"
-import "trees.tppl"
 
 
 // Types
