@@ -1,17 +1,34 @@
-// Math functions and constants
+// Math functions
 
-let PI = 3.14159265358979;
+
+function min(a: Real, b: Real) => Real {
+  if a <= b {
+    return a;
+  }
+  return b;
+}
+
+
+function max(a: Real, b: Real) => Real {
+  if a <= b {
+    return b;
+  }
+  return a;
+}
+
 
 function logFactorial(n: Real) => Real {
 
-  if n <= 1.0 { return 0.0; }
-
+  if (n <= 1.0) {
+    return 0.0;
+  }
   return log(n) + logFactorial(n - 1.0);
 }
 
 
 function lnGamma(z: Real) => Real {
 
+    let pi = 3.14159265358979;
     let lanczos_g = 7.0;
     let lanczos_n = 9;
     let lanczos_c = [
@@ -34,7 +51,7 @@ function lnGamma(z: Real) => Real {
     /* ---- Use reflection for negative arguments (z < 0.5) --------------- */
     if (z < 0.5) {
         /* Recursively evaluate lnGamma(1‑z) which lies in (0.5, ifty) */
-        // return log(PI) - log(sin(pi * z)) - lnGamma(1.0 - z);
+        // return log(pi) - log(sin(pi * z)) - lnGamma(1.0 - z);
         return -1e-12; // This case should not occur in the model
     }
 
@@ -49,6 +66,6 @@ function lnGamma(z: Real) => Real {
     let t = zz + lanczos_g + 0.5;
 
     /* Final lnGamma formula */
-    return 0.5 * log(2.0 * PI) + (zz + 0.5) * log(t) - t + log(x);
+    return 0.5 * log(2.0 * pi) + (zz + 0.5) * log(t) - t + log(x);
 }
 

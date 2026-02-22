@@ -3,15 +3,18 @@
 // Tree types
 // ----------
 
-type ClockTree =
-  | Node {left: Tree, right: Tree, age: Real}
-  | Leaf {age: Real}
+// type BinTree[D] =
+//  | Node {left: BinTree, right: BinTree, data: D}
+//  | Leaf {data: D}
+
+type ClockTree = 
+    | Node {left: ClockTree, right: ClockTree, age: Real}
+    | Leaf {age: Real}
 
 
 // Tree functions
 // --------------
-
-function countLeaves(tree: Tree) => Int {
+function countLeaves(tree: ClockTree) => Int {
   if tree is Node {
     return countLeaves(tree.left) + countLeaves(tree.right);
   }
