@@ -1,0 +1,338 @@
+// BDD2 model with hard-coded delayed sampling
+
+import "trees.tppl"
+import "math.tppl"
+import "distributions.tppl"
+
+// Type for global model parameters
+type Globals = Globals {
+    epsilon: Real,
+    rho:     Real,
+    deltaT:  Real
+}
+
+// Type for distributions
+type Dists = Dists {
+    gdist:      GammaDist,
+    nigdist:    NormalInverseGammaDist
+}
+
+// Types for returns
+type Params = Params {
+    d:          Dists,
+    multiplier: Real
+}
+
+type DistsBool = DistsBool {
+    d:          Dists,
+    detected:   Bool
+}
+
+// We use clock tree representation
+type alias Tree = ClockTree
+
+// Type for capturing BDD time segment cases
+type BDDCase =
+    | DeltaT {timeSegment:Real}
+    | Event {timeSegment:Real}
+    | EndOfBranch {timeSegment:Real}
+
+
+// Help function to predict the prob that a tree goes undetected
+function predictUndetectedProb(g: Globals, d: Dists, time: Real, multiplier: Real) => Real {
+
+    // Effective time
+    let logAlpha = d.nigdist.mu0;
+    let effectiveTime = time * exp(logAlpha) / 2.0;
+
+    // Expected number of leaves
+    let lambda = d.gdist.alpha / d.gdist.beta;
+    let mu = g.epsilon * lambda;
+    let expectedLeaves = exp(effectiveTime*multiplier*(lambda-mu));
+
+    // All leaves need to be unobserved
+    return ((1.0-g.rho)^expectedLeaves);
+}
+
+
+// Help function to determine BDD case
+function bddCase(timeSegment: Real, waitingTime: Real, deltaT: Real) => BDDCase {
+
+    // Take most common case first to promote branch prediction
+    if ((deltaT < waitingTime) && (deltaT < timeSegment)) {
+        return (DeltaT{ timeSegment=deltaT });
+    }
+
+    // Now separate the other cases
+    if (waitingTime < timeSegment) {
+        return (Event{ timeSegment=waitingTime });
+    }
+
+    return (EndOfBranch{ timeSegment=timeSegment });
+}
+
+
+/////////////// Model functions //////////////////////
+
+// Forward simulation sampling the number of times until the
+// MRCA (most recent common ancestor, root of the tree) would
+// have been detected given current parameter settings.
+function numTrialsUntilMRCADetection(g: Globals, d: Dists, tRoot: Real, max_m: Int) => Int {
+
+    // We have used up the number of trials. Conditioning on max_m makes more
+    // sense than killing this simulation altogether. A user might want to monitor
+    // how often this condition is hit, though. If it is hit more than occasionally,
+    // the inference is biased towards parameter values that increase the likelihood
+    // of detection, and max_m needs to be increased to avoid this bias.
+    if (max_m == 0) {
+        // printLn("Hit max_m in getting number of trials until MRCA detection");
+        return 0;
+    }
+
+    // Both descendants of the MRCA need to survive
+    let ret = isDetected(g, d, tRoot, 1.0);
+    if (ret.detected) {
+        let ret = isDetected(g, d, tRoot, 1.0);
+        if (ret.detected) {
+            // MRCA is detected, terminate (and add failures in backward recursion)
+            return 1;
+        }
+    }
+        
+    // MRCA is not detected, continue recursion
+    return (1 + numTrialsUntilMRCADetection(g, d, tRoot, max_m-1)); 
+}
+
+
+// Forward simulation determining whether a tree survives and is detected
+function isDetected(g: Globals, d: Dists, tBegin: Real, multiplier: Real) => DistsBool {
+
+    // Is further simulation worthwhile?
+    if (predictUndetectedProb(g, d, tBegin, multiplier) < 1e-4) {
+        // printLn("Predicted undetected prob < limit");
+        return DistsBool {
+            d        = d,
+            detected = true
+        };
+    }
+
+    // Is process near critical? Use expectation in this case
+    // rather than a computationally expensive simulation
+    if ((1.0-g.epsilon)/tBegin < 1e-4) {
+        // printLn("Used critical process approximation");
+        assume obs ~ Bernoulli(g.rho);  // One lineage is expected to survive
+        return DistsBool {
+            d        = d,
+            detected = obs
+        };
+    }
+    
+    // We always need to consider the possibility of an event
+    let ret1 = drawGammaExponential(d.gdist,multiplier*(1.0+g.epsilon));
+    let waitingTime = ret1.rv;
+ 
+    // Find out BDD case and time segment we will be considering
+    // Note that tEnd is 0, so timeSegment=(tBegin-0)=tBegin
+    let b = bddCase(tBegin, waitingTime, g.deltaT);
+
+    // Let the diversification rates shift
+    let ret2 = drawNormalInverseGammaGaussian(d.nigdist);
+    let multiplier = exp(ret2.rv*b.timeSegment)*multiplier; 
+    
+    // Update distributions
+    let d = Dists {
+        gdist   = ret1.gdist,
+        nigdist = ret2.nigdist
+    };
+
+    // Check for extremely high multiplier (almost surely we will be detected)
+    if (multiplier > 1e4) {
+        // printLn(concat("Multiplier hit upper limit in isDetected: ",real2string(multiplier)));
+        return DistsBool {
+            d        = d,
+            detected = true
+        };
+    }
+
+    // Protect multiplier from becoming so low it causes numerical problems
+    let multiplier = max(multiplier, 1e-6);
+
+    // Catch survival until recent
+    if (b is EndOfBranch) {
+        assume obs ~ Bernoulli(g.rho);
+        return DistsBool {
+            d        = d,
+            detected = obs
+        };
+    }
+
+    // Catch deltaT smallest
+    if (b is DeltaT) {
+        return isDetected(g, d, tBegin-b.timeSegment, multiplier);
+    }
+   
+    // We have a speciation or extinction (b is Event)
+    assume speciation ~ Bernoulli(1.0/(1.0+g.epsilon));
+
+    if (speciation) {
+        let ret = isDetected(g, d, tBegin-b.timeSegment, multiplier);
+        if (ret.detected) {
+            return ret;
+        }
+        return isDetected(g, d, tBegin-b.timeSegment, multiplier);
+    }
+
+    // We died...
+    return DistsBool {
+        d        = d,
+        detected = false
+    };
+}
+
+
+// Simulate hidden speciation process along a branch in the reconstructed tree
+function simHiddenSpeciation(g: Globals, d: Dists, tBegin:Real, tEnd: Real, multiplier: Real) => Params {
+
+    // We always need to consider the possibility of speciation
+    let ret1 = drawGammaExponential(d.gdist,multiplier);
+    let waitingTime = ret1.rv;
+
+    // Find out BDD case and time segment we will be considering
+    let b = bddCase(tBegin-tEnd, waitingTime, g.deltaT);
+
+    // We cannot die during this time segment
+    let gdist = observeGammaPoisson(0, ret1.gdist, multiplier*g.epsilon*b.timeSegment);
+
+    // Let the diversification rates shift
+    let ret2 = drawNormalInverseGammaGaussian(d.nigdist);
+    let multiplier = exp(ret2.rv*b.timeSegment)*multiplier;
+
+    // Update distributions
+    let d = Dists {
+        gdist   = gdist,
+        nigdist = ret2.nigdist
+    };
+
+    // Check for extremely high multiplier (almost surely incompatible with observed tree)
+    if (multiplier > 1e4) {
+        // printLn(concat("Multiplier hit upper limit in simHiddenSpeciation: ",real2string(multiplier)));
+        weight 0.0;
+        return Params {
+            d          = d,
+            multiplier = multiplier
+        };
+    }
+
+    // Protect multiplier from becoming so low it causes numerical problems
+    let multiplier = max(multiplier, 1e-6);
+
+    // Test for termination case (end of branch)
+    if (b is EndOfBranch) {
+        return Params {
+            d          = d,
+            multiplier = multiplier
+        };
+    }
+    
+    // If waitingTime is smallest, there is the hidden subtree resulting from
+    // the speciation event to consider 
+    if (b is Event) {
+        let ret = isDetected(g, d, tBegin-b.timeSegment, multiplier);
+        let d = ret.d;
+        if (ret.detected) {
+            weight 0.0;
+            resample;
+            return Params {
+                d          = d,
+                multiplier = multiplier
+            };
+        }
+        weight 2.0; // Double the weight because of the rotational symmetry
+    }
+
+    // Continue the simulation (b is Event or b is DeltaT)
+    return simHiddenSpeciation(g, d, tBegin-b.timeSegment, tEnd, multiplier);
+}
+
+
+// Simulate ("walk") along the reconstructed tree
+function walk(g: Globals, d: Dists, parentAge: Real, node: Tree, multiplier: Real) => Dists {
+
+    // Simulate hidden speciation on the ancestral branch
+    let nodeAge = node.age;
+    let p = simHiddenSpeciation(g, d, parentAge, nodeAge, multiplier);
+    resample;
+
+    // Deal with the end of the branch
+    if (node is Node) {
+        let gdist = observeGammaExponential(0.0, p.d.gdist, p.multiplier);
+        let d = Dists {
+                    nigdist     = p.d.nigdist,
+                    gdist       = gdist
+                };
+        let d = walk(g, d, p.multiplier, node.left,  nodeAge);
+        return  walk(g, d, p.multiplier, node.right, nodeAge);
+    }
+    observe true ~ Bernoulli(g.rho);
+    resample;
+    return d;
+}
+
+
+// Model function for BDD2
+model function bdd2(tree: Tree, rho: Real, numIntervals: Int) => Real[] {
+  
+    // Compute the time for one of the intervals
+    let deltaT = tree.age / int2real(numIntervals);
+
+    // Set priors such that net diversification (lambda - mu) is likely
+    // to generate a tree of the expected size.
+    let numLeaves = int2real(countLeaves(tree));
+    let expectedTotalLeaves = numLeaves / rho;
+    let meanLambdaPrior = 2.0 * log(expectedTotalLeaves) / tree.age;
+
+    // Define the priors
+    let gdist = GammaDist {
+        alpha = 1.0,
+        beta  = 1.0/meanLambdaPrior
+    };
+
+    let nigdist = NormalInverseGammaDist {
+        mu0    = 0.0,
+        lambda = 1.0,
+        alpha  = 1.0,
+        beta   = 0.2*meanLambdaPrior
+    };
+
+    let d = Dists {
+        gdist   = gdist,
+        nigdist = nigdist
+    };
+
+    assume epsilon ~ Uniform(0.0,1.0)               drift Uniform(max(epsilon-0.05,0.0),min(epsilon+0.05,1.0));
+
+    let g = Globals {
+        epsilon = epsilon,
+        rho     = rho,
+        deltaT  = deltaT
+    };
+
+    // Correct for tip labels and rotations
+    logWeight log(2.0) * (numLeaves - 1.0) - logFactorial(numLeaves);
+    
+    // Walk over tree
+    let d = walk(g, d, tree.age, tree.left, 1.0);
+    let d = walk(g, d, tree.age, tree.right, 1.0);
+
+    // Condition on MRCA detection
+    let m = numTrialsUntilMRCADetection(g, d, tree.age, 1000);
+    weight int2real(m);
+
+    let lambda   = d.gdist.alpha/d.gdist.beta;
+    let mu       = g.epsilon*lambda;
+    let logAlpha = d.nigdist.mu0;
+    let sigma    = sqrt(d.nigdist.beta/((d.nigdist.alpha-1.0)*d.nigdist.lambda));
+
+    return [lambda, mu, logAlpha, sigma, int2real(m)];
+}
+
