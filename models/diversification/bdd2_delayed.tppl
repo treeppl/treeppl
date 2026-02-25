@@ -270,12 +270,12 @@ function walk(g: Globals, d: Dists, parentAge: Real, node: Tree, multiplier: Rea
                     nigdist     = p.d.nigdist,
                     gdist       = gdist
                 };
-        let d = walk(g, d, p.multiplier, node.left,  nodeAge);
-        return  walk(g, d, p.multiplier, node.right, nodeAge);
+        let d = walk(g, d, nodeAge, node.left,  p.multiplier);
+        return  walk(g, d, nodeAge, node.right, p.multiplier);
     }
     observe true ~ Bernoulli(g.rho);
     resample;
-    return d;
+    return p.d;
 }
 
 
