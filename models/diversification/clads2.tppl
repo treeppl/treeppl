@@ -1,204 +1,159 @@
+// ClaDS2 model with hard-coded delayed sampling
+
+import "trees.tppl"
+import "math.tppl"
+import "distributions.tppl"
+
+
+// Types
+// -----
+
+type alias Tree = ClockTree
+
 type Globals = Globals {
-  lambda : Real,
-  mu : Real,
-  sigma : Real,
-  log_alpha : Real,
-  rho : Real
+    lambda:     Real,
+    mu:         Real,
+    sigma:      Real,
+    logAlpha:   Real,
+    rho:        Real
 }
 
-type SpecTree =
-  | Node {left : SpecTree, right : SpecTree, age : Real}
-  | Leaf {age : Real}
+// Model functions
+// ---------------
 
-function countLeaves(tree: SpecTree) => Real {
-  if tree is Node {
-    return countLeaves(tree.left) + countLeaves(tree.right);
-  }
-  return 1.0;
-}
+// Get an estimate of the probability of the MRCA being detected under given parameter values
+function numTrialsUntilMRCADetection(g: Globals, tRoot: Real, max_m: Int) => Int {
 
-function logFactorial(n: Real) => Real {
-  if n <= 0.0 {
-    return 0.0;
-  }
-  return log(n) + logFactorial(n - 1.0);
-}
-
-// Forward simulation from a starting time, returning whether the lineage
-// goes [extinction or not being detected (false)] or [survival and being detected (true)]
-function m_clads2GoesUndetected(g: Globals, tBeg: Real, max_m: Int) => Real {
-  if max_m == 0 {
-    weight 0.0;
-    return 0.;
-  } else {
-    //We need to survive twice
-    if survives_c(g,tBeg,1.) {
-      if survives_c(g,tBeg,1.) {
-        return 1.;
-      } else {
-        return 1. + m_clads2GoesUndetected(g, tBeg, max_m - 1);
-      }
-    } else {
-      return 1. + m_clads2GoesUndetected(g, tBeg, max_m - 1);
+    // Check if we used up the number of trials. If so, condition on max_m as an
+    // approximation. A user might want to monitor how often this condition is hit.
+    // If it is hit frequently, the inference is biased towards parameter values
+    // that increase the likelihood of detection, and max_m needs to be increased.
+    if (max_m == 0) {
+        return 0;
     }
-  }
-}
 
-function survives_c(g: Globals, tBeg: Real, multiplier: Real) => Bool {
-  assume newRate ~ Gaussian(g.log_alpha, g.sigma);
-  let multiplier = multiplier * exp(newRate);
-  if (multiplier < 1e-3) || (multiplier > 1e3) {
-    return true;
-  }
-  assume tEvent ~ Exponential(multiplier * (g.lambda + g.mu));
-  let t = tBeg - tEvent;
-  if t < 0.0 {
-    assume obs ~ Bernoulli(g.rho);
-    return obs;
-  } else {
-    assume surv ~ (Bernoulli (g.lambda/(g.lambda + g.mu)));
-    if surv {
-      //Speciation
-      if survives_c(g,t,multiplier) {
-        return true;
-      } else {
-        return survives_c(g,t,multiplier);
-      }
-    } else {
-      //Extinction
-      return false;
+    if (isDetected(g, 1.0, tRoot) && isDetected(g, 1.0, tRoot)) {
+        return 1;       // We are detected, terminate
     }
-  }
+
+    // MRCA is not detected, continue recursion
+    return (1 + numTrialsUntilMRCADetection(g, tRoot, max_m-1));
 }
 
-//------------------------------------///
+// Simulate the process from some time in the past and determine
+// whether any descendant will be detected at present (at t = 0.0)
+function isDetected(g: Globals, multiplier: Real, tBegin: Real) => Bool {
 
-function survives(g: Globals, tBeg: Real, multiplier: Real) => Bool {
-  assume newRate ~ Gaussian(g.log_alpha, g.sigma);
-  let multiplier = multiplier * exp(newRate);
-  if (multiplier < 1e-3) || (multiplier > 1e3) {
-    return true;
-  }
-  assume tEvent ~ Exponential(multiplier * (g.lambda + g.mu));
-  let t = tBeg - tEvent;
-  if t < 0.0 {
-	//To Fredrik : If you want to kill the program you have only to 
-	// the next 2 ligns
-    assume obs ~ Bernoulli(g.rho);
-    return obs;
-  } else {
-    assume surv ~ (Bernoulli (g.lambda/(g.lambda + g.mu)));
-    if surv {
-      //Speciation
-      if survives(g,t,multiplier) {
-        return true;
-      } else {
-        return survives(g,t,multiplier);
-      }
-    } else {
-      //Extinction
-      return false;
+    assume deltaLogRate ~ Gaussian(g.logAlpha, g.sigma);
+    let multiplier = multiplier * exp(deltaLogRate);
+    if (multiplier > 1e4) {
+      return true;
     }
-  }
+    let multiplier = max(multiplier,1e-6);
+
+    assume waitingTime ~ Exponential(multiplier*(g.lambda+g.mu));
+    let newTime = tBegin - waitingTime; 
+
+    if (newTime < 0.0) {
+        assume detected ~ Bernoulli(g.rho);
+        return detected;
+    }
+
+    assume isSpeciation ~ Bernoulli(g.lambda/(g.lambda+g.mu));
+
+    if (isSpeciation) {
+        return (isDetected(g, multiplier, newTime) || isDetected(g, multiplier, newTime));
+    }
+
+    return false;   // Extinction
 }
 
-function simHiddenSpeciation(g: Globals, nodeAge: Real, tBeg:Real, multiplier: Real) => Real {
-  assume newRate ~ Gaussian(g.log_alpha, g.sigma);
-  let multiplier = multiplier * exp(newRate);
-  if (multiplier < 1e-3) || (multiplier > 1e3) {
+
+// Simulate hidden speciation along an observed branch
+function simHiddenSpeciation(g: Globals, multiplier: Real, startTime: Real, endTime: Real) => Real {
+
+    assume deltaLogRate ~ Gaussian(g.logAlpha, g.sigma);
+    let multiplier = multiplier * exp(deltaLogRate);
+    if (multiplier > 1e4) {
       weight 0.0;
       return multiplier;
-  }
-  //printLn(real2string(multiplier));
-  //printLn(real2string(g.lambda));
-  assume tEvent ~ Exponential(multiplier * g.lambda);
-  let t = tBeg - tEvent;
-  //printLn(real2string(tBeg));
-  //printLn(real2string(tEvent));
-  //printLn(real2string(t));
-  if t > nodeAge {
-    if survives(g, t,multiplier) {
-      weight 0.0;
-      return multiplier;
-    } else {
-      observe 0 ~ (Poisson(multiplier * g.mu * (tBeg - t)));
-      //printLn(real2string(multiplier * g.mu * (tBeg - t)));
-      weight 2.;
-      return simHiddenSpeciation(g, nodeAge,t,multiplier);
     }
-  } else {
-    observe 0 ~ (Poisson(multiplier * g.mu * (tBeg - nodeAge)));
-      //printLn(real2string(multiplier * g.mu * (tBeg - nodeAge)));
+    let multiplier = max(multiplier,1e-6);
+
+    assume waitingTime ~ Exponential(multiplier*g.lambda);
+    let time = startTime - waitingTime;
+
+    // Handle speciation before end of branch
+    if (time > endTime) {
+        if (isDetected(g, multiplier, time)) {
+            weight 0.0;
+            return multiplier;
+        }
+        observe 0 ~ Poisson(multiplier*g.mu*waitingTime);
+        weight 2.0;
+        return simHiddenSpeciation(g, multiplier, time, endTime);
+    }
+    
+    // Passed the end, we are done
+    observe 0 ~ Poisson(multiplier*g.mu*(startTime-endTime));
     return multiplier;
-  }
 }
 
-function walk(g: Globals, node: SpecTree, parentAge: Real, multiplier:Real) {
+
+// Simulate process along the observed tree
+function walk(g: Globals, multiplier: Real, parentAge: Real, node: Tree) {
+   
     let nodeAge = node.age;
-    let multiplier = simHiddenSpeciation(g, nodeAge, parentAge, multiplier);
+    let multiplier = simHiddenSpeciation(g, multiplier, parentAge, nodeAge);
     resample;
-     if node is Node {
-      observe 0. ~ (Exponential (multiplier*g.lambda));
-      //printLn(real2string(multiplier*g.lambda));
-      walk(g, node.left, nodeAge, multiplier);
-      walk(g, node.right, nodeAge, multiplier);
+
+    if (node is Node) {
+        observe 0.0 ~ Exponential(multiplier*g.lambda);
+        walk(g, multiplier, nodeAge, node.left);
+        walk(g, multiplier, nodeAge, node.right);
     } else {
-      observe true ~ (Bernoulli(g.rho));
-      //printLn(real2string(g.rho));
-      resample;
-  }
+        observe true ~ Bernoulli(g.rho);
+        resample;
+    }
 }
 
-function min(a: Real, b: Real) => Real {
-  if a <= b {
-    return a;
-  }
-  return b;
-}
 
-function max(a: Real, b: Real) => Real {
-  if a <= b {
-    return b;
-  }
-  return a;
-}
+// Main model function
+model function clads2(tree: Tree, rho: Real) => Real[] {
 
-model function top(tree: SpecTree, rho: Real) => Real[] {
+    // Set priors such that net diversification (lambda - mu) is likely
+    // to generate a tree of the observed size.
+    let numLeaves = int2real(countLeaves(tree));
+    let expectedTotalLeaves = numLeaves / rho;
+    let meanLambdaPrior = 2.0 * log(expectedTotalLeaves) / tree.age;
 
-  // Set priors such that net diversification (lambda - mu) is likely
-  // to generate a tree of the observed size.
-  let numLeaves = countLeaves(tree);
-  let expectedTotalLeaves = numLeaves / rho;
-  let meanLambdaPrior = 2.0 * log(expectedTotalLeaves) / tree.age;
+    assume lambda ~ Gamma(1.0, meanLambdaPrior)     drift Uniform(max(lambda/1.1,1e-6),min(lambda*1.1,1e6));
+    assume epsilon ~ Uniform(0.0,1.0)               drift Uniform(max(epsilon-0.1,0.0),min(epsilon+0.1,1.0));
+    let mu = epsilon*lambda;
+    assume sigma ~ Gamma(1.0, 1.0)                  drift Gamma(sigma/1.1, 1.1*sigma);
+    let sigma = sqrt(0.2 / sigma);
+    assume logAlpha ~ Gaussian(0.0, sigma)          drift Uniform(logAlpha-0.05,logAlpha+0.05);
 
-  // Define the priors
-  assume lambda ~ Gamma(1.0, meanLambdaPrior)   drift Uniform(max(lambda/1.1,1e-6),min(lambda*1.1,1e6));
-  assume epsilon ~ Uniform(0.0,1.0)             drift Uniform(max(epsilon-0.1,0.0),min(epsilon+0.1,1.0));
-  let mu = epsilon*lambda;
-  assume sigma ~ Gamma(1.0, 1.0)                drift Gamma(sigma/1.1, 1.1);
-  let sigma = sqrt(0.2 / sigma);
-  assume log_alpha ~ Gaussian(0.0, sigma)       drift Gaussian(log_alpha, 0.1);
-  
-  logWeight ((log(2.0) * (numLeaves - 1.0)) - logFactorial(numLeaves));
-  let g = Globals {
-    lambda = lambda,
-    mu = mu,
-    sigma = sigma,
-    log_alpha = log_alpha,
-    rho = rho
-  };
-  let gCRBD = Globals {
-    lambda = lambda,
-    mu = mu,
-    sigma = 0.0,
-    log_alpha = 0.0,
-    rho = rho
-  };
-  //printLn(real2string(g.lambda));
-  walk(g, tree.left, tree.age, 1.);
-  walk(g, tree.right, tree.age, 1.);
-  let m = m_clads2GoesUndetected(g, tree.age, 1000);
-  weight m;
-  return [lambda, mu, sigma, log_alpha, m];
+    let g = Globals {
+        lambda      = lambda,
+        mu          = mu,
+        sigma       = sigma,
+        logAlpha    = logAlpha,
+        rho         = rho
+    };
+
+    // Compensate for the rotation of interior nodes in the
+    // observed tree, and labeling of the leaves in the tree
+    logWeight ((log(2.0) * (numLeaves - 1.0)) - logFactorial(numLeaves));
+
+    // Simulate conditional on the observed tree
+    walk(g, 1.0, tree.age, tree.left);
+    walk(g, 1.0, tree.age, tree.right);
+
+    // Estimate effect of conditioning on survival
+    let m = numTrialsUntilMRCADetection(g, tree.age, 1000);
+    weight int2real(m);
+
+    return [lambda, mu, logAlpha, sigma, int2real(m)];
 }
 
