@@ -92,7 +92,7 @@ function numTrialsUntilMRCADetection(g: Globals, d: Dists, tRoot: Real, max_m: I
     // Both descendants of the MRCA need to survive
     let ret = isDetected(g, d, tRoot, 1.0);
     if (ret.detected) {
-        let ret = isDetected(g, d, tRoot, 1.0);
+        let ret = isDetected(g, ret.d, tRoot, 1.0);
         if (ret.detected) {
             // MRCA is detected, terminate (and add failures in backward recursion)
             return 1;
