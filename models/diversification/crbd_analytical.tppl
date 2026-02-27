@@ -1,8 +1,15 @@
-// Analytical crbd model script
+// Constant Rate Birth Death (CRBD) model script
+// using analytical likelihood expression for
+// sampled values of lambda and mu.
 
-type Tree =
-    | Node {left: Tree, right: Tree, age: Real}
-    | Leaf {age: Real}
+import "trees.tppl"
+import "math.tppl"
+
+
+// Types
+// -----
+
+type alias Tree = ClockTree
 
 type Globals = Globals { 
     lambda : Real,
@@ -10,19 +17,9 @@ type Globals = Globals {
     rho    : Real
 }
 
-function countLeaves(tree: Tree) => Int {
-  if tree is Node {
-    return countLeaves(tree.left) + countLeaves(tree.right);
-  }
-  return 1;
-}
 
-function logFactorial(n: Real) => Real {
-  if n <= 1.0 {
-    return 0.0;
-  }
-  return log(n) + logFactorial(n - 1.0);
-}
+// Help functions
+// ---------------
 
 function gHatLog(g: Globals, t: Real) => Real {
 
@@ -42,6 +39,11 @@ function sLog(g: Globals, t: Real) => Real {
     return log(r) - log(x);
 }
 
+
+// Model functions
+// ---------------
+
+// Forward simulation determining whether a tree survives and is detected (sampled)
 function walk(g: Globals, tree: Tree) => Real {
 
     if (tree is Leaf) {
@@ -51,15 +53,15 @@ function walk(g: Globals, tree: Tree) => Real {
     return (gHatLog(g, tree.age) + walk(g, tree.left) + walk(g, tree.right));
 }
 
+// Main model function
 model function crbd(tree: Tree, rho: Real) => Real[] {
     
     // Set priors such that net diversification (lambda - mu) is likely
     // to generate a tree of the observed size.
-    let leaves = int2real(countLeaves(tree));
-    let expectedTotalLeaves = leaves / rho;
+    let numLeaves = int2real(countLeaves(tree));
+    let expectedTotalLeaves = numLeaves / rho;
     let meanLambdaPrior = 2.0 * log(expectedTotalLeaves) / tree.age;
 
-    // Define the priors
     assume lambda ~ Gamma(1.0, meanLambdaPrior);
     assume epsilon ~ Uniform(0.0,1.0);
     let mu = epsilon*lambda;
@@ -70,21 +72,18 @@ model function crbd(tree: Tree, rho: Real) => Real[] {
         rho    = rho
     };
 
-    let treeLogLike = 2.0*gHatLog(g, tree.age) + walk(g, tree.left) + walk(g, tree.right);
-    // printLn(concat("treeLogLike: : ",real2string(treeLogLike)));
+    // Compute likelihood of tree analytically
+    let recursiveTreeLogLike = 2.0*gHatLog(g, tree.age) + walk(g, tree.left) + walk(g, tree.right);
+    logWeight (numLeaves-2.0)*log(g.lambda) +  numLeaves*log(g.rho) + recursiveTreeLogLike;
 
-    let n = int2real(countLeaves(tree));
-    let rawLogLike = (n-2.0)*log(g.lambda) +  n*log(g.rho) + treeLogLike;
-    let scondLogLike = 2.0*sLog(g, tree.age);
-    logWeight rawLogLike - scondLogLike;
-    // printLn(concat("rawLogLike: : ",real2string(rawLogLike)));
-    // printLn(concat("scondLogLike: : ",real2string(scondLogLike)));
-
-    let correction = (log(2.0) * (n-1.0) - logFactorial(n));
+    // Compensate for the rotation of interior nodes in the
+    // observed tree, and labeling of the leaves in the tree
+    let correction = (log(2.0) * (numLeaves-1.0) - logFactorial(numLeaves));
     logWeight correction;
-    // printLn(concat("correction: ",real2string(correction)));
 
-    // printLn(concat("logLike: ",real2string(rawLogLike-scondLogLike+correction)));
+    // Estimate effect of conditioning on survival
+    let scondLogLike = 2.0*sLog(g, tree.age);
+    logWeight -scondLogLike;
 
     return [lambda, mu];
 }
