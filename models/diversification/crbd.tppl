@@ -22,13 +22,13 @@ type Globals = Globals {
 // ---------------
 
 // Get an estimate of the probability of the MRCA being detected under given parameter values
-function numTrialsUntilMRCADetection(g: Globals, tRoot: Real, maxM: Int) => Int {
+function numTrialsUntilMRCADetection(g: Globals, tRoot: Real, mMax: Int) => Int {
 
     // Check if we used up the max number of trials. If so, condition on max_m as an
     // approximation. A user might want to monitor how often this condition is hit.
     // If it is hit frequently, the inference is biased towards parameter values
     // that increase the likelihood of detection, and max_m needs to be increased.
-    if (maxM == 0) {
+    if (mMax == 0) {
         return 0;
     }
 
@@ -37,7 +37,7 @@ function numTrialsUntilMRCADetection(g: Globals, tRoot: Real, maxM: Int) => Int 
         return 1;    // We are detected, terminate!
     } else {
         // MRCA is not detected, continue recursion
-        return (1 + numTrialsUntilMRCADetection(g, tRoot, max_m-1));
+        return (1 + numTrialsUntilMRCADetection(g, tRoot, mMax-1));
     }
 }
 
@@ -129,6 +129,7 @@ model function crbd(tree: Tree, rho: Real) => Real[] {
     // Estimate effect of conditioning on survival
     let m = numTrialsUntilMRCADetection(g, tree.age, 1000);
     weight int2real(m);
+    resample;
 
     return [lambda, mu];
 }
