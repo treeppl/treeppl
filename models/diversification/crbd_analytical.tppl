@@ -74,7 +74,8 @@ model function crbd(tree: Tree, rho: Real) => Real[] {
 
     // Compute likelihood of tree analytically
     let recursiveTreeLogLike = 2.0*gHatLog(g, tree.age) + walk(g, tree.left) + walk(g, tree.right);
-    logWeight (numLeaves-2.0)*log(g.lambda) +  numLeaves*log(g.rho) + recursiveTreeLogLike;
+    let treeLogLike =  (numLeaves-2.0)*log(g.lambda) +  numLeaves*log(g.rho) + recursiveTreeLogLike;
+    logWeight treeLogLike;
 
     // Compensate for the rotation of interior nodes in the
     // observed tree, and labeling of the leaves in the tree
