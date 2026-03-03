@@ -1,14 +1,18 @@
-// BDD2 model with hard-coded delayed sampling
+// BDD2 model script with hard-coded delayed sampling
 
 import "trees.tppl"
 import "math.tppl"
 import "distributions.tppl"
 
+
+// Types
+// -----
+
 // Type for global model parameters
 type Globals = Globals {
-    epsilon: Real,
-    rho:     Real,
-    deltaT:  Real
+    epsilon:    Real,
+    rho:        Real,
+    deltaT:     Real
 }
 
 // Type for distributions
@@ -38,8 +42,11 @@ type BDDCase =
     | EndOfBranch {timeSegment:Real}
 
 
+// Help functions
+// --------------
+
 // Help function to predict the prob that a tree goes undetected
-function predictUndetectedProb(g: Globals, d: Dists, time: Real, multiplier: Real) => Real {
+function predictUndetectedProb(g: Globals, d: Dists, multiplier: Real, time: Real) => Real {
 
     // Effective time
     let logAlpha = d.nigdist.mu0;
@@ -53,7 +60,6 @@ function predictUndetectedProb(g: Globals, d: Dists, time: Real, multiplier: Rea
     // All leaves need to be unobserved
     return ((1.0-g.rho)^expectedLeaves);
 }
-
 
 // Help function to determine BDD case
 function bddCase(timeSegment: Real, waitingTime: Real, deltaT: Real) => BDDCase {
@@ -72,27 +78,25 @@ function bddCase(timeSegment: Real, waitingTime: Real, deltaT: Real) => BDDCase 
 }
 
 
-/////////////// Model functions //////////////////////
+// Model functions
+// ---------------
 
-// Forward simulation sampling the number of times until the
-// MRCA (most recent common ancestor, root of the tree) would
-// have been detected given current parameter settings.
-function numTrialsUntilMRCADetection(g: Globals, d: Dists, tRoot: Real, max_m: Int) => Int {
+// Get an estimate of the probability of the MRCA being detected under given parameter values
+function numTrialsUntilMRCADetection(g: Globals, d: Dists, tRoot: Real, mMax: Int) => Int {
 
-    // We have used up the number of trials. Conditioning on max_m makes more
-    // sense than killing this simulation altogether. A user might want to monitor
-    // how often this condition is hit, though. If it is hit more than occasionally,
-    // the inference is biased towards parameter values that increase the likelihood
-    // of detection, and max_m needs to be increased to avoid this bias.
-    if (max_m == 0) {
-        // printLn("Hit max_m in getting number of trials until MRCA detection");
+    // Check if we used up the max number of trials. If so, condition on mMax as an
+    // approximation. A user might want to monitor how often this condition is hit.
+    // If it is hit frequently, the inference is biased towards parameter values
+    // that increase the likelihood of detection, and mMax needs to be increased.
+    if (mMax == 0) {
+        // printLn("Hit mMax in getting number of trials until MRCA detection");
         return 0;
     }
 
     // Both descendants of the MRCA need to survive
-    let ret = isDetected(g, d, tRoot, 1.0);
+    let ret = isDetected(g, d, 1.0, tRoot);
     if (ret.detected) {
-        let ret = isDetected(g, ret.d, tRoot, 1.0);
+        let ret = isDetected(g, ret.d, 1.0, tRoot);
         if (ret.detected) {
             // MRCA is detected, terminate (and add failures in backward recursion)
             return 1;
@@ -100,15 +104,14 @@ function numTrialsUntilMRCADetection(g: Globals, d: Dists, tRoot: Real, max_m: I
     }
         
     // MRCA is not detected, continue recursion
-    return (1 + numTrialsUntilMRCADetection(g, d, tRoot, max_m-1)); 
+    return (1 + numTrialsUntilMRCADetection(g, d, tRoot, mMax-1)); 
 }
 
-
 // Forward simulation determining whether a tree survives and is detected
-function isDetected(g: Globals, d: Dists, tBegin: Real, multiplier: Real) => DistsBool {
+function isDetected(g: Globals, d: Dists, multiplier: Real, tBegin: Real) => DistsBool {
 
     // Is further simulation worthwhile?
-    if (predictUndetectedProb(g, d, tBegin, multiplier) < 1e-4) {
+    if (predictUndetectedProb(g, d, multiplier, tBegin) < 1e-4) {
         // printLn("Predicted undetected prob < limit");
         return DistsBool {
             d        = d,
@@ -168,18 +171,18 @@ function isDetected(g: Globals, d: Dists, tBegin: Real, multiplier: Real) => Dis
 
     // Catch deltaT smallest
     if (b is DeltaT) {
-        return isDetected(g, d, tBegin-b.timeSegment, multiplier);
+        return isDetected(g, d, multiplier, tBegin-b.timeSegment);
     }
    
     // We have a speciation or extinction (b is Event)
-    assume speciation ~ Bernoulli(1.0/(1.0+g.epsilon));
+    assume isSpeciation ~ Bernoulli(1.0/(1.0+g.epsilon));
 
-    if (speciation) {
-        let ret = isDetected(g, d, tBegin-b.timeSegment, multiplier);
+    if (isSpeciation) {
+        let ret = isDetected(g, d, multiplier, tBegin-b.timeSegment);
         if (ret.detected) {
             return ret;
         }
-        return isDetected(g, d, tBegin-b.timeSegment, multiplier);
+        return isDetected(g, d, multiplier, tBegin-b.timeSegment);
     }
 
     // We died...
@@ -189,9 +192,8 @@ function isDetected(g: Globals, d: Dists, tBegin: Real, multiplier: Real) => Dis
     };
 }
 
-
 // Simulate hidden speciation process along a branch in the reconstructed tree
-function simHiddenSpeciation(g: Globals, d: Dists, tBegin:Real, tEnd: Real, multiplier: Real) => Params {
+function simHiddenSpeciation(g: Globals, d: Dists, multiplier: Real, tBegin:Real, tEnd: Real) => Params {
 
     // We always need to consider the possibility of speciation
     let ret1 = drawGammaExponential(d.gdist,multiplier);
@@ -233,15 +235,17 @@ function simHiddenSpeciation(g: Globals, d: Dists, tBegin:Real, tEnd: Real, mult
             multiplier = multiplier
         };
     }
+
+    // Compute new time point
+    let tNew = tBegin - b.timeSegment;
     
     // If waitingTime is smallest, there is the hidden subtree resulting from
     // the speciation event to consider 
     if (b is Event) {
-        let ret = isDetected(g, d, tBegin-b.timeSegment, multiplier);
+        let ret = isDetected(g, d, multiplier, tNew);
         let d = ret.d;
         if (ret.detected) {
             weight 0.0;
-            resample;
             return Params {
                 d          = d,
                 multiplier = multiplier
@@ -251,33 +255,32 @@ function simHiddenSpeciation(g: Globals, d: Dists, tBegin:Real, tEnd: Real, mult
     }
 
     // Continue the simulation (b is Event or b is DeltaT)
-    return simHiddenSpeciation(g, d, tBegin-b.timeSegment, tEnd, multiplier);
+    return simHiddenSpeciation(g, d, multiplier, tNew, tEnd);
 }
 
-
 // Simulate ("walk") along the reconstructed tree
-function walk(g: Globals, d: Dists, parentAge: Real, node: Tree, multiplier: Real) => Dists {
+function walk(g: Globals, d: Dists, multiplier: Real, parentAge: Real, node: Tree) => Dists {
 
     // Simulate hidden speciation on the ancestral branch
     let nodeAge = node.age;
-    let p = simHiddenSpeciation(g, d, parentAge, nodeAge, multiplier);
-    resample;
+    let p = simHiddenSpeciation(g, d, multiplier, parentAge, nodeAge);
 
     // Deal with the end of the branch
     if (node is Node) {
         let gdist = observeGammaExponential(0.0, p.d.gdist, p.multiplier);
+        resample;
         let d = Dists {
                     nigdist     = p.d.nigdist,
                     gdist       = gdist
                 };
-        let d = walk(g, d, nodeAge, node.left,  p.multiplier);
-        return  walk(g, d, nodeAge, node.right, p.multiplier);
+        let d = walk(g, d, p.multiplier, nodeAge, node.left);
+        return  walk(g, d, p.multiplier, nodeAge, node.right);
+    } else {
+        observe true ~ Bernoulli(g.rho);
+        resample;
+        return p.d;
     }
-    observe true ~ Bernoulli(g.rho);
-    resample;
-    return p.d;
 }
-
 
 // Model function for BDD2
 model function bdd2(tree: Tree, rho: Real, numIntervals: Int) => Real[] {
@@ -321,13 +324,15 @@ model function bdd2(tree: Tree, rho: Real, numIntervals: Int) => Real[] {
     logWeight log(2.0) * (numLeaves - 1.0) - logFactorial(numLeaves);
     
     // Walk over tree
-    let d = walk(g, d, tree.age, tree.left, 1.0);
-    let d = walk(g, d, tree.age, tree.right, 1.0);
+    let d = walk(g, d, 1.0, tree.age, tree.left);
+    let d = walk(g, d, 1.0, tree.age, tree.right);
 
     // Condition on MRCA detection
     let m = numTrialsUntilMRCADetection(g, d, tree.age, 1000);
     weight int2real(m);
+    resample;
 
+    // Compute expectations
     let lambda   = d.gdist.alpha/d.gdist.beta;
     let mu       = g.epsilon*lambda;
     let logAlpha = d.nigdist.mu0;
