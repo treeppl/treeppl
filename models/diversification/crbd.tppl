@@ -24,10 +24,10 @@ type Globals = Globals {
 // Get an estimate of the probability of the MRCA being detected under given parameter values
 function numTrialsUntilMRCADetection(g: Globals, tRoot: Real, mMax: Int) => Int {
 
-    // Check if we used up the max number of trials. If so, condition on max_m as an
+    // Check if we used up the max number of trials. If so, condition on mMax as an
     // approximation. A user might want to monitor how often this condition is hit.
     // If it is hit frequently, the inference is biased towards parameter values
-    // that increase the likelihood of detection, and max_m needs to be increased.
+    // that increase the likelihood of detection, and mMax needs to be increased.
     if (mMax == 0) {
         return 0;
     }
