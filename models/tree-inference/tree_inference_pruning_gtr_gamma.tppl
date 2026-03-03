@@ -1,3 +1,13 @@
+// TreePPL script for tree inference under the
+// GTR model with a strict clock prior, gamma rate variation across sites. Pruning hard-coded.
+
+// The nucleotide is specified as
+//   "A" for adenine  - 0
+//   "C" for cytosine  - 1
+//   "G" for guanine - 2
+//   "T" for thymine - 3
+//   "-" for gaps - 4
+
 type MsgTree =
   | Leaf {age: Real, index: Int, msg: Matrix[Real][][]}   // [cat][site]
   | Node {age: Real, msg: Matrix[Real][][], left: MsgTree, right: MsgTree}

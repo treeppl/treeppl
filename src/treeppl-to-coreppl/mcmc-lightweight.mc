@@ -51,7 +51,7 @@ let continueIncremental : all a. all b. Int -> Int -> (a -> JsonValue) -> (Int, 
       let sampleStr = sample2string serializer sample [] in
       let printer = match optWc with Some wc
         then lam s. printFile s wc
-        else lam s. print s in 
+        else lam s. print s; flushStdout () in
       printer sampleStr
     else ()); 
     if eqi idx iterations then 

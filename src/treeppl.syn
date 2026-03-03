@@ -132,7 +132,6 @@ prod True: ExprTppl = "true"
 prod False: ExprTppl = "false"
 prod Sequence: ExprTppl = "[" (values:ExprTppl ("," values:ExprTppl)*)? "]"
 
-
 -- infix left Addition: Expr = "+"
 prod left Add: ExprTppl = left:ExprTppl "+" right:ExprTppl
 -- infix Multiplication: Expr = "*"
@@ -207,19 +206,21 @@ precedence {
 }
 
 -- Built-in distro keywords
-prod Uniform: ExprTppl = "Uniform" "(" a:ExprTppl "," b:ExprTppl ")"
 prod Bernoulli: ExprTppl = "Bernoulli" "(" prob:ExprTppl ")"
+prod Beta: ExprTppl = "Beta" "(" a:ExprTppl "," b:ExprTppl ")"
+prod Binomial: ExprTppl = "Binomial" "(" n:ExprTppl "," prob:ExprTppl ")"
+prod Categorical: ExprTppl = "Categorical" "(" probs:ExprTppl ")"
+prod Chi2: ExprTppl = "Chi2" "(" df:ExprTppl ")"
+prod Dirichlet: ExprTppl = "Dirichlet" "(" alphas:ExprTppl ")"
+prod Empirical: ExprTppl = "Empirical" "(" samples:ExprTppl ")"
 prod Exponential: ExprTppl = "Exponential" "(" rate:ExprTppl ")"
 prod Gamma: ExprTppl = "Gamma" "(" shape:ExprTppl "," scale:ExprTppl ")"
 prod Gaussian: ExprTppl = "Gaussian" "(" mean:ExprTppl "," dev:ExprTppl ")"
 prod Geometric: ExprTppl = "Geometric" "("prob:ExprTppl ")"
-prod Poisson: ExprTppl = "Poisson" "(" rate:ExprTppl ")"
-prod Beta: ExprTppl = "Beta" "(" a:ExprTppl "," b:ExprTppl ")"
-prod Categorical: ExprTppl = "Categorical" "(" probs:ExprTppl ")"
 prod Multinomial: ExprTppl = "Multinomial" "(" n:ExprTppl "," probs:ExprTppl ")"
-prod Empirical: ExprTppl = "Empirical" "(" samples:ExprTppl ")"
-prod Dirichlet: ExprTppl = "Dirichlet" "(" alphas:ExprTppl ")"
-prod Binomial: ExprTppl = "Binomial" "(" n:ExprTppl "," prob:ExprTppl ")"
+prod Poisson: ExprTppl = "Poisson" "(" rate:ExprTppl ")"
+prod Uniform: ExprTppl = "Uniform" "(" a:ExprTppl "," b:ExprTppl ")"
+prod UniformDiscrete: ExprTppl = "UniformDiscrete" "(" a:ExprTppl "," b:ExprTppl ")"
 prod Reciprocal: ExprTppl = "Reciprocal" "(" a:ExprTppl "," b:ExprTppl ")"
 
 
