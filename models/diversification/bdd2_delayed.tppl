@@ -123,10 +123,10 @@ function isDetected(g: Globals, d: Dists, multiplier: Real, tBegin: Real) => Dis
     // rather than a computationally expensive simulation
     if ((1.0-g.epsilon)/tBegin < 1e-4) {
         // printLn("Used critical process approximation");
-        assume obs ~ Bernoulli(g.rho);  // One lineage is expected to survive
+        assume detected ~ Bernoulli(g.rho);  // One lineage is expected to survive
         return DistsBool {
             d        = d,
-            detected = obs
+            detected = detected
         };
     }
     
@@ -162,10 +162,10 @@ function isDetected(g: Globals, d: Dists, multiplier: Real, tBegin: Real) => Dis
 
     // Catch survival until recent
     if (b is EndOfBranch) {
-        assume obs ~ Bernoulli(g.rho);
+        assume detected ~ Bernoulli(g.rho);
         return DistsBool {
             d        = d,
-            detected = obs
+            detected = detected
         };
     }
 
@@ -182,7 +182,7 @@ function isDetected(g: Globals, d: Dists, multiplier: Real, tBegin: Real) => Dis
         if (ret.detected) {
             return ret;
         }
-        return isDetected(g, d, multiplier, tBegin-b.timeSegment);
+        return isDetected(g, ret.d, multiplier, tBegin-b.timeSegment);
     }
 
     // We died...
@@ -252,6 +252,7 @@ function simHiddenSpeciation(g: Globals, d: Dists, multiplier: Real, tBegin:Real
             };
         }
         weight 2.0; // Double the weight because of the rotational symmetry
+        return simHiddenSpeciation(g, d, multiplier, tNew, tEnd);
     }
 
     // Continue the simulation (b is Event or b is DeltaT)
