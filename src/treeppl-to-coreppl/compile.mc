@@ -469,7 +469,13 @@ lang TreePPLCompile
     StmtNoCont (optionMapOr (withInfo r.info unit_) (compileExprTppl context) r.return)
 
   | PrintStmtTppl x ->
-    StmtSimple ([], Some (isemi_ (dprint_ (compileExprTppl context x.printable)) (flushStdout_ unit_)))
+    let processTerm : Bool -> ExprTppl -> (Bool, Expr) = lam maybeInsertSpace. lam expr.
+      match expr with TpplStringExprTppl x then (false, printError_ (str_ x.val.v)) else
+      let p = dprint_ (compileExprTppl context expr) in
+      (true, if maybeInsertSpace then isemi_ (printError_ (str_ " ")) p else p) in
+    let final = isemi_ (printError_ (str_ "\n")) (flushStderr_ unit_) in
+    let print = foldr isemi_ final (mapAccumL processTerm false x.printable).1 in
+    StmtSimple ([], Some print)
 
   sem compileExprTppl: TpplCompileContext -> ExprTppl -> Expr
 
