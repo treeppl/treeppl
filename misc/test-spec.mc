@@ -8,11 +8,11 @@ let substituter : Substituter =
   { noSubstituter with substitutions = mapFromSeq cmpChar
     [ ( 't'
       , { tup =
-          { actual = "MCORE_LIBS=$MCORE_LIBS:treeppl=$(ROOT)/src %<tpplc>"
+          { actual = "MCORE_LIBS=treeppl=$(ROOT)/lib:$MCORE_LIBS %<tpplc>"
           , deps = ["$(ROOT)/src/<tpplc>"]
           }
         , make =
-          { actual = "MCORE_LIBS=$$MCORE_LIBS:treeppl=$(ROOT)/src $(ROOT)/build/tpplc"
+          { actual = "MCORE_LIBS=treeppl=$(ROOT)/lib:$$MCORE_LIBS $(ROOT)/build/tpplc"
           , deps = ["build/tpplc"]
           }
         , friendly = "TPPLC"
@@ -20,7 +20,7 @@ let substituter : Substituter =
       )
     ]
   } in
-let directories = ["src", "models"] in
+let directories = ["src", "lib"] in
 let location = Some
   { src = "misc/test-spec.mc"
   , exe = "misc/test"
@@ -108,14 +108,14 @@ testMain [substituter] directories location (lam api.
   let allModelTests = concat mostTests apfTests in
 
   api.tests []
-    (and (strStartsWith "models/") (strEndsWith ".tppl"))
+    (and (strStartsWith "lib/models/") (strEndsWith ".tppl"))
     (map (lam x. (x, Succ ())) allModelTests);
 
   -- NOTE(vipa, 2026-04-13): Some models have a decent likelihood of
   -- getting stuck when running with APF and very few particles, so we
   -- turn off those tests there
   api.tests []
-    (strStartsWith "models/diversification/")
+    (strStartsWith "lib/models/diversification/")
     (map (lam x. (x, Dont ())) apfTests);
 
   ()

@@ -18,7 +18,7 @@ stdenv.mkDerivation (finalAttrs: {
     ocamlPackages.linenoise
   ];
 
-  makeFlags = [ "bin_path=$(out)/bin" "src_path=$(out)/lib/mcore/treeppl" ];
+  makeFlags = [ "bin_path=$(out)/bin" "lib_path=$(out)/lib/mcore/treeppl" ];
 
   meta = with lib; {
     mainProgram     = "tpplc";
