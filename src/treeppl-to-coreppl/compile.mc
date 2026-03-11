@@ -1128,8 +1128,8 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
     match parseTreePPLExn path content with DeclSequenceFileTppl top in
 
     -- Standard library (these should be in scope in the program)
-    match includeFileExn "." "treeppl::lib/standard.mc" loader with (stdlibMCEnv, loader) in
-    match includeFileExn "." "treeppl::lib/standard.tppl" loader with (stdlibTPPLEnv, loader) in
+    match includeFileExn "." "treeppl::standard.mc" loader with (stdlibMCEnv, loader) in
+    match includeFileExn "." "treeppl::standard.tppl" loader with (stdlibTPPLEnv, loader) in
     let fileEnv = stdlibTPPLEnv.env in
     -- Compiler libraries (these should *not* be in scope in the program)
     match includeFileExn "." "stdlib::ext/dist-ext.mc" loader with (distEnv, loader) in
@@ -1138,7 +1138,7 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
     match includeFileExn "." "stdlib::json.mc" loader with (jsonEnv, loader) in
     match includeFileExn "." "stdlib::basic-types.mc" loader with (optionEnv, loader) in
     match includeFileExn "." "stdlib::common.mc" loader with (commonEnv, loader) in
-    match includeFileExn "." "treeppl::treeppl-to-coreppl/lib-compile.mc" loader with (compileLibEnv, loader) in
+    match includeFileExn "." "treeppl::internal/lib-compile.mc" loader with (compileLibEnv, loader) in
     -- Explicit imports (these should be in scope in the program)
     let import = lam acc. lam imp.
       match includeFileExn (dirname path) imp.v acc.1 with (newEnv, loader) in

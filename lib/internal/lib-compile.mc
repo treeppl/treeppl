@@ -4,6 +4,7 @@
 include "json.mc"
 include "optparse-applicative.mc"
 include "ext/dist-ext.mc"
+include "stdlib.mc"
 
 include "runtime-flags.mc"
 
@@ -43,7 +44,7 @@ let runInference : all res. all inferOpts. RunInferenceConfig res inferOpts -> (
       } in
     let run = lam dataFile. lam inferTimeMs. lam sweeps. lam seed. lam inferOpts. lam.
       (match seed with Some seed then setSeed seed else ());
-      let runOnce = config.runOnce (jsonParseExn (readFile dataFile)) in
+      let runOnce = config.runOnce (jsonParseExn (readFile (stdlibResolveFileOr (lam err. error err) "." dataFile))) in
       let runOnce = if inferTimeMs
         then lam. printJsonLn (serializeResult config.sampleSerializer (outputInferTimeMs (lam. runOnce inferOpts)))
         else lam. printJsonLn (serializeResult config.sampleSerializer (runOnce inferOpts)) in

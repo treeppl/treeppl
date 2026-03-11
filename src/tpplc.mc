@@ -13,7 +13,7 @@ include "mexpr/type-check.mc"
 include "mexpr/generate-json-serializers.mc"
 
 include "treeppl-to-coreppl/compile.mc"
-include "treeppl-to-coreppl/runtime-flags.mc"
+include "treeppl::internal/runtime-flags.mc"
 
 include "coreppl::parser.mc"
 
@@ -137,8 +137,8 @@ let mcmcLightweightOptions : OptParser MkInferMethod =
 
     match includeFileExn "." "stdlib::json.mc" loader with (jsonEnv, loader) in
     match includeFileExn "." "coreppl::coreppl-to-mexpr/mcmc-lightweight/config.mc" loader with (configEnv, loader) in
-    match includeFileExn "." "treeppl::treeppl-to-coreppl/mcmc-lightweight.mc" loader with (lwEnv, loader) in
-    match includeFileExn "." "treeppl::treeppl-to-coreppl/runtime-flags.mc" loader with (flagEnv, loader) in
+    match includeFileExn "." "treeppl::internal/mcmc-lightweight.mc" loader with (lwEnv, loader) in
+    match includeFileExn "." "treeppl::internal/runtime-flags.mc" loader with (flagEnv, loader) in
     let debugTypeFields = switch mapLookup (_getTyConExn "DebugInfo" configEnv) (_getTCEnv loader).tyConEnv
       case Some (_, [], TyRecord x) then x
       case Some (_, _, _) then error "Compiler error: unexpected shape of DebugInfo"
@@ -315,7 +315,7 @@ let mcmcLightweightOptions : OptParser MkInferMethod =
 
 let mcmcNaiveOptions : OptParser MkInferMethod =
   let mk = lam iterations. lam. lam loader.
-    match includeFileExn "." "treeppl::treeppl-to-coreppl/runtime-flags.mc" loader with (flagEnv, loader) in
+    match includeFileExn "." "treeppl::internal/runtime-flags.mc" loader with (flagEnv, loader) in
     let getOptParser : String -> Expr -> Expr = lam ident. lam default.
       app_ (nvar_ (_getVarExn ident flagEnv)) default in
     let fields =
@@ -339,7 +339,7 @@ let mcmcNaiveOptions : OptParser MkInferMethod =
 
 let mcmcTraceOptions : OptParser MkInferMethod =
   let mk = lam iterations. lam. lam loader.
-    match includeFileExn "." "treeppl::treeppl-to-coreppl/runtime-flags.mc" loader with (flagEnv, loader) in
+    match includeFileExn "." "treeppl::internal/runtime-flags.mc" loader with (flagEnv, loader) in
     let getOptParser : String -> Expr -> Expr = lam ident. lam default.
       app_ (nvar_ (_getVarExn ident flagEnv)) default in
     let fields =
@@ -363,7 +363,7 @@ let mcmcTraceOptions : OptParser MkInferMethod =
 
 let isLwOptions : OptParser MkInferMethod =
   let mk = lam particles. lam earlyStop. lam cps. lam dynamicDelay. lam prune. lam. lam loader.
-    match includeFileExn "." "treeppl::treeppl-to-coreppl/runtime-flags.mc" loader with (flagEnv, loader) in
+    match includeFileExn "." "treeppl::internal/runtime-flags.mc" loader with (flagEnv, loader) in
     let getOptParser : String -> Expr -> Expr = lam ident. lam default.
       app_ (nvar_ (_getVarExn ident flagEnv)) default in
     let fields =
@@ -392,7 +392,7 @@ let isLwOptions : OptParser MkInferMethod =
 
 let smcApfOptions : OptParser MkInferMethod =
   let mk = lam particles. lam subsample. lam subsampleSize. lam resample. lam prune. lam cps. lam. lam loader.
-    match includeFileExn "." "treeppl::treeppl-to-coreppl/runtime-flags.mc" loader with (flagEnv, loader) in
+    match includeFileExn "." "treeppl::internal/runtime-flags.mc" loader with (flagEnv, loader) in
     let getOptParser : String -> Expr -> Expr = lam ident. lam default.
       app_ (nvar_ (_getVarExn ident flagEnv)) default in
     let fields =
@@ -423,7 +423,7 @@ let smcApfOptions : OptParser MkInferMethod =
 
 let smcBpfOptions : OptParser MkInferMethod =
   let mk = lam particles. lam subsample. lam subsampleSize. lam resample. lam resampleFrac. lam cps. lam prune. lam dynamicDelay. lam. lam loader.
-    match includeFileExn "." "treeppl::treeppl-to-coreppl/runtime-flags.mc" loader with (flagEnv, loader) in
+    match includeFileExn "." "treeppl::internal/runtime-flags.mc" loader with (flagEnv, loader) in
     let getOptParser : String -> Expr -> Expr = lam ident. lam default.
       app_ (nvar_ (_getVarExn ident flagEnv)) default in
     let fields =
@@ -459,7 +459,7 @@ let smcBpfOptions : OptParser MkInferMethod =
 
 let pmcmcPimhOptions : OptParser MkInferMethod =
   let mk = lam particles. lam iterations. lam cps. lam. lam loader.
-    match includeFileExn "." "treeppl::treeppl-to-coreppl/runtime-flags.mc" loader with (flagEnv, loader) in
+    match includeFileExn "." "treeppl::internal/runtime-flags.mc" loader with (flagEnv, loader) in
     let getOptParser : String -> Expr -> Expr = lam ident. lam default.
       app_ (nvar_ (_getVarExn ident flagEnv)) default in
     let fields =

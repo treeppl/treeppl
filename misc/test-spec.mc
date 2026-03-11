@@ -12,7 +12,7 @@ let substituter : Substituter =
           , deps = ["$(ROOT)/src/<tpplc>"]
           }
         , make =
-          { actual = "MCORE_LIBS=$$MCORE_LIBS:treeppl=$(ROOT)/src $(ROOT)/build/tpplc"
+          { actual = "MCORE_LIBS=treeppl=$(ROOT)/src:$$MCORE_LIBS $(ROOT)/build/tpplc"
           , deps = ["build/tpplc"]
           }
         , friendly = "TPPLC"
@@ -20,7 +20,7 @@ let substituter : Substituter =
       )
     ]
   } in
-let directories = ["src", "models"] in
+let directories = ["src", "lib"] in
 let location = Some
   { src = "misc/test-spec.mc"
   , exe = "misc/test"
@@ -104,7 +104,7 @@ testMain [substituter] directories location (lam api.
   let allModelTests = join (map mkTestModel modes) in
 
   api.tests []
-    (and (strStartsWith "models/") (strEndsWith ".tppl"))
+    (and (strStartsWith "lib/models/") (strEndsWith ".tppl"))
     (map (lam x. (x, Succ ())) allModelTests);
 
   -- NOTE(vipa, 2026-04-13): We disable the clads tests for the
@@ -112,7 +112,7 @@ testMain [substituter] directories location (lam api.
   -- APF. There are some model changes that can be made to fix this,
   -- but in the meanwhile we just skip those tests
   api.tests []
-    (eqString "models/diversification/clads.tppl")
+    (eqString "lib/models/diversification/clads.tppl")
     (map (lam x. (x, Dont ())) allModelTests);
 
   ()
