@@ -2,9 +2,9 @@
 // constant rate birth death (CRBD) model
 // with hard-coded delayed sampling
 
-import "math.tppl"
-import "distributions.tppl"
-import "trees.tppl"
+import "treeppl::lib/math.tppl"
+import "treeppl::lib/distributions.tppl"
+import "treeppl::lib/trees.tppl"
 
 // Types for this script
 type alias Tree = ClockTree

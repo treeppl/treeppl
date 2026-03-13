@@ -1,7 +1,7 @@
 // ClaDS2 model script
 
-import "trees.tppl"
-import "math.tppl"
+import "treeppl::lib/trees.tppl"
+import "treeppl::lib/math.tppl"
 
 
 // Types

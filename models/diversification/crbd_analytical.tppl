@@ -2,8 +2,8 @@
 // using analytical likelihood expression for
 // sampled values of lambda and mu.
 
-import "trees.tppl"
-import "math.tppl"
+import "treeppl::lib/trees.tppl"
+import "treeppl::lib/math.tppl"
 
 
 // Types

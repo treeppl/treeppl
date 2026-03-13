@@ -5,8 +5,8 @@
 // mu is a constant fraction of lambda. This fraction is referred to as epsilon
 // in earlier work by us on ClaDS2.
 
-import "trees.tppl"
-import "math.tppl"
+import "treeppl::lib/trees.tppl"
+import "treeppl::lib/math.tppl"
 
 
 // Types

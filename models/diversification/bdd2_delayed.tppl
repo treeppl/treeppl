@@ -1,8 +1,8 @@
 // BDD2 model script with hard-coded delayed sampling
 
-import "trees.tppl"
-import "math.tppl"
-import "distributions.tppl"
+import "treeppl::lib/trees.tppl"
+import "treeppl::lib/math.tppl"
+import "treeppl::lib/distributions.tppl"
 
 
 // Types

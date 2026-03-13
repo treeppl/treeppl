@@ -2,8 +2,8 @@
 // The simulation can be replaced with an analytical computation for
 // the sampled values of lambda and mu; see the crbd_analytical script.
 
-import "trees.tppl"
-import "math.tppl"
+import "treeppl::lib/trees.tppl"
+import "treeppl::lib/math.tppl"
 
 
 // Types
