@@ -1,10 +1,14 @@
-// Tree-related stuff
+/* -------------------
+   Tree types
+   ------------------- */
 
-// Tree types
-// ----------
+// type BinaryTree[D] =
+//  | Node {left: BinaryTree, right: BinaryTree, data: D}
+//  | Leaf {data: D}
+//  | Outgroup {out: BinaryTree, data: D}
 
-// type BinTree[D] =
-//  | Node {left: BinTree, right: BinTree, data: D}
+// type BinaryRootedTree[D] =
+//  | Node {left: BinaryTree, right: BinaryTree, data: D}
 //  | Leaf {data: D}
 
 type ClockTree = 
@@ -12,8 +16,10 @@ type ClockTree =
     | Leaf {age: Real}
 
 
-// Tree functions
-// --------------
+/* -------------------
+   Tree functions
+   ------------------- */
+
 function countLeaves(tree: ClockTree) => Int {
   if tree is Node {
     return countLeaves(tree.left) + countLeaves(tree.right);

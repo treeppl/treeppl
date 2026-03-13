@@ -1,11 +1,12 @@
+import "math.tppl"
+
+
 // Distributions
 
 // Distribution types (for prior distribution parameters
 // and draws from conjugate distributions with updates of
 // of those prior distribution parameters)
 // -----------------------------------------------------
-
-import "math.tppl"
 
 type GammaDist = GammaDist {
     alpha : Real,
@@ -57,14 +58,9 @@ function lomaxRv(alpha: Real, lambda: Real) => Real {
 
 function observeGammaExponential(x: Real, gdist: GammaDist, multiplier: Real) => GammaDist {
 
-    // If x is drawn from Exponential(lambda*multiplier) then multiplier*x is drawn from Exponential(lambda)
     let x = x*multiplier;
 
-    // Weight according to Lomax distribution (posterior predictive)
-    // Note the Jacobian resulting from the multiplier scaling (the log(multiplier) part)
-    let logProb = lomaxLogPDF(x, gdist.alpha, gdist.beta) + log(multiplier);
-    // printLn(concat("In observeGammaExponential, logProb:",real2string(logProb)));
-    logWeight logProb;
+    logWeight lomaxLogPDF(x, gdist.alpha, gdist.beta) + log(multiplier);
 
     return GammaDist {
         alpha = gdist.alpha + 1.0,
@@ -102,17 +98,9 @@ function negbinomialRv(r: Real, p: Real) => Int {
 
 function observeGammaPoisson(x: Int, gdist: GammaDist, multiplier: Real) => GammaDist {
   
-    // If lambda distas Gamma(alpha, lambda) then c*lambda distas Gamma(alpha,lambda/c)
-    // c*lambda is the parameter of the Poisson we are observing from
-
-    // Weight according to negative binomial distribution (posterior predictive)
-    // Scale the gdist parameters (current posterior on lambda) appropriately
     let p = gdist.beta/(gdist.beta + multiplier);
-    let logProb = negbinomialLogPMF(x, gdist.alpha, p);
-    // printLn(concat("In observeGammaPoisson, logProb:",real2string(logProb)));
-    logWeight logProb;
+    logWeight negbinomialLogPMF(x, gdist.alpha, p);
 
-    // Update the posterior on lambda, taking scaling into account
     return GammaDist {
         alpha = gdist.alpha + int2real(x),
         beta  = gdist.beta + multiplier
@@ -121,9 +109,6 @@ function observeGammaPoisson(x: Int, gdist: GammaDist, multiplier: Real) => Gamm
 
 function drawGammaPoisson(gdist: GammaDist, multiplier: Real) => GammaPoissonDraw {
   
-    // If lambda distas Gamma(alpha, beta) then c*lambda distas Gamma(alpha,beta/c)
-    // c*lambda is the parameter of the Poisson we are drawing from
-
     let p = gdist.beta/(gdist.beta + multiplier);
     let x = negbinomialRv(gdist.alpha, p);
 

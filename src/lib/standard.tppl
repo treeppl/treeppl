@@ -6,54 +6,6 @@ import "stdlib::ext/arr-ext.mc"
 import "stdlib::ext/mat-ext.mc"
 import "./standard.mc"
 
-type Tree =
-  | Leaf {age: Real}
-  | Node {left: Tree, right: Tree, age: Real}
-
-
-/* -----------------------
-   Mathematical operations
-   ----------------------- */
-
-function exp(x : Real) => Real {
-  return mathExp(x);
-}
-
-function log(x : Real) => Real {
-  return mathLog(x);
-}
-
-function sqrt(x : Real) => Real {
-  return mathSqrt(x);
-}
-
-/* -------------------
-   Finding maximum and minimum of pairs
-   ------------------- */
-
-function minInt(a : Int, b : Int) => Int {
-  return mathMini(a)(b);
-}
-
-function maxInt(a : Int, b : Int) => Int {
-  return mathMaxi(a)(b);
-}
-
-/* -----------------------
-   Real to Int convertion
-   ----------------------- */
-
-function floor(x : Real) => Int {
-  return mathFloor(x);
-}
-
-function ceil(x : Real) => Int {
-  return mathCeil(x);
-}
-
-function round(x : Real) => Int {
-  return mathRound(x);
-}
 
 /* -------------------
    Sequence operations
@@ -471,7 +423,7 @@ function dirichletScore(x: Real[], param: DirichletParam) => Real {
   return dirichletPdf(param.alphas)(x);
 }
 
-// Empiricial
+// Empirical
 // TODO(vsenderov, 23-10-02): Not sure how to do empricial, it seems that
 // empirical needs tuples support to work
 

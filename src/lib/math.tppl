@@ -1,5 +1,33 @@
-// Math functions
+import "stdlib::ext/mat-ext.mc"
 
+
+/* -----------------------
+   Mathematical operations
+   ----------------------- */
+
+function exp(x : Real) => Real {
+  return mathExp(x);
+}
+
+function log(x : Real) => Real {
+  return mathLog(x);
+}
+
+function sqrt(x : Real) => Real {
+  return mathSqrt(x);
+}
+
+/* -------------------
+   Finding maximum and minimum of pairs
+   ------------------- */
+
+function minInt(a : Int, b : Int) => Int {
+  return mathMini(a)(b);
+}
+
+function maxInt(a : Int, b : Int) => Int {
+  return mathMaxi(a)(b);
+}
 
 function min(a: Real, b: Real) => Real {
   if a <= b {
@@ -8,7 +36,6 @@ function min(a: Real, b: Real) => Real {
   return b;
 }
 
-
 function max(a: Real, b: Real) => Real {
   if a <= b {
     return b;
@@ -16,6 +43,25 @@ function max(a: Real, b: Real) => Real {
   return a;
 }
 
+/* -----------------------
+   Real to Int conversion
+   ----------------------- */
+
+function floor(x : Real) => Int {
+  return mathFloor(x);
+}
+
+function ceil(x : Real) => Int {
+  return mathCeil(x);
+}
+
+function round(x : Real) => Int {
+  return mathRound(x);
+}
+
+/* -----------------------
+   Commonly used math fxns
+   ----------------------- */
 
 function logFactorial(n: Real) => Real {
 
@@ -25,7 +71,8 @@ function logFactorial(n: Real) => Real {
   return log(n) + logFactorial(n - 1.0);
 }
 
-
+// TODO: Implement the approx in full (requires fabs, sin)
+// TODO: Should PI be defined as global constant?
 function lnGamma(z: Real) => Real {
 
     let pi = 3.14159265358979;
