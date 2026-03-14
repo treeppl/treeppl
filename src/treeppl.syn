@@ -246,4 +246,4 @@ prod LogWeight: StmtTppl = "logWeight" value:ExprTppl ";"
 prod ForLoop: StmtTppl = "for" iterator:LName "in" range:ExprTppl "{" forStmts:StmtTppl* "}"
 prod Return: StmtTppl = "return" return:ExprTppl? ";"
 
-prod Print: StmtTppl = "debug" "(" printable:ExprTppl ")" ";"
+prod Print: StmtTppl = "debug" "(" (printable:ExprTppl ("," printable:ExprTppl)*)? ")" ";"
