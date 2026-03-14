@@ -5,7 +5,7 @@
 
 stdenv.mkDerivation (finalAttrs: {
   pname = "treeppl";
-  version = "0.2";
+  version = "0.3";
 
   src = nix-gitignore.gitignoreSource "/misc/packaging\n/result\n" ../..;
 
