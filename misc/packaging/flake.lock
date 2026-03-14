@@ -93,11 +93,11 @@
       },
       "locked": {
         "dir": "misc/packaging",
-        "lastModified": 1762943726,
-        "narHash": "sha256-tafzRpkRipcDV1NZb6Gz1SUX7KEKbCSQwgilUdl4d1o=",
+        "lastModified": 1773425393,
+        "narHash": "sha256-HxlFD7T2cg6JMwiycF9ZFXEhrpnS4B/NrKGlDcGXwUc=",
         "owner": "miking-lang",
         "repo": "miking",
-        "rev": "658b91a15ce620b1659546084a967ea48eb13ac0",
+        "rev": "bde10bb95751ae32bdb467266c4f5b766c2bf7a3",
         "type": "github"
       },
       "original": {
@@ -120,11 +120,11 @@
       },
       "locked": {
         "dir": "misc/packaging",
-        "lastModified": 1762944496,
-        "narHash": "sha256-cZaDNspOd/mVrL6nKF/KK7j4va4gvShsvklJlyH3RLY=",
+        "lastModified": 1773425377,
+        "narHash": "sha256-2gnCDuNDV+Zvh57GF+pHj4t0CqV78yJzjc3PW+d/gAs=",
         "owner": "miking-lang",
         "repo": "miking-dppl",
-        "rev": "8fa394182bd41b94d53e3c7bc2b696ea4fa00ceb",
+        "rev": "7b67b09f84a7e83f24a38e3a0fa513e872de05fe",
         "type": "github"
       },
       "original": {
