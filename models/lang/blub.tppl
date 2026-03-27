@@ -3,6 +3,8 @@
  * Description: Program to showcase data manipulation.
  */
 
+import "treeppl::lib/math.tppl"
+
 function example(a: Int, b: Int) => Int {
   return a + b;
 }
