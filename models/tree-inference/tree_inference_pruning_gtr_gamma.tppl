@@ -8,6 +8,8 @@
 //   "T" for thymine - 3
 //   "-" for gaps - 4
 
+import "treeppl::lib/math.tppl"
+
 type MsgTree =
   | Leaf {age: Real, index: Int, msg: Matrix[Real][][]}   // [cat][site]
   | Node {age: Real, msg: Matrix[Real][][], left: MsgTree, right: MsgTree}

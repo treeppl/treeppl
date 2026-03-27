@@ -13,6 +13,8 @@
 //   "T" for thymine 3
 //   "-" currently not handled in this model
 
+import "treeppl::lib/math.tppl"
+
 // TYPES
 
 type SeqTree =
