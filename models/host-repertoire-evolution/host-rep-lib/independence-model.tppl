@@ -1,3 +1,4 @@
+import "treeppl::lib/math.tppl"
 import "container-types.tppl"
 
 function independenceLikelihood(
