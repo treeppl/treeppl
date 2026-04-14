@@ -18,11 +18,11 @@ MCORE_LIBS:=treeppl=$(current_dir)/src
 endif
 export MCORE_LIBS
 
-build/${tppl_name}: src/treeppl-ast.mc $(shell find src -path 'src/lib' -prune -o \( -name "*.mc" -o -name "*.syn" \) -print)
-	mkdir -p build
-	time mi compile src/tpplc.mc --output $@
+build/${tppl_name}: build/src/treeppl-ast.mc $(shell find src -path 'src/lib' -prune -o \( -name "*.mc" -o -name "*.syn" \) -print)
+	cp build/src/treeppl-ast.mc src/treeppl-ast.mc; mi compile src/tpplc.mc --output $@; e=$$?; rm src/treeppl-ast.mc; exit $e
 
-src/treeppl-ast.mc: src/treeppl.syn
+build/src/treeppl-ast.mc: src/treeppl.syn
+	mkdir -p `dirname $@`
 	mi syn $< $@
 
 install: build/${tppl_name}
@@ -43,75 +43,12 @@ uninstall:
 	rm ${bin_path}/${tppl_name}
 	rm -rf $(src_path)
 
-.PHONY: test-standard
-test-standard:
-	mi compile src/lib/standard.mc --test --output build/standard
-	build/standard
-
-.PHONY: test-compile
-test-compile:
-	mi compile src/treeppl-to-coreppl/compile.mc --test --output build/compile
-	build/compile
-
-# Configurations to run tests with, as flags with spaces replaced with
-# "_", because we want a list of lists here, and that's not actually
-# available. It's possible we should also include variations on the
-# resample flag later, but it's already a large set of configurations
-# to test. The methods that consider the resample flag are marked with
-# "resample" below.
-TEST_CONFIGURATIONS := -m_is_--cps_none
-TEST_CONFIGURATIONS += -m_is_--cps_partial
-TEST_CONFIGURATIONS += -m_is_--cps_full
-TEST_CONFIGURATIONS += -m_smc-bpf_--cps_full  #resample
-TEST_CONFIGURATIONS += -m_smc-bpf_--cps_partial  #resample
-TEST_CONFIGURATIONS += -m_smc-apf_--cps_full  #resample
-TEST_CONFIGURATIONS += -m_smc-apf_--cps_partial  #resample
-TEST_CONFIGURATIONS += -m_mcmc_--cps_none #resample
-TEST_CONFIGURATIONS += -m_mcmc_--align_--cps_none #resample
-TEST_CONFIGURATIONS += -m_mcmc_--align_--cps_full #resample
-TEST_CONFIGURATIONS += -m_mcmc_--align_--cps_partial #resample
-TEST_CONFIGURATIONS += -m_mcmc-trace
-TEST_CONFIGURATIONS += -m_mcmc-naive
-TEST_CONFIGURATIONS += -m_pmcmc-pimh_--cps_full
-TEST_CONFIGURATIONS += -m_pmcmc-pimh_--cps_partial
-
-MODELS := $(shell find models -name "*.tppl" -a ! -path '*-lib/*' -a ! -name "clads.tppl")
-MODEL_CONFIGS := $(foreach model,$(MODELS),$(foreach config,$(TEST_CONFIGURATIONS),$(model)@$(config)))
-
-.PHONY: $(MODEL_CONFIGS)
-$(MODEL_CONFIGS):
-	@set -ue; \
-	output_result () { \
-	  if [ -n "$(COMPACT)" ]; then \
-	    echo "$$1,$$2,$$3,$$4"; \
-	  else \
-	    echo -e "$$3\t$$1\t$$2:"; \
-	    if [ 0 -ne "$$4" ]; then \
-	      misc/scripts/elide-cat stdout $$5; \
-	      misc/scripts/elide-cat stderr $$6; \
-	    fi \
-	  fi \
-	}; \
-	path=$(firstword $(subst @, ,$@)); \
-	conf="$(subst _, ,$(lastword $(subst @, ,$@)))"; \
-	mkdir -p build/$$(dirname $$path); \
-	build/${tppl_name} $$conf $$path -p 2 --debug-phases --output build/$@ > build/$@.c.out 2> build/$@.c.err || { st=$$?; output_result "$$path" "$$conf" "compile failure" "$$st" build/$@.c.out build/$@.c.err; exit $$st; }; \
-	build/$@ $$(dirname $$path)"/data/testdata_"$$(basename -s ".tppl" $$path)".json" > build/$@.r.out 2> build/$@.r.err || { st=$$?; output_result "$$path" "$$conf" "run failure" "$$st" build/$@.r.out build/$@.r.err; exit $$st; }; \
-	output_result "$$path" "$$conf" "success" 0
-
-.PHONY: test-models
-test-models: $(MODEL_CONFIGS)
-
-.PHONY: print-model-targets
-print-model-targets:
-	@echo $(MODEL_CONFIGS)
-
-.PHONY: print-models
-print-models:
-	@echo $(MODELS)
+misc/test: misc/test-spec.mc
+	mi compile $< --output $@
 
 .PHONY: test
-test: test-compile test-standard test-models
+test: misc/test
+	+misc/test
 
 clean:
 	rm -f src/treeppl-ast.mc

@@ -1,0 +1,6 @@
+include_rules
+
+: treeppl.syn |> mi syn %f %o |> treeppl-ast.mc
+: tpplc.mc | treeppl-ast.mc |> ^ mi compile %f --output %o^ cp %i treeppl-ast.mc; mi compile %f --output %o; e=$?; rm treeppl-ast.mc; exit $e |> tpplc <tpplc>
+
+run &(genrules) --tup-rules $(ROOT)

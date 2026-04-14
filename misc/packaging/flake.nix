@@ -44,7 +44,7 @@
             devShells.default = pkgs.mkShell {
               name = "TreePPL dev shell";
               inputsFrom = [ packages.treeppl-unwrapped ];
-              buildInputs = [ pkgs.ocamlPackages.owl ];
+              buildInputs = [ pkgs.ocamlPackages.owl pkgs.gdb pkgs.tup ];
             };
           };
     in flake-utils.lib.eachDefaultSystem mkPkg // rec {
