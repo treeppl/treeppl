@@ -18,8 +18,6 @@ include "coreppl::dppl-arg.mc" -- inherit cmd-line opts from cppl
 include "coreppl::parser.mc"
 
 
-
-
 mexpr
 
 use TreePPLThings in
@@ -27,9 +25,9 @@ use TreePPLThings in
 let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod)) =
   let mk =
     lam pigeonsInfo.  
-    lam debugIterations. lam samplingPeriod. lam incrementalPrinting. lam iterations. lam globalProb.
+    lam debugIterations. lam samplingPeriod. lam incrementalPrinting. lam iterations. lam globalProb : Float.
     lam driftKernel. lam driftScale. lam cps.
-    lam align. lam debugAlignment.
+    lam align. lam debugAlignment. lam resampleBehaviorFlag.
     lam outputType. lam loader.
 
     match includeFileExn "." "stdlib::json.mc" loader with (jsonEnv, loader) in
@@ -75,6 +73,30 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
     let continue =
       let appFunc = unappContinue (int_ samplingPeriod) outputSer.serializer in
       utuple_ [accInit, appFunc] in
+    
+    let resampleBehavior =
+      if (gti resampleBehaviorFlag 0) then
+        (ulam_ "acc" (ulam_ "length"(
+          bind_ (ulet_ "iter" (tupleproj_ 0 (var_ "acc")))
+          ( utuple_ 
+            [var_ "acc"
+            , if_ (eqi_ (int_ 0) (modi_ (var_ "iter") (muli_ (var_ "
+              ") (int_ resampleBehaviorFlag))))
+            (utuple_  [(create_ (var_ "length") (ulam_ "" (bool_ false))) ,(negi_ (int_ 1))])
+            (utuple_  [(create_ (var_ "length") (ulam_ "" (bool_ true))) , (modi_ (subi_ (var_ "iter") (int_ 1)) (var_ "length"))])
+          ]
+          ))))
+      else
+        (ulam_ "acc" (ulam_ "length"(
+          ( utuple_ 
+            [var_ "acc"
+            , if_ (assume_ (bern_ (app_ globalProb (var_ ""))))
+            (utuple_  [(create_ (var_ "length") (ulam_ "" (bool_ false))) ,(negi_ (int_ 2))])
+            (utuple_  [(create_ (var_ "length") (ulam_ "" (bool_ true))) ,
+              (assume_ (uniformDiscrete_ (int_ 0) (subi_ (var_ "length") (int_ 1))))])
+            ]
+          ))))
+    in
     let debug =
       if debugIterations then
         utuple_
@@ -100,7 +122,7 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
       { keepSample = keepSample
       , continue = continue
       , temperature = temperature
-      , globalProb = globalProb
+      , resampleBehavior = resampleBehavior
       , debug = debug
       , driftKernel = driftKernel
       , driftScale = driftScale
@@ -142,19 +164,29 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
       } in
     optOr opt (optPure _pigeonsExploreStepsDefault) in
   let pigeonsOptions = optOptional (optMap3 (lam. lam pg. lam pes. (pg, pes)) _pigeons _pigeonsGlobal _pigeonsExploreSteps) in
+  let resampleBehaviorFlag  =
+    let default = 0 in
+    let opt = optArg
+      { optArgDefInt with long ="augmented-data"
+      , description = concat "Using augmented data algorithm with N cycle before redraw.. Default: " (int2string default)
+      , arg = "N"
+      } in
+    optOr opt (optPure default) in
   let res = optApply (
     optApply (
       optApply (
         optApply (
           optApply (
             optApply (
-              optMap5 mk pigeonsOptions debugIterations samplingPeriod incrementalPrinting _particles
-            ) _mcmcLightweightGlobalProb
-          ) _driftKernel
-        ) _driftScale
-      ) _cps
-    ) _align
-  ) _debugAlignment in
+              optApply (
+                optMap5 mk pigeonsOptions debugIterations samplingPeriod incrementalPrinting _particles
+              ) _mcmcLightweightGlobalProb
+            ) _driftKernel
+          ) _driftScale
+        ) _cps
+      ) _align
+    ) _debugAlignment
+   ) resampleBehaviorFlag in
   optMap2 (lam. lam x. x) (_methodFlag false "mcmc-lightweight") res in
 
 let wrapSimpleInferenceMethod
