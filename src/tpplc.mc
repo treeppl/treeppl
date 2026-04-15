@@ -88,9 +88,9 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
           ))))
       else
         (ulam_ "acc" (ulam_ "length"(
-          ( utuple_ 
+          ( utuple_
             [var_ "acc"
-            , if_ (assume_ (bern_ (app_ globalProb (var_ ""))))
+            , if_ (assume_ (bern_ (app_ globalProb (var_ "acc"))))
             (utuple_  [(create_ (var_ "length") (ulam_ "" (bool_ false))) ,(negi_ (int_ 2))])
             (utuple_  [(create_ (var_ "length") (ulam_ "" (bool_ true))) ,
               (assume_ (uniformDiscrete_ (int_ 0) (subi_ (var_ "length") (int_ 1))))])
