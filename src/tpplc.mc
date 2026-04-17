@@ -167,8 +167,8 @@ let mcmcLightweightOptions : OptParser (Type -> Loader -> (Loader, InferMethod))
   let resampleBehaviorFlag  =
     let default = 0 in
     let opt = optArg
-      { optArgDefInt with long ="augmented-data"
-      , description = concat "Using augmented data algorithm with N cycle before redraw.. Default: " (int2string default)
+      { optArgDefInt with long ="data-augmentation"
+      , description = concat "Using data augmentation algorithm with N cycle before redraw.. Default: " (int2string default)
       , arg = "N"
       } in
     optOr opt (optPure default) in
