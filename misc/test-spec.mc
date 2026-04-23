@@ -84,14 +84,12 @@ testMain [substituter] directories location (lam api.
       , cmd = "%i"
       } in
     [compile, run] in
-  let modes =
+  let mostModes =
     [ "--particles 2 -m is --cps none"
     , "--particles 2 -m is --cps partial"
     , "--particles 2 -m is --cps full"
     , "--particles 2 -m smc-bpf --cps full" --resample
     , "--particles 2 -m smc-bpf --cps partial " --resample
-    , "--particles 2 -m smc-apf --cps full " --resample
-    , "--particles 2 -m smc-apf --cps partial " --resample
     , "--iterations 2 -m mcmc --cps none" --resample
     , "--iterations 2 -m mcmc --align --cps none" --resample
     , "--iterations 2 -m mcmc --align --cps full" --resample
@@ -101,19 +99,24 @@ testMain [substituter] directories location (lam api.
     , "--particles 2 --iterations 2 -m pmcmc-pimh --cps full"
     , "--particles 2 --iterations 2 -m pmcmc-pimh --cps partial"
     ] in
-  let allModelTests = join (map mkTestModel modes) in
+  let apfModes =
+    [ "--particles 2 -m smc-apf --cps full " --resample
+    , "--particles 2 -m smc-apf --cps partial " --resample
+    ] in
+  let mostTests = join (map mkTestModel mostModes) in
+  let apfTests = join (map mkTestModel apfModes) in
+  let allModelTests = concat mostTests apfTests in
 
   api.tests []
     (and (strStartsWith "models/") (strEndsWith ".tppl"))
     (map (lam x. (x, Succ ())) allModelTests);
 
-  -- NOTE(vipa, 2026-04-13): We disable the clads tests for the
-  -- moment, since it's likely to loop forever when running with
-  -- APF. There are some model changes that can be made to fix this,
-  -- but in the meanwhile we just skip those tests
+  -- NOTE(vipa, 2026-04-13): Some models have a decent likelihood of
+  -- getting stuck when running with APF and very few particles, so we
+  -- turn off those tests there
   api.tests []
-    (eqString "models/diversification/clads.tppl")
-    (map (lam x. (x, Dont ())) allModelTests);
+    (strStartsWith "models/diversification/")
+    (map (lam x. (x, Dont ())) apfTests);
 
   ()
 );
