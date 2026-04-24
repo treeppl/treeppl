@@ -1,0 +1,192 @@
+// ClaDS2 model script
+
+import "treeppl::lib/trees.tppl"
+import "treeppl::lib/math.tppl"
+
+
+// Types
+// -----
+
+type alias Tree = ClockTree
+
+type Globals = Globals {
+    lambda:     Real,
+    mu:         Real,
+    sigma:      Real,
+    logAlpha:   Real,
+    rho:        Real
+}
+
+
+// Help function
+// -------------
+
+// Help function to predict the prob that a tree goes undetected (unsampled)
+function predictUndetectedProb(g: Globals, multiplier: Real, time: Real) => Real {
+
+    // Effective time
+    let effectiveTime = time * exp(g.logAlpha) / 2.0;
+
+    // Expected number of leaves
+    let expectedLeaves = exp(effectiveTime*multiplier*(g.lambda-g.mu));
+
+    // All leaves need to be unobserved
+    return ((1.0-g.rho)^expectedLeaves);
+}
+
+
+// Model functions
+// ---------------
+
+// Get an estimate of the probability of the MRCA being detected under given parameter values
+function numTrialsUntilMRCADetection(g: Globals, tRoot: Real, mMax: Int) => Int {
+
+    // Check if we used up the max number of trials. If so, condition on mMax as an
+    // approximation. A user might want to monitor how often this condition is hit.
+    // If it is hit frequently, the inference is biased towards parameter values
+    // that increase the likelihood of detection, and mMax needs to be increased.
+    if (mMax == 0) {
+        return 0;
+    }
+
+    if (isDetected(g, 1.0, tRoot) && isDetected(g, 1.0, tRoot)) {
+        return 1;       // We are detected, terminate
+    }
+
+    // MRCA is not detected, continue recursion
+    return (1 + numTrialsUntilMRCADetection(g, tRoot, mMax));
+}
+
+// Forward simulation determining whether a tree survives and is detected (sampled)
+function isDetected(g: Globals, multiplier: Real, tBegin: Real) => Bool {
+
+    /*
+    // Is further simulation worthwhile?
+    if (predictUndetectedProb(g, multiplier, tBegin) < 1e-4) {
+        // printLn("Predicted undetected prob < limit");
+        return true;
+    }
+
+    // Is process near critical? Use expectation in this case
+    // rather than a computationally expensive simulation
+    if ((g.lambda-g.mu)/(g.lambda*tBegin) < 1e-4) {
+        // printLn("Used critical process approximation");
+        assume detected ~ Bernoulli(g.rho);  // One lineage is expected to survive
+        return detected;
+    }
+    */
+
+    assume deltaLogRate ~ Gaussian(g.logAlpha, g.sigma);
+    let multiplier = multiplier * exp(deltaLogRate);
+    if (multiplier > 1e4) {
+      return true;
+    }
+    let multiplier = max(multiplier,1e-6);
+
+    assume waitingTime ~ Exponential(multiplier*(g.lambda+g.mu));
+    let newTime = tBegin - waitingTime; 
+
+    if (newTime < 0.0) {
+        assume detected ~ Bernoulli(g.rho);
+        return detected;
+    }
+
+    assume isSpeciation ~ Bernoulli(g.lambda/(g.lambda+g.mu));
+
+    if (isSpeciation) {
+        return (isDetected(g, multiplier, newTime) || isDetected(g, multiplier, newTime));
+    }
+
+    return false;   // Extinction
+}
+
+
+// Simulate hidden speciation along an observed branch
+function simHiddenSpeciation(g: Globals, multiplier: Real, startTime: Real, endTime: Real) => Real {
+
+    assume deltaLogRate ~ Gaussian(g.logAlpha, g.sigma);
+    let multiplier = multiplier * exp(deltaLogRate);
+    if (multiplier > 1e4) {
+      weight 0.0;
+      return multiplier;
+    }
+    let multiplier = max(multiplier,1e-6);
+
+    assume waitingTime ~ Exponential(multiplier*g.lambda);
+    let newTime = startTime - waitingTime;
+
+    // Handle speciation before end of branch
+    if (newTime > endTime) {
+        if (isDetected(g, multiplier, newTime)) {
+            weight 0.0;
+            return multiplier;
+        }
+        observe 0 ~ Poisson(multiplier*g.mu*waitingTime);
+        weight 2.0;
+        return simHiddenSpeciation(g, multiplier, newTime, endTime);
+    }
+    
+    // Passed the end, we are done
+    observe 0 ~ Poisson(multiplier*g.mu*(startTime-endTime));
+    return multiplier;
+}
+
+
+// Simulate process ("walk") along the observed tree
+function walk(g: Globals, multiplier: Real, parentAge: Real, node: Tree) {
+   
+    let nodeAge = node.age;
+    let multiplier = simHiddenSpeciation(g, multiplier, parentAge, nodeAge);
+
+    if (node is Node) {
+        observe 0.0 ~ Exponential(multiplier*g.lambda);
+        resample;
+        walk(g, multiplier, nodeAge, node.left);
+        walk(g, multiplier, nodeAge, node.right);
+    } else {
+        observe true ~ Bernoulli(g.rho);
+        resample;
+    }
+}
+
+
+// Main model function
+model function clads2(tree: Tree, rho: Real) => Real[] {
+
+    // Set priors such that net diversification (lambda - mu) is likely
+    // to generate a tree of the observed size.
+    let numLeaves = int2real(countLeaves(tree));
+    let expectedTotalLeaves = numLeaves / rho;
+    let meanLambdaPrior = 2.0 * log(expectedTotalLeaves) / tree.age;
+
+    assume lambda ~ Gamma(1.0, meanLambdaPrior)     drift Uniform(max(lambda/1.1,1e-6),min(lambda*1.1,1e6));
+    assume epsilon ~ Uniform(0.0,1.0)               drift Uniform(max(epsilon-0.1,0.0),min(epsilon+0.1,1.0));
+    let mu = epsilon*lambda;
+    assume sigma ~ Gamma(1.0, 1.0)                  drift Gamma(sigma/1.1, 1.1*sigma);
+    let sigma = sqrt(0.2 / sigma);
+    assume logAlpha ~ Gaussian(0.0, sigma)          drift Uniform(logAlpha-0.05,logAlpha+0.05);
+
+    let g = Globals {
+        lambda      = lambda,
+        mu          = mu,
+        sigma       = sigma,
+        logAlpha    = logAlpha,
+        rho         = rho
+    };
+
+    // Compensate for the rotation of interior nodes in the
+    // observed tree, and labeling of the leaves in the tree
+    logWeight ((log(2.0) * (numLeaves - 1.0)) - logFactorial(numLeaves));
+
+    // Simulate conditional on the observed tree
+    walk(g, 1.0, tree.age, tree.left);
+    walk(g, 1.0, tree.age, tree.right);
+
+    // Estimate effect of conditioning on survival
+    let m = numTrialsUntilMRCADetection(g, tree.age, 1000);
+    weight int2real(m);
+    resample;
+
+    return [lambda, mu, logAlpha, sigma, int2real(m)];
+}
+

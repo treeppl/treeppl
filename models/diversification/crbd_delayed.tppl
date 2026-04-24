@@ -1,0 +1,170 @@
+// Simulation-based implementation of
+// constant rate birth death (CRBD) model
+// with hard-coded delayed sampling
+
+import "treeppl::lib/math.tppl"
+import "treeppl::lib/distributions.tppl"
+import "treeppl::lib/trees.tppl"
+
+// Types for this script
+type alias Tree = ClockTree
+
+type GammaBool =
+    GammaBool {
+        gdist:    GammaDist,
+        detected: Bool
+    }
+
+type Globals =
+    Globals {
+        epsilon: Real,
+        rho    : Real
+    }
+
+// Model functions
+
+// Get an estimate of the probability of the MRCA being detected under given parameter values
+function numTrialsUntilMRCADetection(g: Globals, gdist: GammaDist, tRoot: Real, mMax: Int) => Int {
+
+    // Check if we used up the max number of trials. If so, condition on mMax as an
+    // approximation. A user might want to monitor how often this condition is hit.
+    // If it is hit frequently, the inference is biased towards parameter values
+    // that increase the likelihood of detection, and mMax needs to be increased.
+    if (mMax == 0) {
+        return 0;
+    }
+
+    let ret = isDetected(g, gdist, tRoot);
+    if (ret.detected) {
+        let ret = isDetected(g, ret.gdist, tRoot);
+        if (ret.detected) { 
+            return 1;       // We are detected, terminate
+        }
+    }
+
+    // MRCA is not detected, continue recursion
+    return (1 + numTrialsUntilMRCADetection(g, gdist, tRoot, mMax-1));
+}
+
+// Simulate the process from some time in the past and determine
+// whether any descendant will be detected at present (at t = 0.0)
+function isDetected(g: Globals, gdist: GammaDist, tBegin: Real) => GammaBool {
+  
+    let ret = drawGammaExponential(gdist, 1.0 + g.epsilon);
+    let gdist = ret.gdist;
+    let waitingTime = ret.rv;
+    let newTime = tBegin - waitingTime;
+  
+    if (newTime < 0.0) {
+        assume detected ~ Bernoulli(g.rho);
+        return GammaBool {
+            gdist    = gdist,
+            detected = detected
+        };
+    }
+  
+    assume isSpeciation ~ Bernoulli(1.0 / (1.0 + g.epsilon));
+
+    if (isSpeciation) {
+        let ret = isDetected(g, gdist, newTime);
+        if (ret.detected) {
+            return ret;
+        }
+        return isDetected(g, ret.gdist, newTime);
+    }
+
+    // Extinction
+    return GammaBool {
+        gdist    = gdist,
+        detected = false
+    };
+}
+
+
+// Simulate hidden speciation along an observed branch
+function simHiddenSpeciation(g: Globals, gdist: GammaDist, startTime: Real, endTime: Real) => GammaDist {
+  
+    let ret = drawGammaExponential(gdist, 1.0);
+    let gdist = ret.gdist;
+    let waitingTime = ret.rv;
+    let newTime = startTime - waitingTime;
+
+    // Handle speciation before end of branch
+    if (newTime > endTime) {
+        let ret = isDetected(g, gdist, newTime);
+        if (ret.detected) {
+            weight 0.0;
+            return ret.gdist;
+        }
+        weight 2.0;
+        let gdist = observeGammaPoisson(0, ret.gdist, g.epsilon*waitingTime);
+        return simHiddenSpeciation(g, gdist, newTime, endTime);
+    }
+
+    // We reached the end of the branch
+    let gdist = observeGammaPoisson(0, gdist, g.epsilon*(startTime-endTime));
+    return gdist;
+}
+
+// Simulate process ("walk") along the observed tree
+function walk(g: Globals, gdist: GammaDist, parentAge: Real, node: Tree) => GammaDist {
+
+    let nodeAge = node.age;
+    let gdist = simHiddenSpeciation(g, gdist, parentAge, nodeAge);
+    
+    if (node is Node) {
+        let gdist = observeGammaExponential(0.0, gdist, 1.0);   // Speciation at end of branch
+        resample;
+        let gdist = walk(g, gdist, nodeAge, node.left);
+        return      walk(g, gdist, nodeAge, node.right);
+    } else { // node is Leaf
+        observe true ~ Bernoulli(g.rho);  // The leaf was detected
+        resample;
+        return gdist;
+    }
+}
+
+// Model function
+model function crbd(tree: Tree, rho: Real) => Real[] {
+
+    // Set priors such that net diversification (lambda - mu) is likely
+    // to generate a tree of the observed size.
+    let numLeaves = int2real(countLeaves(tree));
+    let expectedTotalLeaves = numLeaves / rho;
+    let meanLambdaPrior = 2.0 * log(expectedTotalLeaves) / tree.age;
+
+    // Define the conjugate prior
+    let gdist = GammaDist {
+        alpha = 1.0,
+        beta  = 1.0/meanLambdaPrior
+    };
+
+    assume epsilon ~ Uniform(0.0,1.0)               drift Uniform(max(epsilon-0.1,0.0),min(epsilon+0.1,1.0));
+
+    // Define the globals
+    let g = Globals {
+        epsilon = epsilon,
+        rho     = rho
+    };
+
+    // Compensate for the rotation of interior nodes in the
+    // observed tree, and unlabeling of the leaves in the tree
+    // in the model script
+    logWeight log(2.0) * (numLeaves - 1.0) - logFactorial(numLeaves);
+
+    // Simulate conditional on the observed tree
+    let gdist = walk(g, gdist, tree.age, tree.left);
+    let gdist = walk(g, gdist, tree.age, tree.right);
+
+    // Estimate effect of conditioning on survival
+    let m = numTrialsUntilMRCADetection(g, gdist, tree.age, 1000);
+    weight int2real(m);
+    resample;
+
+    // Sample expectations
+    let lambda = gdist.alpha/gdist.beta;
+    let mu = g.epsilon*lambda;
+
+    return [gdist.alpha, gdist.beta, lambda, mu, int2real(m)];
+}
+
