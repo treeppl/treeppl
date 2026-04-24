@@ -51,18 +51,20 @@ lang TreePPLCompile
   + TyVarOrConAst
   + UncurriedAst
 
+  type MkInferMethod = Type -> Loader -> (Loader, {mkMethod : Name -> InferMethod, optParser : Expr})
+
   -- a type with useful information passed down from compile
   type TpplCompileContext = {
     serializeResult: Name,
-    outputinferTimeMs: Name,
+    runInference: Name,
     logName: Name, expName: Name,
     printJsonLn: Name,
-    particles: Name, sweeps: Name, input: Name, some: Name,
+    some: Name,
+    none: Name,
     matrixMul: Name,
     matrixAdd: Name,
     matrixMulFloat: Name,
-    pow: Name,
-    repeat: Name
+    pow: Name
   }
 
   sem isemi_: Expr -> Expr -> Expr
@@ -197,7 +199,7 @@ lang TreePPLCompile
 
   | NothingTypeTppl x -> tyunit_
 
-  sem compileModelInvocation : TpplCompileContext -> TpplFrontendOptions -> (Type -> Loader -> (Loader, InferMethod)) -> Loader -> SymEnv -> DeclTppl -> Option (Loader, SymEnv, Expr)
+  sem compileModelInvocation : TpplCompileContext -> TpplFrontendOptions -> MkInferMethod -> Loader -> SymEnv -> DeclTppl -> Option (Loader, SymEnv, Expr)
   sem compileModelInvocation context frontend mkInferenceMethod loader fileEnv =
   | FunDeclTppl (x & {model = Some modelInfo}) ->
     -- TODO(vipa, 2024-12-13): We could technically shadow a model
@@ -217,13 +219,16 @@ lang TreePPLCompile
 
     let app_ = lam f. lam a. withInfo modelInfo (app_ f a) in
 
+    let jsonInputName = nameSym "input" in
+    let inferOptsName = nameSym "inferOpts" in
+
     let parsedName = nameSym "input" in
     let parsedDecl = DeclLet
       { ident = parsedName
       , body =
         let m = nameSym "m" in
         match_
-          (app_ inputSer.deserializer (nvar_ context.input))
+          (app_ inputSer.deserializer (nvar_ jsonInputName))
           (npcon_ context.some (npvar_ m))
           (nvar_ m)
           (error_ (str_ "Could not deserialize data input, malformed json"))
@@ -231,13 +236,10 @@ lang TreePPLCompile
       , tyBody = tyunknown_
       , info = modelInfo
       } in
-    match _addDeclWithEnvExn fileEnv loader parsedDecl with (fileEnv, loader) in
 
     match mkInferenceMethod outputType loader with (loader, inferenceMethod) in
 
     let invocation =
-      -- Either apply to 0 (if nullary model function) or each
-      -- parameter in sequence
       let f = withInfo modelInfo (nvar_ x.name.v) in
       let positional = map (lam p. recordproj_ (nameGetStr p.0) (nvar_ parsedName)) params in
       TmUncurriedApp
@@ -246,17 +248,21 @@ lang TreePPLCompile
         , info = NoInfo ()
         , ty = tyunknown_
         } in
+    let runOnce = nulam_ jsonInputName
+      (bind_ parsedDecl
+        (nulam_ inferOptsName
+          (infer_ (inferenceMethod.mkMethod inferOptsName) (ulam_ "" invocation)))) in
 
-    let inferCode = appf2_ (nvar_ context.repeat)
-      (ulam_ ""
-        (app_ (nvar_ context.printJsonLn)
-          (appf2_ (nvar_ context.serializeResult) outputSer.serializer
-            (if frontend.inferTimeMs then
-              app_ (nvar_ context.outputinferTimeMs) (ulam_ "" (infer_ inferenceMethod (ulam_ "" invocation)))
-            else
-              (infer_ inferenceMethod (ulam_ "" invocation)))
-          )))
-      (nvar_ context.sweeps) in
+    let inferConfig = urecord_
+      [ ("sweeps", int_ frontend.sweeps)
+      , ("seed", optionMapOr (nconapp_ context.none unit_) (lam i. nconapp_ context.some (int_ i)) frontend.seed)
+      , ("inferTimeMs", bool_ frontend.inferTimeMs)
+      , ("inferOpts", inferenceMethod.optParser)
+      , ("sampleSerializer", outputSer.serializer)
+      , ("runOnce", runOnce)
+      ] in
+    let inferCode = app_ (nvar_ context.runInference) inferConfig in
+
     Some (loader, fileEnv, inferCode)
   | _ -> None ()
 
@@ -635,7 +641,7 @@ lang TreePPLCompile
       ty = tyunknown_,
       info = d.info
     }
-  
+
   | GeometricExprTppl d ->
     TmDist {
       dist = DGeometric {
@@ -1074,6 +1080,8 @@ type TpplFrontendOptions =
   , output : String
   , outputMl : Option String
   , inferTimeMs : Bool
+  , seed : Option Int
+  , sweeps : Int
   }
 
 lang TreePPLThings = TreePPLAst + TreePPLCompile
@@ -1100,7 +1108,10 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
   | FTreePPL ()
 
   syn Hook =
-  | TreePPLHook {frontend : TpplFrontendOptions , mkInferenceMethod : Type -> Loader -> (Loader, InferMethod)}
+  | TreePPLHook
+    { frontend : TpplFrontendOptions
+    , mkInferenceMethod : MkInferMethod
+    }
 
   sem _fileType = | _ ++ ".tppl" -> FTreePPL ()
   sem _loadFile path = | (FTreePPL _, loader & Loader x) ->
@@ -1117,8 +1128,8 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
     match parseTreePPLExn path content with DeclSequenceFileTppl top in
 
     -- Standard library (these should be in scope in the program)
-    match includeFileExn "." "treeppl::lib/standard.mc" loader with (stdlibMCEnv, loader) in
-    match includeFileExn "." "treeppl::lib/standard.tppl" loader with (stdlibTPPLEnv, loader) in
+    match includeFileExn "." "treeppl::standard.mc" loader with (stdlibMCEnv, loader) in
+    match includeFileExn "." "treeppl::standard.tppl" loader with (stdlibTPPLEnv, loader) in
     let fileEnv = stdlibTPPLEnv.env in
     -- Compiler libraries (these should *not* be in scope in the program)
     match includeFileExn "." "stdlib::ext/dist-ext.mc" loader with (distEnv, loader) in
@@ -1127,7 +1138,7 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
     match includeFileExn "." "stdlib::json.mc" loader with (jsonEnv, loader) in
     match includeFileExn "." "stdlib::basic-types.mc" loader with (optionEnv, loader) in
     match includeFileExn "." "stdlib::common.mc" loader with (commonEnv, loader) in
-    match includeFileExn "." "treeppl::treeppl-to-coreppl/lib-compile.mc" loader with (compileLibEnv, loader) in
+    match includeFileExn "." "treeppl::internal/lib-compile.mc" loader with (compileLibEnv, loader) in
     -- Explicit imports (these should be in scope in the program)
     let import = lam acc. lam imp.
       match includeFileExn (dirname path) imp.v acc.1 with (newEnv, loader) in
@@ -1136,19 +1147,16 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
 
     let context =
       { serializeResult = _getVarExn "serializeResult" compileLibEnv
-      , particles = _getVarExn "particles" compileLibEnv
-      , sweeps = _getVarExn "sweeps" compileLibEnv
-      , input = _getVarExn "input" compileLibEnv
-      , outputinferTimeMs = _getVarExn "outputinferTimeMs" compileLibEnv
+      , runInference = _getVarExn "runInference" compileLibEnv
       , logName = _getVarExn "externalLog" mathEnv
       , expName = _getVarExn "externalExp" mathEnv
       , pow = _getVarExn "pow" mathEnv
       , printJsonLn = _getVarExn "printJsonLn" jsonEnv
       , some = _getConExn "Some" optionEnv
+      , none = _getConExn "None" optionEnv
       , matrixMul = _getVarExn "matMulExn" matrixEnv
       , matrixAdd = _getVarExn "matAddExn" matrixEnv
       , matrixMulFloat = _getVarExn "matScale" matrixEnv
-      , repeat = _getVarExn "repeat" commonEnv
       } in
 
     -- 1. Type and constructor definitions. *All* types are inserted
@@ -1208,35 +1216,6 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
 
     loader
 end
-
-let tpplFrontendOptions : OptParser TpplFrontendOptions =
-  let mk = lam input. lam output. lam outputMl. lam inferTimeMs.
-    { input = input
-    , output = output
-    , outputMl = outputMl
-    , inferTimeMs = inferTimeMs
-    } in
-  let input = optPos
-    { optPosDefString with arg = "<program>"
-    , description = "The TreePPL program to compile."
-    } in
-  let output =
-    let default = "out" in
-    let opt = optArg
-      { optArgDefString with long = "output"
-      , description = concat "The name of the final compiled executable. Default: " default
-      , arg = "<file>"
-      } in
-    optOr opt (optPure default) in
-  let outputMl = optOptional (optArg
-    { optArgDefString with long = "output-ml"
-    , description = "Output the intermediate .ml file to this path."
-    }) in
-  let inferTimeMs = optFlag
-    { optFlagDef with long = "infer-time"
-    , description = "Inference time (ms) is printed with the output."
-    } in
-  optMap4 mk input output outputMl inferTimeMs
 
 let compileTpplToExecutable = lam frontend. lam transformations. lam mkInferenceMethod.
   use TreePPLThings in

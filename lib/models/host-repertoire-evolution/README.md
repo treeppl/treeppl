@@ -6,7 +6,7 @@ sidebar_label: Host-repertoire model
 
 # Host repertoire evolution
 
-  - **Model files:** `models/host-repertoire-evolution/flat-root-prior-HRM.tppl` and `models/host-repertoire-evolution/subroot-HRM.tppl`. 
+  - **Model files:** `models/host-repertoire-evolution/flat-root-prior-HRM.tppl` and `models/host-repertoire-evolution/subroot-HRM.tppl`.
 
   - **Example input data:** `models/host-repertoire-evolution/testdata_flat-root-prior-HRM.json` and `models/host-repertoire-evolution/testdata_subroot-HRM.json`.
 
