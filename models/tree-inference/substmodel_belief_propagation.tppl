@@ -17,6 +17,8 @@
 // combinations of the four nucleotides, but typically
 // only those given above are used.
 
+import "treeppl::lib/math.tppl"
+
 // TYPES
 
 type TheReturn = TheReturn{stationary_probs: Real[], exchangeability_rates: Real[]}

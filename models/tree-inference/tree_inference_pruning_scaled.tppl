@@ -10,6 +10,8 @@
 //   "T" for thymine - 3
 //   "-" for gaps - 4
 
+import "treeppl::lib/math.tppl"
+
 // TYPES
 
 type MsgTree =
