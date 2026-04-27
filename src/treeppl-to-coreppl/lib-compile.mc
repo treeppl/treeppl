@@ -1,59 +1,53 @@
 -- NOTE(2023-08-11,dlunde): This CorePPL library file contains functions
 -- referred to by the TreePPL compiler.
 
--- 1. We define this `ext.mc` which contains the includes needed for log, etc.
--- external functions
-include "ext/dist-ext.mc"
-include "ext/math-ext.mc"
-include "matrix.mc"
-include "treeppl::lib/standard.mc"
-include "coreppl::coreppl-to-mexpr/runtime-dists.mc"
-
--- 2. We parse this file to Expr
--- let externals = parseMCoreFile "src/externals/ext.mc" in
-
--- 3. We bind this, as well as our input, to the AST we're generating
---   let input = bind_ externals input in
--- and then in TmRecLets
---   inexpr = bind_ input invocation
-
--- 4. We need to get  the name for symbol that has the string "log"
--- this is where I am stuck
---   getExternalIds externals
--- will give us a Set String
--- but I am looking for a function like
---   getNameFor "log" externals
--- But I can't find that
--- There is nameGetStr, but this is from Name -> Str
---
-
 include "json.mc"
+include "optparse-applicative.mc"
+include "ext/dist-ext.mc"
 
-let serializeResult: all a. (a -> JsonValue) -> Dist(a) -> JsonValue =
-    lam sampleSerializer. lam resultDist.
-      match distEmpiricalSamples resultDist with (samples, weights) in
-      match distEmpiricalNormConst resultDist with nc in -- nc is NaN when inference method does not produce it
-      let samples: [a] = samples in
-      let weights: [Float] = weights in
-      let nc: Float = nc in
-      JsonObject
-        (mapInsert "normConst" (jsonSerializeFloat nc)
-        (mapInsert "samples" (JsonArray (map sampleSerializer samples))
-        (mapInsert "weights" (JsonArray (map jsonSerializeFloat weights))
-        (mapEmpty cmpString))))
+include "runtime-flags.mc"
 
-let outputinferTimeMs: all a. (() -> a) -> a = lam f.
+let serializeResult: all a. (a -> JsonValue) -> Dist(a) -> JsonValue
+  = lam sampleSerializer. lam resultDist.
+    match distEmpiricalSamples resultDist with (samples, weights) in
+    match distEmpiricalNormConst resultDist with nc in -- nc is NaN when inference method does not produce it
+    let samples: [a] = samples in
+    let weights: [Float] = weights in
+    let nc: Float = nc in
+    JsonObject
+      (mapInsert "normConst" (jsonSerializeFloat nc)
+      (mapInsert "samples" (JsonArray (map sampleSerializer samples))
+      (mapInsert "weights" (JsonArray (map jsonSerializeFloat weights))
+      (mapEmpty cmpString))))
+
+let outputInferTimeMs: all a. (() -> a) -> a = lam f.
   let beginT = wallTimeMs () in
   let inf = f () in
   let endT = wallTimeMs () in
-  printError "{\"Inference time (ms) \":";  printError (float2string (subf endT beginT));  printErrorLn "}";
+  printError "{\"Inference time (ms)\":";  printError (float2string (subf endT beginT));  printErrorLn "}";
   inf
 
-let particles = if leqi (length argv) 2 then 10 else string2int (get argv 2)
-
-let sweeps    = if leqi (length argv) 3 then 1 else string2int (get argv 3)
-
-
-let input: JsonValue =
-  if leqi (length argv) 1 then error "You must provide a data file!"
-  else jsonParseExn (readFile (get argv 1))
+type RunInferenceConfig res inferOpts =
+  { sweeps : Int
+  , seed : Option Int
+  , inferTimeMs : Bool
+  , inferOpts : OptParser inferOpts
+  , sampleSerializer : res -> JsonValue
+  , runOnce : JsonValue -> inferOpts -> Dist res
+  }
+let runInference : all res. all inferOpts. RunInferenceConfig res inferOpts -> ()
+  = lam config.
+    let dataFile = optPos
+      { optPosDefString with arg = "<data.json>"
+      , description = "The data to pass to the main model function, in a json file"
+      } in
+    let run = lam dataFile. lam inferTimeMs. lam sweeps. lam seed. lam inferOpts. lam.
+      (match seed with Some seed then setSeed seed else ());
+      let runOnce = config.runOnce (jsonParseExn (readFile dataFile)) in
+      let runOnce = if inferTimeMs
+        then lam. printJsonLn (serializeResult config.sampleSerializer (outputInferTimeMs (lam. runOnce inferOpts)))
+        else lam. printJsonLn (serializeResult config.sampleSerializer (runOnce inferOpts)) in
+      repeat runOnce sweeps in
+    let options = optMap5 run
+      dataFile (_inferTimeMs config.inferTimeMs) (_sweeps config.sweeps) (_seed config.seed) config.inferOpts in
+    optParseWithHelp (head argv) "" options (tail argv) ()

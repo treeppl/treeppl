@@ -59,17 +59,17 @@ test-compile:
 # resample flag later, but it's already a large set of configurations
 # to test. The methods that consider the resample flag are marked with
 # "resample" below.
-TEST_CONFIGURATIONS := -m_is-lw_--cps_none
-TEST_CONFIGURATIONS += -m_is-lw_--cps_partial
-TEST_CONFIGURATIONS += -m_is-lw_--cps_full
+TEST_CONFIGURATIONS := -m_is_--cps_none
+TEST_CONFIGURATIONS += -m_is_--cps_partial
+TEST_CONFIGURATIONS += -m_is_--cps_full
 TEST_CONFIGURATIONS += -m_smc-bpf_--cps_full  #resample
 TEST_CONFIGURATIONS += -m_smc-bpf_--cps_partial  #resample
 TEST_CONFIGURATIONS += -m_smc-apf_--cps_full  #resample
 TEST_CONFIGURATIONS += -m_smc-apf_--cps_partial  #resample
-TEST_CONFIGURATIONS += -m_mcmc-lightweight_--cps_none #resample
-TEST_CONFIGURATIONS += -m_mcmc-lightweight_--align_--cps_none #resample
-TEST_CONFIGURATIONS += -m_mcmc-lightweight_--align_--cps_full #resample
-TEST_CONFIGURATIONS += -m_mcmc-lightweight_--align_--cps_partial #resample
+TEST_CONFIGURATIONS += -m_mcmc_--cps_none #resample
+TEST_CONFIGURATIONS += -m_mcmc_--align_--cps_none #resample
+TEST_CONFIGURATIONS += -m_mcmc_--align_--cps_full #resample
+TEST_CONFIGURATIONS += -m_mcmc_--align_--cps_partial #resample
 TEST_CONFIGURATIONS += -m_mcmc-trace
 TEST_CONFIGURATIONS += -m_mcmc-naive
 TEST_CONFIGURATIONS += -m_pmcmc-pimh_--cps_full
