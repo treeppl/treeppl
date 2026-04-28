@@ -5,16 +5,15 @@ RESET=\033[0m
 
 tppl_name=tpplc
 bin_path=${HOME}/.local/bin
-src_path=${HOME}/.local/src/treeppl/
-tppl_src=src/.
-tppl_models=models
+lib_path=${HOME}/.local/src/treeppl/
+tppl_lib=lib/.
 
 mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
 current_dir := $(dir $(mkfile_path))
 ifdef MCORE_LIBS
-MCORE_LIBS:=treeppl=$(current_dir)/src:$(MCORE_LIBS)
+MCORE_LIBS:=treeppl=$(current_dir)/lib:$(MCORE_LIBS)
 else
-MCORE_LIBS:=treeppl=$(current_dir)/src
+MCORE_LIBS:=treeppl=$(current_dir)/lib
 endif
 export MCORE_LIBS
 
@@ -27,21 +26,20 @@ build/src/treeppl-ast.mc: src/treeppl.syn
 
 install: build/${tppl_name}
 	echo "Make sure you extend the MCORE_LIBS variable with"
-	mkdir -p ${bin_path} `dirname ${src_path}`
+	mkdir -p ${bin_path} `dirname ${lib_path}`
 	cp build/${tppl_name} ${bin_path}/${tppl_name}
 	chmod +x ${bin_path}/${tppl_name}
-	cp -rf $(tppl_src) $(src_path)
-	cp -rf $(tppl_models) $(src_path)
+	cp -rf $(tppl_lib) $(lib_path)
 	@echo "\n${RED}Attention:${RESET}"
-	@echo "${tppl_name} has been installed to ${bin_path} and the TreePPL sources have been installed to $(src_path)."
+	@echo "${tppl_name} has been installed to ${bin_path} and the TreePPL sources have been installed to $(lib_path)."
 	@echo "Please, ensure that the PATH and the MCORE_LIBS environment variables have been set accordingly."
 	@echo "E.g. under Bash:"
 	@echo 'export PATH=$$PATH:'"${bin_path}"
-	@echo 'export MCORE_LIBS=$$MCORE_LIBS:treeppl='"$(src_path)\n"
+	@echo 'export MCORE_LIBS=$$MCORE_LIBS:treeppl='"$(lib_path)\n"
 
 uninstall:
 	rm ${bin_path}/${tppl_name}
-	rm -rf $(src_path)
+	rm -rf $(lib_path)
 
 misc/test: misc/test-spec.mc
 	mi compile $< --output $@
