@@ -32,6 +32,7 @@ testMain [substituter] directories location (lam api.
     let set = setOfSeq cmpString elems in
     lam x. setMem x set in
   let dirIs = lam dir. lam path. eqString dir (dirname path) in
+  let strContains = lam needle. lam str. optionIsSome (subseqFindIdx eqc needle str) in
 
   -- === Test .mc files ===
 
@@ -72,7 +73,7 @@ testMain [substituter] directories location (lam api.
 
   -- === Test models ===
 
-  let mkTestModel = lam flags.
+  let mkTestModelPair = lam flags.
     let compile = api.midStep
       { tag = strReplace " " "_" (concat "compile " flags)
       , uses = []
@@ -83,7 +84,9 @@ testMain [substituter] directories location (lam api.
       , uses = [compile, api.file (lam f. concat "data/testdata_" (withExtension ".json" f))]
       , cmd = "%i"
       } in
-    [compile, run] in
+    (compile, run) in
+  let mkTestModel = lam flags.
+    match mkTestModelPair flags with (l, r) in [l, r] in
   let mostModes =
     [ "--particles 2 -m is --cps none"
     , "--particles 2 -m is --cps partial"
@@ -91,25 +94,55 @@ testMain [substituter] directories location (lam api.
     , "--particles 2 -m smc-bpf --cps full" --resample
     , "--particles 2 -m smc-bpf --cps partial " --resample
     , "--iterations 2 -m mcmc --cps none" --resample
-    , "--iterations 2 -m mcmc --align --cps none" --resample
-    , "--iterations 2 -m mcmc --align --cps full" --resample
-    , "--iterations 2 -m mcmc --align --cps partial" --resample
     , "--iterations 2 -m mcmc-trace"
     , "--iterations 2 -m mcmc-naive"
     , "--particles 2 --iterations 2 -m pmcmc-pimh --cps full"
     , "--particles 2 --iterations 2 -m pmcmc-pimh --cps partial"
     ] in
+  let alignedModes =
+    [ "--iterations 2 -m mcmc --align --cps none" --resample
+    , "--iterations 2 -m mcmc --align --cps full" --resample
+    , "--iterations 2 -m mcmc --align --cps partial" --resample
+    , "--iterations 2 -m mcmc --align --cps full --incremental-printing" --resample
+    , "--iterations 2 -m mcmc --align --cps none --data-augmentation 1" --resample
+    , "--iterations 2 -m mcmc --align --cps full --data-augmentation 1" --resample
+    , "--iterations 2 -m mcmc --align --cps full --data-augmentation 1 --incremental-printing" --resample
+    ] in
   let apfModes =
-    [ "--particles 2 -m smc-apf --cps full " --resample
-    , "--particles 2 -m smc-apf --cps partial " --resample
+    [ "--particles 2 -m smc-apf --cps full" --resample
+    , "--particles 2 -m smc-apf --cps partial" --resample
     ] in
   let mostTests = join (map mkTestModel mostModes) in
+  let alignedTests = unzip (map mkTestModelPair alignedModes) in
   let apfTests = join (map mkTestModel apfModes) in
-  let allModelTests = concat mostTests apfTests in
+  let allModelTests = join [mostTests, apfTests, alignedTests.0, alignedTests.1] in
 
   api.tests []
     (and (strStartsWith "lib/models/") (strEndsWith ".tppl"))
     (map (lam x. (x, Succ ())) allModelTests);
+
+  -- NOTE(vipa, 2026-05-06): Some models have additional library files
+  -- in a `-lib` folder, do not test them as though they were models.
+  api.tests []
+    (strContains "-lib/")
+    (map (lam x. (x, Dont ())) allModelTests);
+
+  -- NOTE(vipa, 2026-05-06): These tests either have no `assume`s (and
+  -- thus no aligned `assume`s) or are written in such a way that our
+  -- current alignment analysis marks all `assume`s as unaligned
+  api.tests []
+    (elem
+      [ "lib/models/lang/anonymous.tppl"
+      , "lib/models/lang/externals.tppl"
+      , "lib/models/lang/hello.tppl"
+      , "lib/models/lang/matrix-tests.tppl"
+      , "lib/models/lang/mini-mat-test.tppl"
+      , "lib/models/lang/tensors.tppl"
+      , "lib/models/tree-inference/tree_inference_pruning_scaled.tppl"
+      , "lib/models/tree-inference/tree_inference_pruning.tppl"
+      , "lib/models/tree-inference/tree_inference.tppl"
+      ])
+    (map (lam x. (x, Fail ())) alignedTests.1);
 
   -- NOTE(vipa, 2026-04-13): Some models have a decent likelihood of
   -- getting stuck when running with APF and very few particles, so we
