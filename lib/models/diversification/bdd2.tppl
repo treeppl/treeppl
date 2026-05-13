@@ -5,9 +5,6 @@
 // mu is a constant fraction of lambda. This fraction is referred to as epsilon
 // in earlier work by us on ClaDS2.
 
-import "treeppl::trees.tppl"
-import "treeppl::math.tppl"
-
 
 // Types
 // -----
@@ -94,7 +91,7 @@ function numTrialsUntilMRCADetection(g: Globals, tRoot: Real, mMax: Int) => Int 
         return 1;    // We are detected, terminate!
     } else {
         // MRCA is not detected, continue recursion
-        return (1 + numTrialsUntilMRCADetection(g, tRoot, mMax-1)); 
+        return (1 + numTrialsUntilMRCADetection(g, tRoot, mMax-1));
     }
 }
 
@@ -117,7 +114,7 @@ function isDetected(g: Globals, multiplier: Real, tBegin: Real) => Bool {
 
     // We always need to consider the possibility of an event
     assume waitingTime ~ Exponential(multiplier*(g.lambda+g.mu));
- 
+
     // Find out BDD case and time frame we will be considering
     // Note that tEnd is 0, so tSegment=(tBegin-0)=tBegin
     let b = bddCase(tBegin, waitingTime, g.deltaT);
@@ -143,7 +140,7 @@ function isDetected(g: Globals, multiplier: Real, tBegin: Real) => Bool {
     if (b is DeltaT) {
         return isDetected(g, multiplier, tNew);
     }
-   
+
     // We have a speciation or extinction (b is Event)
     assume isSpeciation ~ Bernoulli(g.lambda/(g.lambda+g.mu));
 
@@ -180,12 +177,12 @@ function simHiddenSpeciation(g: Globals, multiplier: Real, tBegin:Real, tEnd: Re
     if (b is EndOfBranch) {
         return multiplier;
     }
-    
+
     // Compute new time point
     let tNew = tBegin - b.timeSegment;
 
     // If waitingTime is smallest, there is the hidden subtree resulting from
-    // the speciation event to consider 
+    // the speciation event to consider
     if (b is Event) {
         if (isDetected(g, multiplier, tNew)) {
             weight 0.0;
@@ -219,7 +216,7 @@ function walk(g: Globals, multiplier: Real, parentAge: Real, node: Tree) {
 
 // Model function for BDD2
 model function bdd2(tree: Tree, rho: Real, numIntervals: Int) => Real[] {
-  
+
     // Compute the time for one of the intervals
     let deltaT = tree.age / int2real(numIntervals);
 
@@ -231,11 +228,11 @@ model function bdd2(tree: Tree, rho: Real, numIntervals: Int) => Real[] {
 
     // ClaDS2-like settings (priors as in concept paper except that mean of lambda is data dependent)
     assume lambda ~ Gamma(1.0, meanLambdaPrior)     drift Uniform(lambda/1.1,lambda*1.1);               // Multiplier probably more efficient, tuning param 1.1
-    assume epsilon ~ Uniform(0.0, 1.0)              drift Uniform(max(epsilon-0.1,0.0),min(epsilon+0.1,1.0));  // Sliding window, tuning param width=0.2 
+    assume epsilon ~ Uniform(0.0, 1.0)              drift Uniform(max(epsilon-0.1,0.0),min(epsilon+0.1,1.0));  // Sliding window, tuning param width=0.2
     let mu = epsilon*lambda;
     assume sigma_x ~ Gamma(1.0, 1.0)                drift Gamma(sigma_x/1.1,sigma_x*1.1);               // Multiplier probably more efficient, tuning param 1.1
     let sigma = sqrt(0.2*meanLambdaPrior/sigma_x);
-    assume logAlpha ~ Gaussian(0.0, sigma)          drift Uniform(logAlpha-0.05,logAlpha+0.05);         // Sliding window, tuning param width=0.1 
+    assume logAlpha ~ Gaussian(0.0, sigma)          drift Uniform(logAlpha-0.05,logAlpha+0.05);         // Sliding window, tuning param width=0.1
 
     // Package global model variables in one object
     let g = Globals {
@@ -254,7 +251,7 @@ model function bdd2(tree: Tree, rho: Real, numIntervals: Int) => Real[] {
 
     // Correct for tip labels and rotations
     logWeight log(2.0) * (numLeaves - 1.0) - logFactorial(numLeaves);
-    
+
     // Walk over tree
     walk(g, 1.0, tree.age, tree.left);
     walk(g, 1.0, tree.age, tree.right);
@@ -263,7 +260,6 @@ model function bdd2(tree: Tree, rho: Real, numIntervals: Int) => Real[] {
     let m = numTrialsUntilMRCADetection(g, tree.age, 1000);
     weight int2real(m);
     resample;
-    
+
     return [lambda, mu, logAlpha, sigma, int2real(m)];
 }
-

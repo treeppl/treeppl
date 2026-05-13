@@ -1,0 +1,106 @@
+import "stdlib::common.mc"
+import "stdlib::ext/arr-ext.mc"
+import "stdlib::ext/mat-ext.mc"
+import "./matrix.mc"
+import "./math.mc"
+import "./debug.mc"
+
+type alias Matrix[X] = Mat[X]
+
+function mtxCreate(rows : Int, cols : Int, data : Real[]) => Matrix[Real] {
+  return matFromArrExn(rows)(cols)(extArrOfSeq(extArrKindFloat64)(data));
+}
+
+function mtxCreateId(sideLength : Int) => Matrix[Real] {
+  let mat = matMake(extArrKindFloat64)(sideLength)(sideLength)(0.0);
+  repeati(function(i : Int) {return matSetExn(mat)(i)(i)(1.0);})(sideLength);
+  return mat;
+}
+
+function rvecCreate(cols : Int, seq : Real[]) => Matrix[Real] {
+  return matFromArrExn(1)(cols)(extArrOfSeq(extArrKindFloat64)(seq));
+}
+
+function cvecCreate(rows : Int, seq : Real[]) => Matrix[Real] {
+  return matFromArrExn(rows)(1)(extArrOfSeq(extArrKindFloat64)(seq));
+}
+
+function dim[X](mtx : Matrix[X]) => Int[] {
+  return [matNumRows(mtx), matNumCols(mtx)];
+}
+
+function mtxGet[X](row : Int, col : Int, mtx : Matrix[X]) => X {
+  return matGetExn(mtx)(row - 1)(col - 1);
+}
+
+function mtxRowCols[X](mtx : Matrix[X], row : Int, cols : Int[]) => Matrix[X] {
+  return matRowCols(mtx)(row)(cols);
+}
+
+function mtxSclrMul(scalar : Real, mtx : Matrix[Real]) => Matrix[Real] {
+  return matScale(scalar)(mtx);
+}
+
+function mtxAdd(a : Matrix[Real], b : Matrix[Real]) => Matrix[Real] {
+  return matAddExn(a)(b);
+}
+
+function mtxTrans(mtx : Matrix[Real]) => Matrix[Real] {
+  return matTranspose(mtx);
+}
+
+function mtxExp(mtx : Matrix[Real]) => Matrix[Real] {
+  return matExpExn(mtx);
+}
+
+function mtxMul(a : Matrix[Real], b : Matrix[Real]) => Matrix[Real] {
+  return matMulExn(a)(b);
+}
+
+function mtxElemMul(a : Matrix[Real], b : Matrix[Real]) => Matrix[Real] {
+  return matElemMulExn(a)(b);
+}
+
+function mtxElemPow(mtx : Matrix[Real], pow : Real) => Matrix[Real] {
+  return matElemPow(mtx)(pow);
+}
+
+function mtxNormalize(mtx : Matrix[Real]) => Matrix[Real] {
+  return matNormalize(mtx);
+}
+
+function mtxGetRow[X](row : Int, mtx : Matrix[X]) => Matrix[X] {
+  return matGetRow(row)(mtx);
+}
+
+function _mtxPow(mtx : Matrix[Real], pow : Int) => Matrix[Real] {
+  if pow == 1 {
+     return mtx;
+  }
+  if mathModi(pow)(2) == 0 {
+     let halfPow = _mtxPow(mtx, pow/2);
+     return mtxMul(halfPow, halfPow);
+  }
+  return mtxMul(mtx, _mtxPow(mtx, pow-1));
+}
+
+function mtxPow(mtx : Matrix[Real], pow : Int) => Matrix[Real] {
+  if !matIsSquare(mtx) {
+     return crash("Matrix must be square");
+  }
+  if pow < 0 {
+     return crash("Powers must be non-negative");
+  }
+  if pow == 0 {
+     return mtxCreateId(matNumRows(mtx));
+  }
+  return _mtxPow(mtx, pow);
+}
+
+function mtxMean(mtx : Matrix[Real]) => Real {
+  return matMean(mtx);
+}
+
+function tapply[A, B](mtx : Matrix[A], f : Function(A)=>B) => B[] {
+  return matApplyToSeq(mtx)(f);
+}

@@ -1,9 +1,5 @@
 // BDD2 model script with hard-coded delayed sampling
 
-import "treeppl::trees.tppl"
-import "treeppl::math.tppl"
-import "treeppl::distributions.tppl"
-
 
 // Types
 // -----
@@ -102,9 +98,9 @@ function numTrialsUntilMRCADetection(g: Globals, d: Dists, tRoot: Real, mMax: In
             return 1;
         }
     }
-        
+
     // MRCA is not detected, continue recursion
-    return (1 + numTrialsUntilMRCADetection(g, d, tRoot, mMax-1)); 
+    return (1 + numTrialsUntilMRCADetection(g, d, tRoot, mMax-1));
 }
 
 // Forward simulation determining whether a tree survives and is detected
@@ -129,19 +125,19 @@ function isDetected(g: Globals, d: Dists, multiplier: Real, tBegin: Real) => Dis
             detected = detected
         };
     }
-    
+
     // We always need to consider the possibility of an event
     let ret1 = drawGammaExponential(d.gdist,multiplier*(1.0+g.epsilon));
     let waitingTime = ret1.rv;
- 
+
     // Find out BDD case and time segment we will be considering
     // Note that tEnd is 0, so timeSegment=(tBegin-0)=tBegin
     let b = bddCase(tBegin, waitingTime, g.deltaT);
 
     // Let the diversification rates shift
     let ret2 = drawNormalInverseGammaGaussian(d.nigdist);
-    let multiplier = exp(ret2.rv*b.timeSegment)*multiplier; 
-    
+    let multiplier = exp(ret2.rv*b.timeSegment)*multiplier;
+
     // Update distributions
     let d = Dists {
         gdist   = ret1.gdist,
@@ -173,7 +169,7 @@ function isDetected(g: Globals, d: Dists, multiplier: Real, tBegin: Real) => Dis
     if (b is DeltaT) {
         return isDetected(g, d, multiplier, tBegin-b.timeSegment);
     }
-   
+
     // We have a speciation or extinction (b is Event)
     assume isSpeciation ~ Bernoulli(1.0/(1.0+g.epsilon));
 
@@ -238,9 +234,9 @@ function simHiddenSpeciation(g: Globals, d: Dists, multiplier: Real, tBegin:Real
 
     // Compute new time point
     let tNew = tBegin - b.timeSegment;
-    
+
     // If waitingTime is smallest, there is the hidden subtree resulting from
-    // the speciation event to consider 
+    // the speciation event to consider
     if (b is Event) {
         let ret = isDetected(g, d, multiplier, tNew);
         let d = ret.d;
@@ -285,7 +281,7 @@ function walk(g: Globals, d: Dists, multiplier: Real, parentAge: Real, node: Tre
 
 // Model function for BDD2
 model function bdd2(tree: Tree, rho: Real, numIntervals: Int) => Real[] {
-  
+
     // Compute the time for one of the intervals
     let deltaT = tree.age / int2real(numIntervals);
 
@@ -323,7 +319,7 @@ model function bdd2(tree: Tree, rho: Real, numIntervals: Int) => Real[] {
 
     // Correct for tip labels and rotations
     logWeight log(2.0) * (numLeaves - 1.0) - logFactorial(numLeaves);
-    
+
     // Walk over tree
     let d = walk(g, d, 1.0, tree.age, tree.left);
     let d = walk(g, d, 1.0, tree.age, tree.right);
@@ -341,4 +337,3 @@ model function bdd2(tree: Tree, rho: Real, numIntervals: Int) => Real[] {
 
     return [lambda, mu, logAlpha, sigma, int2real(m)];
 }
-

@@ -2,7 +2,6 @@
  * Library of drift kernels emulating the drift kernels from the RevBayes implementation
  */
 
-import "treeppl::math.tppl"
 
 function simplexMove(x: Real[], alpha: Real, epsilon: Real) => Dist[Real[]] {
   /*

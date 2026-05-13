@@ -68,12 +68,12 @@ type TestDistributions = TestDistributions {
   someUniform: Real[],
   scoreUniform: Real,
   logScoreUniform: Real,
-  
+
   aUniformDiscrete: Int,
   someUniformDiscrete: Int[],
   scoreUniformDiscrete: Real,
   logScoreUniformDiscrete: Real,
-  
+
   aReciprocal: Real,
   someReciprocal: Real[],
   scoreReciprocal: Real,
@@ -86,125 +86,125 @@ model function distributions() => TestDistributions {
   // Bernoulli
   assume aB ~ Bernoulli(0.99);
 
-  let myBernP = BernoulliParam{prob = 0.99};
-  let someB = iid(bernoulli, myBernP, 10);
-  let scoreB = bernoulliScore(true, myBernP);
-  let logScoreB = bernoulliLogScore(true, myBernP);
+  let myBernP = Bernoulli(0.99);
+  let someB = repDraw(10, myBernP);
+  let scoreB = pdf(true, myBernP);
+  let logScoreB = logPdf(true, myBernP);
 
-  // Beta 
+  // Beta
   assume aBt ~ Beta(2.0, 5.0);
 
-  let myBetaP = BetaParam {a = 2.0, b = 5.0};
-  let someBt = iid(beta, myBetaP, 10);
-  let scoreBt = betaScore(0.4, myBetaP);
-  let logScoreBt = betaLogScore(0.4, myBetaP);
+  let myBetaP = Beta(2.0, 5.0);
+  let someBt = repDraw(10, myBetaP);
+  let scoreBt = pdf(0.4, myBetaP);
+  let logScoreBt = logPdf(0.4, myBetaP);
 
   // Binomial
   assume aBn ~ Binomial(10, 0.5);
 
-  let myBinP = BinomialParam {n = 10, prob = 0.5};
-  let someBn = iid(binomial, myBinP, 10);
-  let scoreBn = binomialScore(5, myBinP);
-  let logScoreBn = binomialLogScore(5, myBinP);
+  let myBinP = Binomial(10, 0.5);
+  let someBn = repDraw(10, myBinP);
+  let scoreBn = pdf(5, myBinP);
+  let logScoreBn = logPdf(5, myBinP);
 
   // Categorical
   let catProbs = [0.2, 0.3, 0.5];
   assume aCat ~ Categorical(catProbs);
-  
-  let myCatP = CategoricalParam {probs = catProbs};
-  let someCat = iid(categorical, myCatP, 10);
-  let scoreCat = categoricalScore(1, myCatP);
-  let logScoreCat = categoricalLogScore(1, myCatP);
-  
+
+  let myCatP = Categorical(catProbs);
+  let someCat = repDraw(10, myCatP);
+  let scoreCat = pdf(1, myCatP);
+  let logScoreCat = logPdf(1, myCatP);
+
   // Chi2
   assume aChi2 ~ Chi2(2);
 
-  let myChi2P = Chi2Param {df = 2};
-  let someChi2 = iid(chi2, myChi2P, 10);
-  let scoreChi2 = chi2Score(1.0, myChi2P);
-  let logScoreChi2 = chi2LogScore(1.0, myChi2P);
+  let myChi2P = Chi2(2);
+  let someChi2 = repDraw(10, myChi2P);
+  let scoreChi2 = pdf(1.0, myChi2P);
+  let logScoreChi2 = logPdf(1.0, myChi2P);
 
    // Dirichlet
   let dirAlphas = [2.0, 3.0, 5.0];
   assume aDir ~ Dirichlet(dirAlphas);
 
-  let myDirP = DirichletParam {alphas = dirAlphas};
-  let someDir = iid(dirichlet, myDirP, 10);
-  let scoreDir = dirichletScore([0.2, 0.3, 0.5], myDirP);
-  let logScoreDir = dirichletLogScore([0.2, 0.3, 0.5], myDirP);
+  let myDirP = Dirichlet(dirAlphas);
+  let someDir = repDraw(10, myDirP);
+  let scoreDir = pdf([0.2, 0.3, 0.5], myDirP);
+  let logScoreDir = logPdf([0.2, 0.3, 0.5], myDirP);
 
   // Exponential
   assume anE ~ Exponential(2.0);
 
-  let myExpoP = ExponentialParam {rate = 2.0};
-  let someE = iid(exponential, myExpoP, 10);
-  let scoreE = exponentialScore(1.0, myExpoP);
-  let logScoreE = exponentialLogScore(1.0, myExpoP);
+  let myExpoP = Exponential(2.0);
+  let someE = repDraw(10, myExpoP);
+  let scoreE = pdf(1.0, myExpoP);
+  let logScoreE = logPdf(1.0, myExpoP);
 
   // Gamma
   assume aG ~ Gamma(2.0, 3.0);
 
-  let myGammaP = GammaParam {shape = 2.0, scale = 3.0};
-  let someG = iid(gamma, myGammaP, 10);
-  let scoreG = gammaScore(1.5, myGammaP);
-  let logScoreG = gammaLogScore(1.5, myGammaP);
+  let myGammaP = Gamma(2.0, 3.0);
+  let someG = repDraw(10, myGammaP);
+  let scoreG = pdf(1.5, myGammaP);
+  let logScoreG = logPdf(1.5, myGammaP);
 
   // Gaussian
   assume aG ~ Gaussian(0.0, 1.0);
 
-  let myGaussP = GaussianParam {mean = 0.0, dev = 1.0};
-  let someG = iid(gaussian, myGaussP, 10);
-  let scoreG = gaussianScore(-1.5, myGaussP);
-  let logScoreG = gaussianLogScore(-1.5, myGaussP);
+  let myGaussP = Gaussian(0.0, 1.0);
+  let someG = repDraw(10, myGaussP);
+  let scoreG = pdf(-1.5, myGaussP);
+  let logScoreG = logPdf(-1.5, myGaussP);
 
   // Geometric
   assume aGeo ~ Geometric(0.5);
 
-  let myGeoP = GeometricParam {prob = 0.5};
-  let someGeo = iid(geometric, myGeoP, 10);
-  let scoreGeo = geometricScore(5, myGeoP);
-  let logScoreGeo = geometricLogScore(5, myGeoP);
- 
+  let myGeoP = Geometric(0.5);
+  let someGeo = repDraw(10, myGeoP);
+  let scoreGeo = pdf(5, myGeoP);
+  let logScoreGeo = logPdf(5, myGeoP);
+
   // Multinomial
   let multiProbs = [0.2, 0.3, 0.5];
   assume aMulti ~ Multinomial(10, multiProbs);
 
-  let myMultiP = MultinomialParam {n = 10, probs = multiProbs};
-  let someMulti = iid(multinomial, myMultiP, 10);
-  let scoreMulti = multinomialScore([3, 4, 3], myMultiP);
-  let logScoreMulti = multinomialLogScore([3, 4, 3], myMultiP);
+  let myMultiP = Multinomial(10, multiProbs);
+  let someMulti = repDraw(10, myMultiP);
+  let scoreMulti = pdf([3, 4, 3], myMultiP);
+  let logScoreMulti = logPdf([3, 4, 3], myMultiP);
 
   // Poisson
   assume aP ~ Poisson(5.);
 
-  let myPoisP = PoissonParam {rate = 5.0};
-  let someP = iid(poisson, myPoisP, 10);
-  let scoreP = poissonScore(3, myPoisP);
-  let logScoreP = poissonLogScore(3, myPoisP);
+  let myPoisP = Poisson(5.);
+  let someP = repDraw(10, myPoisP);
+  let scoreP = pdf(3, myPoisP);
+  let logScoreP = logPdf(3, myPoisP);
 
   // Uniform
   assume aU ~ Uniform(0., 1.0);
 
-  let myUniP = UniformParam {a = 0., b = 1.};
-  let someU = iid(uniform, myUniP, 10);
-  let scoreU = uniformScore(-5., myUniP);
-  let logScoreU = uniformLogScore(-5., myUniP);
+  let myUniP = Uniform(0., 1.0);
+  let someU = repDraw(10, myUniP);
+  let scoreU = pdf(-5., myUniP);
+  let logScoreU = logPdf(-5., myUniP);
 
   // UniformDiscrete
   assume aUDis ~ UniformDiscrete(0, 2);
 
-  let myUniDisP = UniformDiscreteParam {a = 0, b = 2};
-  let someUDis = iid(uniformDiscrete, myUniDisP, 10);
-  let scoreUDis = uniformDiscreteScore(1, myUniDisP);
-  let logScoreUDis = uniformDiscreteLogScore(1, myUniDisP);
+  let myUniDisP = UniformDiscrete(0, 2);
+  let someUDis = repDraw(10, myUniDisP);
+  let scoreUDis = pdf(1, myUniDisP);
+  let logScoreUDis = logPdf(1, myUniDisP);
 
   // Reciprocal
   assume aR ~ Reciprocal(0.1, 2.);
 
-  let myReciP = ReciprocalParam {a = 0.1, b = 2.};
-  let someR = iid(reciprocal, myReciP, 10);
-  let scoreR = reciprocalScore(-5., myReciP);
-  let logScoreR = reciprocalLogScore(-5., myReciP);
+  let myReciP = Reciprocal(0.1, 2.);
+  let someR = repDraw(10, myReciP);
+  let scoreR = pdf(-5., myReciP);
+  let logScoreR = logPdf(-5., myReciP);
 
   return TestDistributions {
     aBernoulli = aB,
@@ -283,5 +283,3 @@ model function distributions() => TestDistributions {
     logScoreReciprocal = logScoreR
   };
 }
-
-

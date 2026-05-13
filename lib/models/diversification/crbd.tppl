@@ -2,8 +2,6 @@
 // The simulation can be replaced with an analytical computation for
 // the sampled values of lambda and mu; see the crbd_analytical script.
 
-import "treeppl::trees.tppl"
-import "treeppl::math.tppl"
 
 
 // Types
@@ -43,7 +41,7 @@ function numTrialsUntilMRCADetection(g: Globals, tRoot: Real, mMax: Int) => Int 
 
 // Forward simulation determining whether a tree survives and is detected (sampled)
 function isDetected(g: Globals, tBegin: Real) => Bool {
-    
+
     assume waitingTime ~ Exponential(g.lambda+g.mu);
     let newTime = tBegin - waitingTime;
 
@@ -64,7 +62,7 @@ function simHiddenSpeciation(g: Globals, startTime: Real, endTime: Real) {
 
     assume waitingTime ~ Exponential(g.lambda);
     let newTime = startTime - waitingTime;
-    
+
     // Handle speciation before end of branch
     if (newTime > endTime) {
         if (isDetected(g, newTime)) {
@@ -75,7 +73,7 @@ function simHiddenSpeciation(g: Globals, startTime: Real, endTime: Real) {
         weight 2.0;
         return simHiddenSpeciation(g, newTime, endTime);
     }
-   
+
     // Passed the end, we are done
     observe 0 ~ Poisson(g.mu*(startTime-endTime));
     return;
@@ -133,4 +131,3 @@ model function crbd(tree: Tree, rho: Real) => Real[] {
 
     return [lambda, mu];
 }
-

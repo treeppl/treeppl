@@ -1,4 +1,3 @@
-import "treeppl::math.tppl"
 import "host-rep-lib/lib.tppl"
 import "host-rep-lib/container-types.tppl"
 import "host-rep-lib/helpers.tppl"
@@ -40,7 +39,7 @@ model function rejectAcceptSubroot(
   // We have a subroot branch so we should propagate the messages
   // back to the subroot node
   let rootMsg = postorderTree.outMsg;
-  // Calculate kernels for the subroot branch 
+  // Calculate kernels for the subroot branch
   let subrootKernel = mtxExp(mtxSclrMul(subrootLength, qMatrix));
   let subrootBackwardsKernel = mtxTrans(subrootKernel);
   let subRootSamplingProb = mtxMul(rootMsg, subrootBackwardsKernel);
@@ -71,7 +70,7 @@ model function rejectAcceptSubroot(
   let rootRep = suggestRepRS(rootSamplingProb, nhosts, initRootRep, 0);
   let rootLogDebt = getRepertoireDebt(rootRep, rootSamplingProb, nhosts);
 
-  // Construct an object containing the rate matrix in a suitable format for sampling 
+  // Construct an object containing the rate matrix in a suitable format for sampling
   // from the embedded Markov chain
   let embeddedQMatrix = rateMatrixToEmbeddedMarkovChain(qMatrix);
   let modelParams = ModelParams {
@@ -125,12 +124,12 @@ model function rejectAcceptSubroot(
     beta = beta,
     tree = historyTree
   };
-} 
+}
 
 function suggestRepAligned(msg: Matrix[Real], i: Int, max: Int) => Int[] {
   if i <= max {
     let param = mtx3ToSeq(msg, i);
-    assume x ~ Categorical(param) drift categoricalMove(x, param); 
+    assume x ~ Categorical(param) drift categoricalMove(x, param);
     return cons(x, suggestRepAligned(msg, i + 1, max));
   } else {
     return [];
@@ -156,7 +155,7 @@ function suggestRepRS(msg: Matrix[Real], max: Int, initialRep: Int[], depth: Int
 function suggestRepUnaligned(msg: Matrix[Real], i: Int, max: Int) => Int[] {
   if i <= max {
     let param = mtx3ToSeq(msg, i);
-    assume x ~ Categorical(param); 
+    assume x ~ Categorical(param);
     return paste0([[x], suggestRepUnaligned(msg, i + 1, max)]);
   } else {
     return [];
@@ -275,11 +274,11 @@ function sampleBranch(
       let orderedEvents = qSort(compAge, allHostEvents);
       let nEvents = length(orderedEvents);
       if allTimesValidBranch(startRep, orderedEvents, 1, nEvents, nhosts) {
-        // The branch is correct along the full history, 
+        // The branch is correct along the full history,
         // accept and calculate the true weight of the sample
-        
+
         // Calculate the debt -- this is the density of the endpoint conditioned
-        // (parallel) chains at the current sample. 
+        // (parallel) chains at the current sample.
         let logDebt = independenceLikelihoodEndCond(
           startRep, finalRep, startAge, finalAge, unorderedBranch.history, modelParams, branchKernel
         );
@@ -315,17 +314,17 @@ function sampleBranch(
       logDebt = -log(0.0),
       logExcess = log(0.0),
       success = false
-    };   
+    };
   }
 }
 
 function compAge(left: Event, right: Event) => Int {
   if (isNaN(right.eventTime)) {
     return -1;
-  } 
+  }
   if (isNaN(left.eventTime)) {
     return 1;
-  } 
+  }
   if (right.eventTime >= left.eventTime) {
     return 1;
   } else {

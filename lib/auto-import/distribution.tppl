@@ -1,4 +1,27 @@
-import "math.tppl"
+import "./distribution.cppl"
+import "./math.tppl"
+import "./conversion.tppl"
+
+function draw[X](dist : Dist[X]) => X {
+  assume x ~ dist;
+  return x;
+}
+
+function pdf[X](x : X, dist : Dist[X]) => Real {
+  return exp(capLogObserve(dist)(x));
+}
+
+function pmf[X](x : X, dist : Dist[X]) => Real {
+  return pdf(x, dist);
+}
+
+function logPdf[X](x : X, dist : Dist[X]) => Real {
+  return capLogObserve(dist)(x);
+}
+
+function logPmf[X](x : X, dist : Dist[X]) => Real {
+  return logPdf(x, dist);
+}
 
 
 // Distributions
@@ -50,7 +73,7 @@ function lomaxRv(alpha: Real, lambda: Real) => Real {
 
     assume u ~ Uniform(0.0,1.0);
 
-    // Applying inverse CDF 
+    // Applying inverse CDF
     let x = lambda*((u^(-1.0/alpha)) - 1.0);
 
     return x;
@@ -92,12 +115,12 @@ function negbinomialRv(r: Real, p: Real) => Int {
     let theta = (1.0-p)/p;
     assume lambda ~ Gamma(r, theta);
     assume x ~ Poisson(lambda);
-    
+
     return x;
 }
 
 function observeGammaPoisson(x: Int, gdist: GammaDist, multiplier: Real) => GammaDist {
-  
+
     let p = gdist.beta/(gdist.beta + multiplier);
     logWeight negbinomialLogPMF(x, gdist.alpha, p);
 
@@ -108,7 +131,7 @@ function observeGammaPoisson(x: Int, gdist: GammaDist, multiplier: Real) => Gamm
 }
 
 function drawGammaPoisson(gdist: GammaDist, multiplier: Real) => GammaPoissonDraw {
-  
+
     let p = gdist.beta/(gdist.beta + multiplier);
     let x = negbinomialRv(gdist.alpha, p);
 
@@ -147,5 +170,3 @@ function drawNormalInverseGammaGaussian(nig: NormalInverseGammaDist) => NormalIn
 
     return NormalInverseGammaGaussianDraw{ rv=value, nigdist=nig };
 }
-
-
