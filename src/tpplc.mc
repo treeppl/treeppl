@@ -221,7 +221,7 @@ let mcmcLightweightOptions : OptParser MkInferMethod =
         , lam n. ulam_ "acc" (ulam_ "length"
           (bind_
             (ulet_ "iter"
-              (if optionIsSome pigeonsInfo
+              (if or incrementalPrinting (optionIsSome pigeonsInfo)
                 then tupleproj_ 0 (var_ "acc")
                 else var_ "acc"))
             (utuple_
