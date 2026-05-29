@@ -485,6 +485,36 @@ let pmcmcPimhOptions : OptParser MkInferMethod =
     } in
   optMap2 (lam. lam x. x) method res in
 
+let graphMcmcOptions : OptParser MkInferMethod =
+  let mk = lam iterations. lam globalProb. lam. lam loader.
+    match includeFileExn "." "treeppl::internal/runtime-flags.mc" loader with (flagEnv, loader) in
+    match includeFileExn "." "coreppl::coreppl-to-mexpr/pval-graph/config.mc" loader with (pvalConfigEnv, loader) in
+    let getOptParser : String -> Expr -> Expr = lam ident. lam default.
+      app_ (nvar_ (_getVarExn ident flagEnv)) default in
+    let fields =
+      [ ("iterations", getOptParser "_iterations" (int_ iterations))
+      , ("globalProb", getOptParser "_mcmcLightweightGlobalProb" (float_ globalProb))
+      ] in
+    match makeOptParser loader fields with (loader, optParser) in
+    ( loader
+    , { mkMethod = lam n. SimplePValGraph
+        { run = app_ (nvar_ (_getVarExn "simplePValGraphMCMC" pvalConfigEnv))
+          (autoty_record_
+            [ ("globalProb", recordproj_ "globalProb" (nvar_ n))
+            , ("iterations", recordproj_ "iterations" (nvar_ n))
+            ])
+        }
+      , optParser = optParser
+      }
+    ) in
+  let res = optMap2 mk iterations mcmcLightweightGlobalProb in
+  let method = optSpecificArg
+    { optExactArg "mcmc-graph" with short = "m", long = "method"
+    , description = "MCMC using the experimental graph representation"
+    , category = catMethod
+    } in
+  optMap2 (lam. lam x. x) method res in
+
 let tpplFrontendOptions : OptParser TpplFrontendOptions =
   let mk = lam input. lam output. lam outputMl. lam inferTimeMs. lam seed. lam sweeps.
     { input = input
@@ -582,6 +612,7 @@ let options : OptParser (TpplFrontendOptions, TransformationOptions, MkInferMeth
     , mcmcLightweightOptions
     , mcmcNaiveOptions
     , mcmcTraceOptions
+    , graphMcmcOptions
     , pmcmcPimhOptions
     ] in
   optMap3 (lam a. lam b. lam c. (a, b, c)) tpplFrontendOptions transformationOptions inference in

@@ -99,6 +99,7 @@ testMain [substituter] directories location (lam api.
     , "--iterations 2 -m mcmc-naive"
     , "--particles 2 --iterations 2 -m pmcmc-pimh --cps full"
     , "--particles 2 --iterations 2 -m pmcmc-pimh --cps partial"
+    , "--iterations 2 -m mcmc-graph"
     ] in
   let alignedModes =
     [ "--iterations 2 -m mcmc --debug-mcmc --align --cps none" --resample

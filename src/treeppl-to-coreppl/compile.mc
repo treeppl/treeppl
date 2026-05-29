@@ -36,6 +36,7 @@ include "coreppl::coreppl-to-mexpr/smc-apf/compile.mc"
 include "coreppl::coreppl-to-mexpr/mcmc-naive/compile.mc"
 include "coreppl::coreppl-to-mexpr/mcmc-trace/compile.mc"
 include "coreppl::coreppl-to-mexpr/mcmc-lightweight/compile.mc"
+include "coreppl::coreppl-to-mexpr/pval-graph/compile.mc"
 include "coreppl::coreppl-to-mexpr/pmcmc-pimh/compile.mc"
 
 include "matrix.mc"
@@ -1101,7 +1102,7 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
   + PhaseStats
   + BPFCompilerPicker + APFCompilerPicker + ImportanceCompilerPicker
   + NaiveMCMCCompilerPicker + TraceMCMCCompilerPicker + PIMHCompilerPicker
-  + LightweightMCMCCompilerPicker
+  + LightweightMCMCCompilerPicker + SimplePValGraphCompiler
   + UnboundErrorAttr + DefinedAttr + WithoutInfoAttr
 
   syn FileType =
