@@ -226,17 +226,18 @@ let mcmcLightweightOptions : OptParser MkInferMethod =
                 else var_ "acc"))
             (utuple_
               [ var_ "acc"
-              , if_
-                (eqi_ (int_ 0)
-                  (modi_ (var_ "iter") (muli_ (var_ "length") (recordproj_ "resampleBehavior" (nvar_ n)))))
-                (utuple_
-                  [ create_ (var_ "length") (ulam_ "" false_)
-                  , int_ (negi 1)
-                  ])
-                (utuple_
-                  [ create_ (var_ "length") (ulam_ "" true_)
-                  , modi_ (subi_ (var_ "iter") (int_ 1)) (var_ "length")
-                  ])
+              , bind_ (ulet_ "iter" (modi_ (var_ "iter") (addi_ (int_ 1) (muli_ (var_ "length") (recordproj_ "resampleBehavior" (nvar_ n))))))
+                (if_
+                  (eqi_ (int_ 0) (var_ "iter"))
+                  (utuple_
+                    [ create_ (var_ "length") (ulam_ "" false_)
+                    , int_ (negi 1)
+                    ])
+                  (bind_ (ulet_ "idx" (modi_ (subi_ (var_ "iter") (int_ 1)) (var_ "length")))
+                    (utuple_
+                      [ create_ (var_ "length") (ulam_ "i" (neqi_ (var_ "idx") (var_ "i")))
+                      , var_ "idx"
+                      ])))
               ])))
         )
       else
