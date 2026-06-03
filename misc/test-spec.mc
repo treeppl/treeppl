@@ -94,19 +94,20 @@ testMain [substituter] directories location (lam api.
     , "--particles 2 -m smc-bpf --cps full" --resample
     , "--particles 2 -m smc-bpf --cps partial " --resample
     , "--iterations 2 -m mcmc --cps none" --resample
+    , "--iterations 2 -m mcmc --debug-mcmc --cps none" --resample
     , "--iterations 2 -m mcmc-trace"
     , "--iterations 2 -m mcmc-naive"
     , "--particles 2 --iterations 2 -m pmcmc-pimh --cps full"
     , "--particles 2 --iterations 2 -m pmcmc-pimh --cps partial"
     ] in
   let alignedModes =
-    [ "--iterations 2 -m mcmc --align --cps none" --resample
-    , "--iterations 2 -m mcmc --align --cps full" --resample
-    , "--iterations 2 -m mcmc --align --cps partial" --resample
-    , "--iterations 2 -m mcmc --align --cps full --incremental-printing" --resample
-    , "--iterations 2 -m mcmc --align --cps none --data-augmentation 1" --resample
-    , "--iterations 2 -m mcmc --align --cps full --data-augmentation 1" --resample
-    , "--iterations 2 -m mcmc --align --cps full --data-augmentation 1 --incremental-printing" --resample
+    [ "--iterations 2 -m mcmc --debug-mcmc --align --cps none" --resample
+    , "--iterations 2 -m mcmc --debug-mcmc --align --cps full" --resample
+    , "--iterations 2 -m mcmc --debug-mcmc --align --cps partial" --resample
+    , "--iterations 2 -m mcmc --debug-mcmc --align --cps full --incremental-printing" --resample
+    , "--iterations 2 -m mcmc --debug-mcmc --align --cps none --data-augmentation 1" --resample
+    , "--iterations 2 -m mcmc --debug-mcmc --align --cps full --data-augmentation 1" --resample
+    , "--iterations 2 -m mcmc --debug-mcmc --align --cps full --data-augmentation 1 --incremental-printing" --resample
     ] in
   let apfModes =
     [ "--particles 2 -m smc-apf --cps full" --resample
