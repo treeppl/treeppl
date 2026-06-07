@@ -2,6 +2,7 @@ import "stdlib::ext/dist-ext.mc"
 import "stdlib::seq.mc"
 import "stdlib::string.mc"
 import "stdlib::common.mc"
+import "stdlib::float.mc"
 import "stdlib::ext/arr-ext.mc"
 import "stdlib::ext/mat-ext.mc"
 import "./standard.mc"
@@ -27,9 +28,13 @@ function sqrt(x : Real) => Real {
   return mathSqrt(x);
 }
 
-/* -------------------
+function isNaN(r : Real) => Bool {
+  return mathIsNaN(r);
+}
+
+/* ------------------------------------
    Finding maximum and minimum of pairs
-   ------------------- */
+   ------------------------------------ */
 
 function minInt(a : Int, b : Int) => Int {
   return mathMini(a)(b);
@@ -37,6 +42,10 @@ function minInt(a : Int, b : Int) => Int {
 
 function maxInt(a : Int, b : Int) => Int {
   return mathMaxi(a)(b);
+}
+
+function maxReal(a : Real, b : Real) => Real {
+  return maxf(a)(b);
 }
 
 /* -------------------
@@ -127,6 +136,10 @@ function whichTrue(s : Bool[]) => Int[] {
     }
     return acc;
   }, [], s);
+}
+
+function kroneckerDelta(index : Int, length : Int) => Real[] {
+  return repApply(length, function(i : Int) => Real { return bool2real(index == i); });
 }
 
 
@@ -231,6 +244,14 @@ function mtxTrans(mtx : Matrix[Real]) => Matrix[Real] {
 
 function mtxExp(mtx : Matrix[Real]) => Matrix[Real] {
   return matExpExn(mtx);
+}
+
+// NOTE(ed: 2026-02-22): The squaring and scaling algorithm can sometimes fail
+// to produce a valid Markov matrix when exponentiating a rate matrix. This
+// removes any remnant negative numbers and normalizes the rows. A more fancy
+// option is to use a projection in terms of the Frobenius inner product
+function mtxExpRateSafe(mtx : Matrix[Real]) => Matrix[Real] {
+  return matExpRateSafe(mtx);
 }
 
 function mtxMul(a : Matrix[Real], b : Matrix[Real]) => Matrix[Real] {
