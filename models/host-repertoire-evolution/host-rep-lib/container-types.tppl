@@ -1,7 +1,8 @@
 /*
- * Types shared by several files
+ * Types shared by the host repertoire models
  */ 
-// Tree with labels 
+
+// Input tree with labels 
 type TreeLabeled =
   | Leaf{age: Real, label: Int}
   | Node{age: Real, left: TreeLabeled, right: TreeLabeled, label: Int}
@@ -18,41 +19,31 @@ type MsgTree =
     leftKernel: Matrix[Real], rightKernel: Matrix[Real],
     outMsg: Matrix[Real]
   }
-// Container type for all model params
-type ModelParams = ModelParams {
-  beta: Real,
-  hostMetric: Matrix[Real],
-  embeddedQMatrix: EmbeddedMarkovChainMatrix,
-  meanDist: Real
-}
 
-// This is the final tree with node repertoires and branch histories
+// The final tree with node repertoires and branch histories
 type HistoryTree =
   | HistoryLeaf {age: Real, label: Int, repertoire: Int[], history: Event[]}
   | HistoryNode {age: Real, left: HistoryTree, right: HistoryTree, label: Int, repertoire: Int[], history: Event[]}
 
-// Container type for a single event in a host
+// A single event in a host
 type Event = Event {eventTime: Real, fromState: Int, toState: Int, host: Int}
 
-// Container type for the history along a branch,
-// along with the debt from the independence model
-type BranchSample = BranchSample {
-  history: Event[][], success: Bool
-}
-
-type HostBranchSample = HostBranchSample {
-  history: Event[], success: Bool
-}
-
-// Like the above but with the excess from the full model too
+// Events for all hosts and the likelihood ratio
 type CorrectedBranchSample = CorrectedBranchSample {
   history: Event[],
-  logDebt: Real,
-  logExcess: Real,
+  logSamplingDensity: Real,
+  logModelDensity: Real,
   success: Bool
 }
 
-// Container type for a CTMC in jump chain form
+// Model parameters as given
+type ModelParams = ModelParams {
+  beta: Real,
+  hostMetric: Matrix[Real],
+  embeddedQMatrix: EmbeddedMarkovChainMatrix
+}
+
+// Model parameters for CTMC in jump chain form
 type EmbeddedMarkovChainMatrix = EmbeddedMarkovChainMatrix {
   totalRates: Real[],
   transitionProbs: Real[][],

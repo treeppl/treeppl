@@ -1,53 +1,39 @@
-import "stdlib::ext/dist-ext.mc"
-import "helpers.tppl"
 /*
- * Log-PDFs for distributions used
- */
-function categoricalLogPdf(x: Int, params: Real[]) => Real {
-  if x >= 0 && x < length(params) {
-    return log(params[x + 1]);
-  } else {
-    return log(0.);
-  }
-}
-
-function exponentialLogPdf(x: Real, rate: Real) => Real {
-  if (x >= 0) {
-    return -x * rate;
-  } else {
-    return log(0.);
-  }
-}
-
-function uniformLogPdf(x: Real, a: Real, b: Real) => Real {
-  if x >= a && x <= b {
-    return -log(b - a);
-  } else {
-    return log(0.);
-  }
-}
-
-
-
-/*
- * Node repertoire debt
+ * Node repertoire sampling density
  */ 
-function mtx3ToSeq(mtx: Matrix[Real], i: Int ) => Real[] {
-  let p1 = mtxGet(i, 1, mtx); 
-  let p2 = mtxGet(i, 2, mtx); 
-  let p3 = mtxGet(i, 3, mtx); 
-  let s = p1 + p2 + p3;
-  return [p1 / s, p2 / s, p3 / s];
+
+function categoricalLogPmf(x: Int, param: Real[]) => Real {
+  if (0 <= x) && (x < length(param)) {
+    return log(param[x + 1]);
+  } else {
+    return log(0.);
+  }
 }
 
-function getRepertoireDebt(x: Int[], samplingProb: Matrix[Real], nhosts: Int) => Real {
+function getRepertoireSamplingDensity(x: Int[], samplingProb: Matrix[Real]) => Real {
+  let nHosts = length(x);
   // Accumulate the total log probability of sampling this repertoire
-  return fold(
-    function(acc: Real, i: Int) => Real {
-      let param = mtx3ToSeq(samplingProb, i);
-      return acc + categoricalLogPdf(x[i], param);
+  let logSamplingDensity = seqSumReal(sapplyi(
+    x, function(h: Int, obs: Int) => Real {
+      return categoricalLogPmf(
+        obs, hostMsgToProb(samplingProb, h)
+      );
+    }
+  ));
+  // Since we are using rejection sampling in the independence model
+  // we need to correct the sampling probability
+  let probInvalidRep = fold(
+    function(acc: Real, h: Int) => Real {
+      let ph = hostMsgToProb(samplingProb, h);
+      return acc * (1. - ph[3]);
     },
-    0.0,
-    1 to nhosts
+    1.,
+    1 to nHosts
   );
+  let logZReject = log(1. - probInvalidRep);
+  return logSamplingDensity - logZReject;
+}
+
+function hostMsgToProb(mtx: Matrix[Real], i: Int) => Real[] {
+  return seqNormalize(sapply(1 to 3, function(j: Int) => Real { return mtxGet(i, j, mtx); }));
 }
