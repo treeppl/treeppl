@@ -15,6 +15,7 @@ include "mexpr/boot-parser.mc"
 include "mexpr/type-check.mc"
 include "mexpr/generate-json-serializers.mc"
 include "mexpr/utils.mc"
+include "mexpr/constant-fold.mc"
 include "mexpr/duplicate-code-elimination.mc"
 include "mexpr/deadcode.mc"
 include "mexpr/generate-utest.mc"
@@ -41,6 +42,7 @@ include "matrix.mc"
 
 include "ast-additions.mc"
 
+
 lang TreePPLCompile
   = TreePPLAst + MExprPPL + MExprFindSym + RecLetsDeclAst + Externals + MExprSym
   + FloatAst + Resample + GenerateJsonSerializers + MExprEliminateDuplicateCode
@@ -49,17 +51,20 @@ lang TreePPLCompile
   + TyVarOrConAst
   + UncurriedAst
 
+  type MkInferMethod = Type -> Loader -> (Loader, {mkMethod : Name -> InferMethod, optParser : Expr})
+
   -- a type with useful information passed down from compile
   type TpplCompileContext = {
     serializeResult: Name,
+    runInference: Name,
     logName: Name, expName: Name,
     printJsonLn: Name,
-    particles: Name, sweeps: Name, input: Name, some: Name,
+    some: Name,
+    none: Name,
     matrixMul: Name,
     matrixAdd: Name,
     matrixMulFloat: Name,
-    pow: Name,
-    repeat: Name
+    pow: Name
   }
 
   sem isemi_: Expr -> Expr -> Expr
@@ -118,9 +123,10 @@ lang TreePPLCompile
         } in
       map g f.args in
     let ret = optionMapOr tyunit_ compileTypeTppl f.returnTy in
-    let body = foldr (lam f. lam e. f e)
-      (withInfo f.info unit_)
+    let body = foldr stmtSeq
+      (StmtSimple ([], None ()))
       (map (compileStmtTppl context) f.body) in
+    let body = stmtAsCont body (withInfo f.info unit_) in
     let function = TmUncurriedLam
       { positional = positional
       , body = body
@@ -193,8 +199,8 @@ lang TreePPLCompile
 
   | NothingTypeTppl x -> tyunit_
 
-  sem compileModelInvocation : TpplCompileContext -> (Type -> Loader -> (Loader, InferMethod)) -> Loader -> SymEnv -> DeclTppl -> Option (Loader, SymEnv, Expr)
-  sem compileModelInvocation context mkInferenceMethod loader fileEnv =
+  sem compileModelInvocation : TpplCompileContext -> TpplFrontendOptions -> MkInferMethod -> Loader -> SymEnv -> DeclTppl -> Option (Loader, SymEnv, Expr)
+  sem compileModelInvocation context frontend mkInferenceMethod loader fileEnv =
   | FunDeclTppl (x & {model = Some modelInfo}) ->
     -- TODO(vipa, 2024-12-13): We could technically shadow a model
     -- function, in which case the generated code will refer to the
@@ -213,13 +219,16 @@ lang TreePPLCompile
 
     let app_ = lam f. lam a. withInfo modelInfo (app_ f a) in
 
+    let jsonInputName = nameSym "input" in
+    let inferOptsName = nameSym "inferOpts" in
+
     let parsedName = nameSym "input" in
     let parsedDecl = DeclLet
       { ident = parsedName
       , body =
         let m = nameSym "m" in
         match_
-          (app_ inputSer.deserializer (nvar_ context.input))
+          (app_ inputSer.deserializer (nvar_ jsonInputName))
           (npcon_ context.some (npvar_ m))
           (nvar_ m)
           (error_ (str_ "Could not deserialize data input, malformed json"))
@@ -227,13 +236,10 @@ lang TreePPLCompile
       , tyBody = tyunknown_
       , info = modelInfo
       } in
-    match _addDeclWithEnvExn fileEnv loader parsedDecl with (fileEnv, loader) in
 
     match mkInferenceMethod outputType loader with (loader, inferenceMethod) in
 
     let invocation =
-      -- Either apply to 0 (if nullary model function) or each
-      -- parameter in sequence
       let f = withInfo modelInfo (nvar_ x.name.v) in
       let positional = map (lam p. recordproj_ (nameGetStr p.0) (nvar_ parsedName)) params in
       TmUncurriedApp
@@ -242,77 +248,156 @@ lang TreePPLCompile
         , info = NoInfo ()
         , ty = tyunknown_
         } in
+    let runOnce = nulam_ jsonInputName
+      (bind_ parsedDecl
+        (nulam_ inferOptsName
+          (infer_ (inferenceMethod.mkMethod inferOptsName) (ulam_ "" invocation)))) in
 
-    let inferCode = appf2_ (nvar_ context.repeat)
-      (ulam_ ""
-        (app_ (nvar_ context.printJsonLn)
-          (appf2_ (nvar_ context.serializeResult) outputSer.serializer
-            (infer_ inferenceMethod
-              (ulam_ "" invocation)))))
-      (nvar_ context.sweeps) in
+    let inferConfig = urecord_
+      [ ("sweeps", int_ frontend.sweeps)
+      , ("seed", optionMapOr (nconapp_ context.none unit_) (lam i. nconapp_ context.some (int_ i)) frontend.seed)
+      , ("inferTimeMs", bool_ frontend.inferTimeMs)
+      , ("inferOpts", inferenceMethod.optParser)
+      , ("sampleSerializer", outputSer.serializer)
+      , ("runOnce", runOnce)
+      ] in
+    let inferCode = app_ (nvar_ context.runInference) inferConfig in
+
     Some (loader, fileEnv, inferCode)
   | _ -> None ()
 
-  sem compileStmtTppl: TpplCompileContext -> StmtTppl -> (Expr -> Expr)
+  syn StmtRes =
+  | StmtSimple ([Decl], Option Expr)
+  | StmtCont Expr -> Expr
+  | StmtNoCont Expr
 
+  sem msemi_ : Option Expr -> Expr -> Expr
+  sem msemi_ l = | r -> optionMapOr r (lam l. isemi_ l r) l
+
+  sem stmtSeq : StmtRes -> StmtRes -> StmtRes
+  sem stmtSeq a = | b -> stmtSeq_ (a, b)
+  sem stmtSeq_ : (StmtRes, StmtRes) -> StmtRes
+  sem stmtSeq_ =
+  | (StmtNoCont e, _) -> StmtNoCont e
+  | (StmtSimple (as, a), StmtNoCont e) ->
+    StmtNoCont (bindall_ as (msemi_ a e))
+  | (StmtCont c, StmtNoCont e) -> StmtNoCont (c e)
+  | (StmtSimple (as, a), StmtSimple ([], None _)) -> StmtSimple (as, a)
+  | (StmtSimple (as, a), StmtSimple (bs, b)) ->
+    StmtSimple (join [as, optionMapOr [] (lam x. [nulet_ (nameSym "") x]) a, bs], b)
+  | (StmtSimple (as, a), StmtCont c) ->
+    StmtCont (lam cont. bindall_ as (msemi_ a (c cont)))
+  | (StmtCont c, StmtSimple (bs, b)) ->
+    StmtCont (lam cont. c (bindall_ bs (msemi_ b cont)))
+  | (StmtCont a, StmtCont b) -> StmtCont (lam cont. a (b cont))
+
+  sem stmtAsCont : StmtRes -> Expr -> Expr
+  sem stmtAsCont =
+  | StmtSimple (xs, x) -> lam cont. bindall_ xs (msemi_ x cont)
+  | StmtCont c -> c
+  | StmtNoCont e -> lam. e
+
+  sem compileIf : TpplCompileContext -> IfStmtTpplRecord -> StmtRes
+  sem compileIf context = | x ->
+    let condition = compileExprTppl context x.condition in
+    let ifTrue =
+      foldr stmtSeq (StmtSimple ([], None ())) (map (compileStmtTppl context) x.ifTrueStmts) in
+    let ifFalse =
+      foldr stmtSeq (StmtSimple ([], None ())) (map (compileStmtTppl context) x.ifFalseStmts) in
+    let mkIf = lam t. lam f. TmMatch
+      { info = x.info
+      , target = compileExprTppl context x.condition
+      , pat = withInfoPat (get_ExprTppl_info x.condition) ptrue_
+      , thn = t
+      , els = f
+      , ty = tyunknown_
+      } in
+    switch (ifTrue, ifFalse)
+    case (StmtSimple (ts, t), StmtSimple (fs, f)) then
+      -- NOTE(vipa, 2026-02-02): We currently don't have a concept of
+      -- returning data from `if`s, thus we ensure each branch
+      -- "returns" unit.
+      let t = msemi_ t unit_ in
+      let f = msemi_ f unit_ in
+      StmtSimple ([], Some (mkIf (bindall_ ts t) (bindall_ fs f)))
+    case (StmtNoCont t, StmtNoCont f) then
+      StmtNoCont (mkIf t f)
+    case (t, StmtNoCont f) then
+      StmtCont (lam cont. mkIf (stmtAsCont t cont) f)
+    case (StmtNoCont t, f) then
+      StmtCont (lam cont. mkIf t (stmtAsCont f cont))
+    case _ then
+      -- NOTE(vipa, 2025-09-17): At least one is cont, neither is
+      -- nocont. In this case we're going to need the continuation
+      -- expression twice (once per branch), so we bind it to a
+      -- function that we call when needed, so we don't duplicate the
+      -- AST.
+      let f = lam cont.
+        let contName = nameSym "ifCont" in
+        let contF = lam_ "" tyunit_ cont in
+        let cont = withInfo x.info (app_ (nvar_ contName) unit_) in
+        TmDecl
+        { decl = DeclLet
+          { ident = contName
+          , body = contF
+          , tyBody = tyunknown_
+          , tyAnnot = tyunknown_
+          , info = x.info
+          }
+        , info = x.info
+        , ty = tyunknown_
+        , inexpr = mkIf (stmtAsCont ifTrue cont) (stmtAsCont ifFalse cont)
+        } in
+      StmtCont f
+    end
+
+  sem compileStmtTppl: TpplCompileContext -> StmtTppl -> StmtRes
   sem compileStmtTppl (context: TpplCompileContext) =
 
   | ExprStmtTppl x ->
-    lam cont. isemi_ (compileExprTppl context x.e) cont
+    StmtSimple ([], Some (compileExprTppl context x.e))
 
   | AssumeStmtTppl a ->
-    lam cont.
-      let driftKernel =
-        match a.driftKernel with Some dk then
-          let dk = compileExprTppl context dk in
-          Some (withInfo (infoTm dk) (nulam_ a.randomVar.v dk))
-        else None () in
-      let body = TmAssume
-        { dist = compileExprTppl context a.dist
-        , ty = tyunknown_
-        , info = a.info
-        , driftKernel = driftKernel
-        } in
-      let tyAnnot = optionMapOr tyunknown_ compileTypeTppl a.ty in
-      bind_ (declWithInfo a.info (nlet_ a.randomVar.v (tyWithInfo a.info tyAnnot) (withInfo a.info body))) cont
+    let driftKernel =
+      match a.driftKernel with Some dk then
+        let dk = compileExprTppl context dk in
+        Some (withInfo (infoTm dk) (nulam_ a.randomVar.v dk))
+      else None () in
+    let body = TmAssume
+      { dist = compileExprTppl context a.dist
+      , ty = tyunknown_
+      , info = a.info
+      , driftKernel = driftKernel
+      } in
+    let tyAnnot = optionMapOr tyunknown_ compileTypeTppl a.ty in
+    StmtSimple ([declWithInfo a.info (nlet_ a.randomVar.v (tyWithInfo a.info tyAnnot) (withInfo a.info body))], None ())
 
   | ObserveStmtTppl x ->
-    lam cont.
-      let obs = TmObserve {
-        info = x.info,
-        value = compileExprTppl context x.value,
-        dist = compileExprTppl context x.dist,
-        ty = tyunknown_
-      } in
-      -- TODO(vipa, 2022-12-22): Info for semi?
-      (isemi_ obs cont)
+    let obs = TmObserve {
+      info = x.info,
+      value = compileExprTppl context x.value,
+      dist = compileExprTppl context x.dist,
+      ty = tyunknown_
+    } in
+    StmtSimple ([], Some obs)
 
   | ResampleStmtTppl x ->
-    lam cont.
-      let res = TmResample { info = x.info, ty = tyunknown_ } in
-      isemi_ res cont
+    StmtSimple ([], Some (TmResample { info = x.info, ty = tyunknown_ }))
 
   | AssignStmtTppl a ->
-    lam cont. TmDecl
-    { decl = DeclLet
+    let d = DeclLet
       { ident = a.var.v
       , tyBody = tyunknown_
       , tyAnnot = optionMapOr tyunknown_ compileTypeTppl a.ty
       , body =  compileExprTppl context a.val
       , info = a.info
-      }
-    , info = a.info
-    , inexpr = cont
-    , ty = tyunknown_
-    }
+      } in
+    StmtSimple ([d], None ())
 
   | WeightStmtTppl a ->
-    lam cont.
-
     let cExpr: Expr = (compileExprTppl context a.value) in
     let logExpr: Expr = withInfo a.info (app_ (withInfo a.info (nvar_ context.logName)) cExpr) in
-    TmDecl
-    { decl = DeclLet
+    let d = DeclLet
       { ident = nameNoSym "foo"
       , tyBody = tyunknown_
       , tyAnnot = tyunknown_
@@ -322,15 +407,11 @@ lang TreePPLCompile
         , info = a.info
         }
       , info = a.info
-      }
-    , info = a.info
-    , inexpr = cont
-    , ty = tyunknown_
-    }
+      } in
+    StmtSimple ([d], None ())
 
   | LogWeightStmtTppl a ->
-    lam cont. TmDecl
-    { decl = DeclLet
+    let d = DeclLet
       { ident = nameNoSym "foo"
       , tyBody = tyunknown_
       , tyAnnot = tyunknown_
@@ -340,50 +421,13 @@ lang TreePPLCompile
         , info = a.info
         }
       , info = a.info
-      }
-    , info = a.info
-    , inexpr = cont
-    , ty = tyunknown_
-    }
+      } in
+    StmtSimple ([d], None ())
 
-  /--
-  To avoid code duplication.
-  Intuition: compiling with continuations
-  Instead of
-    a; cont
-  we do
-    let c = lam x:(). cont in
-    a; c()
-
-  Here c corresponds to contF.
-  --/
-  -- TODO for Daniel: have C compiler handle f()
   | IfStmtTppl a ->
-    lam cont.
-    let contName = nameSym "ifCont" in
-    let contF = lam_ "" tyint_ cont in -- continuation function
-    let cont: Expr = withInfo a.info (app_ (nvar_ contName) (int_ 0)) in
-    TmDecl
-    { decl = DeclLet
-      { ident = contName
-      , body = contF
-      , tyBody = tyunknown_
-      , tyAnnot = tyunknown_
-      , info = a.info
-      }
-    , info = a.info
-    , ty = tyunknown_
-    , inexpr = TmMatch
-      { target = compileExprTppl context a.condition
-      , pat = withInfoPat (get_ExprTppl_info a.condition) ptrue_
-      , thn = foldr (lam f. lam e. f e) cont (map (compileStmtTppl context) a.ifTrueStmts)
-      , els = foldr (lam f. lam e. f e) cont (map (compileStmtTppl context) a.ifFalseStmts)
-      , ty = tyunknown_
-      , info = a.info
-      }
-    }
+    compileIf context a
 
-  | ForLoopStmtTppl x -> lam cont.
+  | ForLoopStmtTppl x ->
     let var_ = lam n. TmVar {ident = n, ty = tyunknown_, info = x.info, frozen = false} in
     let lam_ = lam n. lam body. TmLam {ident = n, ty = tyunknown_, info = x.info, body = body, tyAnnot = tyunknown_, tyParam = tyunknown_} in
     let match_ = lam target. lam pat. lam thn. lam els. TmMatch { target = target, pat = pat, thn = thn, els = els, info = x.info, ty = tyunknown_ } in
@@ -415,23 +459,29 @@ lang TreePPLCompile
       } in
     let param = nameSym "l" in
     let rest = nameSym "l" in
-    loop_ (compileExprTppl context x.range)
-      (lam recur.
-        lam_ param
-          (match_ (var_ param) (consPat_ x.iterator rest)
-            (foldr (lam f. lam e. f e) (recur (var_ rest)) (map (compileStmtTppl context) x.forStmts))
-            cont))
+    let body = foldr stmtSeq
+      (StmtSimple ([], None ()))
+      (map (compileStmtTppl context) x.forStmts) in
+    let f = lam cont.
+      loop_ (compileExprTppl context x.range)
+        (lam recur.
+          lam_ param
+            (match_ (var_ param) (consPat_ x.iterator rest)
+              (stmtAsCont body (recur (var_ rest)))
+              cont)) in
+    StmtCont f
 
   | ReturnStmtTppl r ->
-    lam cont. match r.return with Some x then compileExprTppl context x else withInfo r.info unit_
+    StmtNoCont (optionMapOr (withInfo r.info unit_) (compileExprTppl context) r.return)
 
   | PrintStmtTppl x ->
-    lam cont.
-      foldr isemi_ cont
-        [ dprint_ (compileExprTppl context x.printable)
-        -- , print_ (str_ "\n") in
-        , flushStdout_ unit_
-        ]
+    let processTerm : Bool -> ExprTppl -> (Bool, Expr) = lam maybeInsertSpace. lam expr.
+      match expr with TpplStringExprTppl x then (false, printError_ (str_ x.val.v)) else
+      let p = dprint_ (compileExprTppl context expr) in
+      (true, if maybeInsertSpace then isemi_ (printError_ (str_ " ")) p else p) in
+    let final = isemi_ (printError_ (str_ "\n")) (flushStderr_ unit_) in
+    let print = foldr isemi_ final (mapAccumL processTerm false x.printable).1 in
+    StmtSimple ([], Some print)
 
   sem compileExprTppl: TpplCompileContext -> ExprTppl -> Expr
 
@@ -446,9 +496,10 @@ lang TreePPLCompile
       , info = a.name.i
       } in
     let positional = map mkArg x.args in
-    let body = foldr (lam f. lam e. f e)
-      (withInfo x.info unit_)
+    let body = foldr stmtSeq
+      (StmtSimple ([], None ()))
       (map (compileStmtTppl context) x.stmts) in
+    let body = stmtAsCont body (withInfo x.info unit_) in
     let retTy = optionMapOr tyunit_ compileTypeTppl x.retTy in
     let fun = TmUncurriedLam
       { positional = positional
@@ -506,33 +557,61 @@ lang TreePPLCompile
       info = d.info
     }
 
-  | GaussianExprTppl d ->
+  | BetaExprTppl d ->
     TmDist {
-      dist = DGaussian {
-        mu = compileExprTppl context d.mean,
-        sigma = compileExprTppl context d.dev
+      dist = DBeta {
+        a = compileExprTppl context d.a,
+        b = compileExprTppl context d.b
       },
       ty = tyunknown_,
       info = d.info
     }
-  
-  | GeometricExprTppl d ->
+
+  | BinomialExprTppl d ->
     TmDist {
-      dist = DGeometric {
+      dist = DBinomial {
+        n = compileExprTppl context d.n,
         p = compileExprTppl context d.prob
       },
       ty = tyunknown_,
       info = d.info
   }
 
-  | PoissonExprTppl d ->
+  | CategoricalExprTppl d ->
     TmDist {
-      dist = DPoisson {
-        lambda = compileExprTppl context d.rate
+      dist = DCategorical {
+        p = compileExprTppl context d.probs
       },
       ty = tyunknown_,
       info = d.info
-    }
+  }
+
+  | Chi2ExprTppl d ->
+    TmDist {
+      dist = DChi2 {
+        df = compileExprTppl context d.df
+      },
+      ty = tyunknown_,
+      info = d.info
+  }
+
+  | DirichletExprTppl d ->
+    TmDist {
+      dist = DDirichlet {
+        a = compileExprTppl context d.alphas
+      },
+      ty = tyunknown_,
+      info = d.info
+  }
+
+  | EmpiricalExprTppl d ->
+    TmDist {
+      dist = DEmpirical {
+        samples = compileExprTppl context d.samples
+      },
+      ty = tyunknown_,
+      info = d.info
+  }
 
   | ExponentialExprTppl d ->
     TmDist {
@@ -553,30 +632,20 @@ lang TreePPLCompile
       info = d.info
     }
 
-  | CategoricalExprTppl d ->
+  | GaussianExprTppl d ->
     TmDist {
-      dist = DCategorical {
-        p = compileExprTppl context d.probs
-      },
-      ty = tyunknown_,
-      info = d.info
-  }
-
-  | BetaExprTppl d ->
-    TmDist {
-      dist = DBeta {
-        a = compileExprTppl context d.a,
-        b = compileExprTppl context d.b
+      dist = DGaussian {
+        mu = compileExprTppl context d.mean,
+        sigma = compileExprTppl context d.dev
       },
       ty = tyunknown_,
       info = d.info
     }
 
-  | UniformExprTppl d ->
+  | GeometricExprTppl d ->
     TmDist {
-      dist = DUniform {
-        a = compileExprTppl context d.a,
-        b = compileExprTppl context d.b
+      dist = DGeometric {
+        p = compileExprTppl context d.prob
       },
       ty = tyunknown_,
       info = d.info
@@ -592,29 +661,30 @@ lang TreePPLCompile
       info = d.info
   }
 
-  | EmpiricalExprTppl d ->
+  | PoissonExprTppl d ->
     TmDist {
-      dist = DEmpirical {
-        samples = compileExprTppl context d.samples
+      dist = DPoisson {
+        lambda = compileExprTppl context d.rate
+      },
+      ty = tyunknown_,
+      info = d.info
+    }
+
+  | UniformExprTppl d ->
+    TmDist {
+      dist = DUniform {
+        a = compileExprTppl context d.a,
+        b = compileExprTppl context d.b
       },
       ty = tyunknown_,
       info = d.info
   }
 
-  | DirichletExprTppl d ->
+  | UniformDiscreteExprTppl d ->
     TmDist {
-      dist = DDirichlet {
-        a = compileExprTppl context d.alphas
-      },
-      ty = tyunknown_,
-      info = d.info
-  }
-
-  | BinomialExprTppl d ->
-    TmDist {
-      dist = DBinomial {
-        n = compileExprTppl context d.n,
-        p = compileExprTppl context d.prob
+      dist = DUniformDiscrete {
+        a = compileExprTppl context d.a,
+        b = compileExprTppl context d.b
       },
       ty = tyunknown_,
       info = d.info
@@ -1005,6 +1075,14 @@ lang TreePPLCompile
     }
 end
 
+type TpplFrontendOptions =
+  { input : String
+  , output : String
+  , outputMl : Option String
+  , inferTimeMs : Bool
+  , seed : Option Int
+  , sweeps : Int
+  }
 
 lang TreePPLThings = TreePPLAst + TreePPLCompile
   + ProjMatchTypeCheck + ProjMatchPprint + MExprAst
@@ -1019,17 +1097,21 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
   + TreePPLOperators
   + StripUtestLoader + PprintUnifyErrorNumArguments + UncurriedTypeCheck + SymUncurried + UncurriedPrettyPrint + LowerUncurryLoader
   + UnifyUncurriedMixed
-  + MExprLowerNestedPatterns + MExprDeadcodeElimination + MCoreCompileLang
+  + MExprLowerNestedPatterns + MExprDeadcodeElimination + MExprConstantFold + MCoreCompileLang
   + PhaseStats
   + BPFCompilerPicker + APFCompilerPicker + ImportanceCompilerPicker
   + NaiveMCMCCompilerPicker + TraceMCMCCompilerPicker + PIMHCompilerPicker
   + LightweightMCMCCompilerPicker
+  + UnboundErrorAttr + DefinedAttr + WithoutInfoAttr
 
   syn FileType =
   | FTreePPL ()
 
   syn Hook =
-  | TreePPLHook { mkInferenceMethod : Type -> Loader -> (Loader, InferMethod) }
+  | TreePPLHook
+    { frontend : TpplFrontendOptions
+    , mkInferenceMethod : MkInferMethod
+    }
 
   sem _fileType = | _ ++ ".tppl" -> FTreePPL ()
   sem _loadFile path = | (FTreePPL _, loader & Loader x) ->
@@ -1046,8 +1128,8 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
     match parseTreePPLExn path content with DeclSequenceFileTppl top in
 
     -- Standard library (these should be in scope in the program)
-    match includeFileExn "." "treeppl::lib/standard.mc" loader with (stdlibMCEnv, loader) in
-    match includeFileExn "." "treeppl::lib/standard.tppl" loader with (stdlibTPPLEnv, loader) in
+    match includeFileExn "." "treeppl::standard.mc" loader with (stdlibMCEnv, loader) in
+    match includeFileExn "." "treeppl::standard.tppl" loader with (stdlibTPPLEnv, loader) in
     let fileEnv = stdlibTPPLEnv.env in
     -- Compiler libraries (these should *not* be in scope in the program)
     match includeFileExn "." "stdlib::ext/dist-ext.mc" loader with (distEnv, loader) in
@@ -1056,7 +1138,7 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
     match includeFileExn "." "stdlib::json.mc" loader with (jsonEnv, loader) in
     match includeFileExn "." "stdlib::basic-types.mc" loader with (optionEnv, loader) in
     match includeFileExn "." "stdlib::common.mc" loader with (commonEnv, loader) in
-    match includeFileExn "." "treeppl::treeppl-to-coreppl/lib-compile.mc" loader with (compileLibEnv, loader) in
+    match includeFileExn "." "treeppl::internal/lib-compile.mc" loader with (compileLibEnv, loader) in
     -- Explicit imports (these should be in scope in the program)
     let import = lam acc. lam imp.
       match includeFileExn (dirname path) imp.v acc.1 with (newEnv, loader) in
@@ -1065,18 +1147,16 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
 
     let context =
       { serializeResult = _getVarExn "serializeResult" compileLibEnv
-      , particles = _getVarExn "particles" compileLibEnv
-      , sweeps = _getVarExn "sweeps" compileLibEnv
-      , input = _getVarExn "input" compileLibEnv
+      , runInference = _getVarExn "runInference" compileLibEnv
       , logName = _getVarExn "externalLog" mathEnv
       , expName = _getVarExn "externalExp" mathEnv
       , pow = _getVarExn "pow" mathEnv
       , printJsonLn = _getVarExn "printJsonLn" jsonEnv
       , some = _getConExn "Some" optionEnv
+      , none = _getConExn "None" optionEnv
       , matrixMul = _getVarExn "matMulExn" matrixEnv
       , matrixAdd = _getVarExn "matAddExn" matrixEnv
       , matrixMulFloat = _getVarExn "matScale" matrixEnv
-      , repeat = _getVarExn "repeat" commonEnv
       } in
 
     -- 1. Type and constructor definitions. *All* types are inserted
@@ -1094,7 +1174,7 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
 
     -- 3. Model invocations.
     let work = lam loader. lam decl.
-      match compileModelInvocation context hook.mkInferenceMethod loader fileEnv decl with Some (loader, fileEnv, invocation) then
+      match compileModelInvocation context hook.frontend hook.mkInferenceMethod loader fileEnv decl with Some (loader, fileEnv, invocation) then
         let decl = DeclLet
           { body = invocation
           , ident = nameSym ""
@@ -1137,39 +1217,9 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
     loader
 end
 
-type TpplFrontendOptions =
-  { input : String
-  , output : String
-  , outputMl : Option String
-  }
-
-let tpplFrontendOptions : OptParser TpplFrontendOptions =
-  let mk = lam input. lam output. lam outputMl.
-    { input = input
-    , output = output
-    , outputMl = outputMl
-    } in
-  let input = optPos
-    { optPosDefString with arg = "<program>"
-    , description = "The TreePPL program to compile."
-    } in
-  let output =
-    let default = "out" in
-    let opt = optArg
-      { optArgDefString with long = "output"
-      , description = concat "The name of the final compiled executable. Default: " default
-      , arg = "<file>"
-      } in
-    optOr opt (optPure default) in
-  let outputMl = optOptional (optArg
-    { optArgDefString with long = "output-ml"
-    , description = "Output the intermediate .ml file to this path."
-    }) in
-  optMap3 mk input output outputMl
-
 let compileTpplToExecutable = lam frontend. lam transformations. lam mkInferenceMethod.
   use TreePPLThings in
-  let log = mkPhaseLogState transformations.debugDumpPhases transformations.debugPhases in
+  let log = mkPhaseLogState transformations.debugDumpPhases transformations.debugPhases transformations.invariantsToCheck in
   let loader = mkLoader symEnvDefault typcheckEnvDefault [StripUtestHook ()] in
   let loader = enableCPPLCompilation transformations loader in
   let loader = enableEqGeneration loader in
@@ -1177,7 +1227,7 @@ let compileTpplToExecutable = lam frontend. lam transformations. lam mkInference
   let loader = enableJsonSerialization loader in
   let loader = enableDPrintViaPprint loader in
   let loader = registerMatrixFunctions loader in
-  let loader = addHook loader (TreePPLHook {mkInferenceMethod = mkInferenceMethod}) in
+  let loader = addHook loader (TreePPLHook {frontend = frontend, mkInferenceMethod = mkInferenceMethod}) in
   let loader = addHook loader (LowerUncurryHook ()) in
   endPhaseStatsExpr log "mk-cppl-loader" unit_;
   let loader = (includeFileExn "." frontend.input loader).1 in
@@ -1204,6 +1254,8 @@ let compileTpplToExecutable = lam frontend. lam transformations. lam mkInference
   endPhaseStatsExpr log "deadcode-elimination" ast;
   let ast = lowerAll ast in
   endPhaseStatsExpr log "lower-all" ast;
+  let ast = constantFold ast in
+  endPhaseStatsExpr log "constant-folding" ast;
   let res = compileMCore ast hooks in
   endPhaseStatsExpr log "compile-mcore" ast;
   res

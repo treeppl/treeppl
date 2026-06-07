@@ -1,0 +1,42 @@
+import "treeppl::math.tppl"
+import "stdlib::ext/dist-ext.mc"
+import "helpers.tppl"
+/*
+ * Node repertoire sampling density
+ */ 
+
+function categoricalLogPmf(x: Int, param: Real[]) => Real {
+  if (0 <= x) && (x < length(param)) {
+    return log(param[x + 1]);
+  } else {
+    return log(0.);
+  }
+}
+
+function getRepertoireSamplingDensity(x: Int[], samplingProb: Matrix[Real]) => Real {
+  let nHosts = length(x);
+  // Accumulate the total log probability of sampling this repertoire
+  let logSamplingDensity = seqSumReal(sapplyi(
+    x, function(h: Int, obs: Int) => Real {
+      return categoricalLogPmf(
+        obs, hostMsgToProb(samplingProb, h)
+      );
+    }
+  ));
+  // Since we are using rejection sampling in the independence model
+  // we need to correct the sampling probability
+  let probInvalidRep = fold(
+    function(acc: Real, h: Int) => Real {
+      let ph = hostMsgToProb(samplingProb, h);
+      return acc * (1. - ph[3]);
+    },
+    1.,
+    1 to nHosts
+  );
+  let logZReject = log(1. - probInvalidRep);
+  return logSamplingDensity - logZReject;
+}
+
+function hostMsgToProb(mtx: Matrix[Real], i: Int) => Real[] {
+  return seqNormalize(sapply(1 to 3, function(j: Int) => Real { return mtxGet(i, j, mtx); }));
+}

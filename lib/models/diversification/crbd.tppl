@@ -1,0 +1,136 @@
+// Constant rate birth-death (CRBD) script using explicit simulation.
+// The simulation can be replaced with an analytical computation for
+// the sampled values of lambda and mu; see the crbd_analytical script.
+
+import "treeppl::trees.tppl"
+import "treeppl::math.tppl"
+
+
+// Types
+// -----
+
+type alias Tree = ClockTree
+
+type Globals = Globals {
+    lambda:     Real,
+    mu:         Real,
+    rho:        Real
+}
+
+
+// Model functions
+// ---------------
+
+// Get an estimate of the probability of the MRCA being detected under given parameter values
+function numTrialsUntilMRCADetection(g: Globals, tRoot: Real, mMax: Int) => Int {
+
+    // Check if we used up the max number of trials. If so, condition on mMax as an
+    // approximation. A user might want to monitor how often this condition is hit.
+    // If it is hit frequently, the inference is biased towards parameter values
+    // that increase the likelihood of detection, and mMax needs to be increased.
+    if (mMax == 0) {
+        return 0;
+    }
+
+    // Check if both MRCA descendants are detected
+    if (isDetected(g, tRoot) && isDetected(g, tRoot)) {
+        return 1;    // We are detected, terminate!
+    } else {
+        // MRCA is not detected, continue recursion
+        return (1 + numTrialsUntilMRCADetection(g, tRoot, mMax-1));
+    }
+}
+
+// Forward simulation determining whether a tree survives and is detected (sampled)
+function isDetected(g: Globals, tBegin: Real) => Bool {
+    
+    assume waitingTime ~ Exponential(g.lambda+g.mu);
+    let newTime = tBegin - waitingTime;
+
+    if (newTime < 0.0) {
+        assume detected ~ Bernoulli(g.rho);
+        return detected;
+    }
+
+    assume isSpeciation ~ Bernoulli(g.lambda/(g.lambda+g.mu));
+    if (isSpeciation) {
+        return (isDetected(g, newTime) || isDetected(g, newTime));
+    }
+    return false;
+}
+
+// Simulate hidden speciation along an observed branch
+function simHiddenSpeciation(g: Globals, startTime: Real, endTime: Real) {
+
+    assume waitingTime ~ Exponential(g.lambda);
+    let newTime = startTime - waitingTime;
+    
+    // Handle speciation before end of branch
+    if (newTime > endTime) {
+        if (isDetected(g, newTime)) {
+            weight 0.0;
+            return;
+        }
+        observe 0 ~ Poisson(g.mu*waitingTime);
+        weight 2.0;
+        return simHiddenSpeciation(g, newTime, endTime);
+    }
+   
+    // Passed the end, we are done
+    observe 0 ~ Poisson(g.mu*(startTime-endTime));
+    return;
+}
+
+// Simulate process ("walk") along the observed tree
+function walk(g: Globals, parentAge: Real, node: Tree) {
+
+    let nodeAge = node.age;
+    simHiddenSpeciation(g, parentAge, nodeAge);
+
+    if (node is Node) {
+        observe 0.0 ~ Exponential(g.lambda);
+        resample;
+        walk(g, nodeAge, node.left);
+        walk(g, nodeAge, node.right);
+    } else {
+        observe true ~ Bernoulli(g.rho);
+        resample;
+    }
+}
+
+// Main model function
+model function crbd(tree: Tree, rho: Real) => Real[] {
+
+    // Set priors such that net diversification (lambda - mu) is likely
+    // to generate a tree of the observed size.
+    let numLeaves = int2real(countLeaves(tree));
+    let expectedTotalLeaves = numLeaves / rho;
+    let meanLambdaPrior = 2.0 * log(expectedTotalLeaves) / tree.age;
+
+    assume lambda ~ Gamma(1.0, meanLambdaPrior)     drift Uniform(max(lambda/1.1,1e-6),min(lambda*1.1,1e6));
+    assume epsilon ~ Uniform(0.0,1.0)               drift Uniform(max(epsilon-0.1,0.0),min(epsilon+0.1,1.0));
+    let mu = epsilon * lambda;
+
+    // Pack model variables
+    let g = Globals {
+        lambda      = lambda,
+        mu          = mu,
+        rho         = rho
+    };
+
+    // Compensate for the rotation of interior nodes in the
+    // observed tree, and labeling of the leaves in the tree
+    logWeight ((log(2.0) * (numLeaves - 1.0)) - logFactorial(numLeaves));
+
+    // Simulate conditional on the observed tree
+    walk(g, tree.age, tree.left);
+    walk(g, tree.age, tree.right);
+
+    // Estimate effect of conditioning on survival
+    let m = numTrialsUntilMRCADetection(g, tree.age, 1000);
+    weight int2real(m);
+    resample;
+
+    return [lambda, mu];
+}
+

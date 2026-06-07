@@ -1,0 +1,118 @@
+import "./standard.mc"
+
+
+/* -----------------------
+   Mathematical operations
+   ----------------------- */
+
+function exp(x : Real) => Real {
+  return mathExp(x);
+}
+
+function log(x : Real) => Real {
+  return mathLog(x);
+}
+
+function sqrt(x : Real) => Real {
+  return mathSqrt(x);
+}
+
+/* -------------------
+   Finding maximum and minimum of pairs
+   ------------------- */
+
+function minInt(a : Int, b : Int) => Int {
+  return mathMini(a)(b);
+}
+
+function maxInt(a : Int, b : Int) => Int {
+  return mathMaxi(a)(b);
+}
+
+function min(a: Real, b: Real) => Real {
+  if a <= b {
+    return a;
+  }
+  return b;
+}
+
+function max(a: Real, b: Real) => Real {
+  if a <= b {
+    return b;
+  }
+  return a;
+}
+
+/* -----------------------
+   Real to Int conversion
+   ----------------------- */
+
+function floor(x : Real) => Int {
+  return mathFloor(x);
+}
+
+function ceil(x : Real) => Int {
+  return mathCeil(x);
+}
+
+function round(x : Real) => Int {
+  return mathRound(x);
+}
+
+/* -----------------------
+   Commonly used math fxns
+   ----------------------- */
+
+function logFactorial(n: Real) => Real {
+
+  if (n <= 1.0) {
+    return 0.0;
+  }
+  return log(n) + logFactorial(n - 1.0);
+}
+
+// TODO: Implement the approx in full (requires fabs, sin)
+// TODO: Should PI be defined as global constant?
+function lnGamma(z: Real) => Real {
+
+    let pi = 3.14159265358979;
+    let lanczos_g = 7.0;
+    let lanczos_n = 9;
+    let lanczos_c = [
+        0.99999999999980993,
+        676.5203681218851,
+       -1259.1392167224028,
+        771.32342877765313,
+       -176.61502916214059,
+        12.507343278686905,
+       -0.13857109526572012,
+        9.9843695780195716e-6,
+        1.5056327351493116e-7];
+
+    /* ---- Poles at non‑positive integers -------------------------------- */
+    // if (z <= 0.0) && (fabs(z - round(z)) < 1e-12) { return -Inf; }
+    if (z <= 0.0) {
+        return -1e-12;    // This case should not occur in the model
+    }
+
+    /* ---- Use reflection for negative arguments (z < 0.5) --------------- */
+    if (z < 0.5) {
+        /* Recursively evaluate lnGamma(1‑z) which lies in (0.5, ifty) */
+        // return log(pi) - log(sin(pi * z)) - lnGamma(1.0 - z);
+        return -1e-12; // This case should not occur in the model
+    }
+
+    /* ---- Shift the argument (Lanczos works with z‑1) ------------------- */
+    let zz = z - 1.0;
+    let x  = lanczos_c[1];             /* c1 */
+
+    for i in 2 to lanczos_n {
+        let x = x + lanczos_c[i] / (zz + int2real(i-1));
+    }
+
+    let t = zz + lanczos_g + 0.5;
+
+    /* Final lnGamma formula */
+    return 0.5 * log(2.0 * pi) + (zz + 0.5) * log(t) - t + log(x);
+}
+

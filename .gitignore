@@ -4,3 +4,5 @@ out.mc
 tool
 build/
 
+.envrc
+result

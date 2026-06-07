@@ -2,6 +2,7 @@ include "mexpr/ast.mc"
 include "mexpr/json-debug.mc"
 include "mexpr/type-check.mc"
 include "mexpr/op-overload.mc"
+include "mexpr/generate-eq.mc"
 
 -- Pattern match over an algebraic type where each constructor carries
 -- a record, pulling out the field with the given name.
