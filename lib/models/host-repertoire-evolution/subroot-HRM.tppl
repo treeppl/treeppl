@@ -25,7 +25,7 @@ function subrootNode(
   nHosts: Int
 ) => SubrootInfo {
   // Calculate kernels for the subroot branch 
-  let subrootKernel = mtxExpRateSafe(mtxSclrMul(subrootLength, qMatrix));
+  let subrootKernel = mtxExp(mtxSclrMul(subrootLength, qMatrix));
   let subrootBackwardsKernel = mtxTrans(subrootKernel);
   let subRootSamplingProb = mtxMul(rootMsg, subrootBackwardsKernel);
 

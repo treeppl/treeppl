@@ -19,8 +19,8 @@ function postorderTraverse(
   let right = postorderTraverse(tree.right, qMatrix, interactions, nhosts);
 
     // These will be used when we propagate messages in the forward pass later
-  let leftKernel = mtxExpRateSafe(mtxSclrMul(tree.age-left.age, qMatrix));
-  let rightKernel = mtxExpRateSafe(mtxSclrMul(tree.age-right.age, qMatrix));
+  let leftKernel = mtxExp(mtxSclrMul(tree.age-left.age, qMatrix));
+  let rightKernel = mtxExp(mtxSclrMul(tree.age-right.age, qMatrix));
 
   // We are doing the backward pass, so we should transpose the kernels
   let leftBackwardKernel = mtxTrans(leftKernel);
