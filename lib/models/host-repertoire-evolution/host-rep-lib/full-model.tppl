@@ -3,8 +3,8 @@ import "treeppl::math.tppl"
 import "helpers.tppl"
 import "container-types.tppl"
 /*
- * This file contains functions for calculating the point wise density (excess)
- * for the full model.
+ * This file contains functions for calculating the point wise density for the
+ * full model -- this is called "modelDensity" in variable names
  */ 
 function fullModelWeight(
   nextIndex: Int,
@@ -94,7 +94,7 @@ function getLossRate(
 ) => Real {
   // Check if we are losing a two and if this results in a legal repertoire
   let fromState = repertoire[hostIndex];
-  if fromState == 2 && n2s(repertoire) == 1 {
+  if fromState == 2 && count2s(repertoire) == 1 {
     return 0.0;
   } else {
     let toState = fromState - 1;
@@ -114,23 +114,23 @@ function getGainRate (
   // We need to add the phylogenetic influence to the rate
   // since we have a gain event
   if fromState == 0 {
-    let currentHosts = whichTrue(sapply(repertoire, function (i: Int) => Bool {return i == 2 || i == 1; })); 
+    let currentHosts = whichTrue(sapply(
+      repertoire,
+      function(i: Int) => Bool { return i == 2 || i == 1; }
+    ));
     let dist = mtxMean(mtxRowCols(
       modelParams.hostMetric, hostIndex, currentHosts
     ));
-    // This is where the model departs from the original implementation
-    return baseRate * (
-      (dist / modelParams.meanDist)^(-modelParams.beta)
-    );
+    return baseRate * (dist^(-modelParams.beta));
   } else {
-    let currentHosts = whichTrue(sapply(repertoire, function (i: Int) => Bool {return i == 2; }));   
+    let currentHosts = whichTrue(sapply(
+      repertoire,
+      function(i: Int) => Bool { return i == 2 ; }
+    ));
     let dist = mtxMean(mtxRowCols(
       modelParams.hostMetric, hostIndex, currentHosts
     ));
-    // This is where the model departs from the original implementation
-    return baseRate * (
-      (dist / modelParams.meanDist)^(-modelParams.beta)
-    );
+    return baseRate * (dist^(-modelParams.beta));
   }
 }
 
@@ -145,8 +145,7 @@ function allTimesValidBranch(
   } else {
     let event = eventSeq[eventIndex];
     if event.fromState == 2 {
-      let n2s = fold(function(acc: Int, h: Int) => Int { if h == 2 { return acc + 1; } else { return acc; }}, 0, currRep);
-      if n2s == 1 {
+      if count2s(currRep) == 1 {
         // We have a loss event on repertoire with a single true hosts, so it is invalid
         return false;
       }
@@ -161,4 +160,21 @@ function allTimesValidBranch(
       nhosts
     );
   }
+}
+
+function count2s(repertoire: Int[]) => Int {
+  return fold(function (acc: Int, h: Int) => Int {
+      if h == 2 { return acc + 1; } else { return acc; }
+    }, 0, repertoire);
+}
+
+function updateRepertoire(currRep: Int[], event: Event, nhosts: Int) => Int[] {
+  let hostIndex = event.host;
+  return paste0(
+    [
+      slice(currRep, 1, hostIndex),
+      [event.toState],
+      slice(currRep, hostIndex + 1, nhosts + 1)
+    ]
+  );
 }

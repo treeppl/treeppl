@@ -63,6 +63,10 @@ function round(x : Real) => Int {
    Commonly used math fxns
    ----------------------- */
 
+function isNaN(x : Real) => Bool {
+  return isNaN(x);
+}
+
 function logFactorial(n: Real) => Real {
 
   if (n <= 1.0) {

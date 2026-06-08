@@ -2,6 +2,7 @@ import "stdlib::ext/dist-ext.mc"
 import "stdlib::seq.mc"
 import "stdlib::string.mc"
 import "stdlib::common.mc"
+import "stdlib::float.mc"
 import "stdlib::ext/arr-ext.mc"
 import "stdlib::ext/mat-ext.mc"
 import "./standard.mc"
@@ -95,6 +96,10 @@ function whichTrue(s : Bool[]) => Int[] {
     }
     return acc;
   }, [], s);
+}
+
+function kroneckerDelta(index : Int, length : Int) => Real[] {
+  return repApply(length, function(i : Int) => Real { return bool2real(index == i); });
 }
 
 

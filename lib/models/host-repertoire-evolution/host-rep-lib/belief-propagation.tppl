@@ -1,17 +1,16 @@
 import "container-types.tppl"
-import "lib.tppl"
 
 // Compute postorder messages on the observed tree
 function postorderTraverse(
   tree: TreeLabeled, qMatrix: Matrix[Real], interactions: Int[][], nhosts: Int
 ) => MsgTree {
   if tree is Leaf {
-    let outmsg = mtxCreate(nhosts, 3, observationMessage(interactions[tree.label], 1, nhosts));
+    let outmsg = observationMessage(interactions[tree.label]);
     let leafInts = interactions[tree.label];
     return MsgLeaf{
       age = 0.0,
       label = tree.label,
-      outMsg = mtxCreate(nhosts, 3, observationMessage(leafInts, 1, nhosts)),
+      outMsg = observationMessage(leafInts),
       interactions = leafInts
     };
   }
@@ -41,24 +40,8 @@ function postorderTraverse(
   };
 }
 
-// Compute leaf message from observed interactions
-function observationMessage(obsRepertoire: Int[], i: Int, max: Int) => Real[] {
-  if i <= max {
-    let stateMsg = makeStateMessage(obsRepertoire[i]);
-    // Aligned, so don't use join
-    return cons(
-      stateMsg[1],
-      cons(
-        stateMsg[2],
-        cons(
-          stateMsg[3],
-          observationMessage(obsRepertoire, i + 1, max)
-        )
-      )
-    );
-  } else {
-    return [];
-  }
+function observationMessage(obsRepertoire: Int[]) => Matrix[Real] {
+  return mtxCreate(length(obsRepertoire), 3, paste0(sapply(obsRepertoire, makeStateMessage)));
 }
 
 function makeStateMessage(interaction: Int) => Real[] {
