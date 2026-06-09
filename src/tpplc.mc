@@ -45,7 +45,7 @@ let _prune : OptParser Bool = optMap (xor _pruneDefault) (optFlag
   , category = catCompile
   }) in
 
-let _resampleDefault : String = "manual" in
+let _resampleDefault : String = "likelihood" in
 let _resample : OptParser String =
   let opt = optArg
     { optArgDefString with long = "resample"
