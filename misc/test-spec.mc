@@ -146,6 +146,34 @@ testMain [substituter] directories location (lam api.
       ])
     (map (lam x. (x, Fail ())) alignedTests.1);
 
+  let pigeonsCompile = api.midStep
+    { tag = "pigeons-compile"
+    , uses = []
+    , cmd = "%t %f --output %o --method mcmc --pigeons --pigeons-explore-steps 2 --incremental-printing"
+    } in
+  let pigeonsRun = api.midStep
+    { tag = "pigeons-run"
+    , uses = [pigeonsCompile, api.file (lam f. concat "data/testdata_" (withExtension ".json" f))]
+    , cmd = "PPL_OUTPUT=%o $(ROOT)/misc/pigeons/test_responses.sh %i < $(ROOT)/misc/pigeons/commands.txt"
+    } in
+  let pigeonsCheckSamples = api.endStep
+    { tag = "pigeons-samples"
+    , uses = [pigeonsRun]
+    , cmd = "$(ROOT)/misc/pigeons/test_samples.sh $(ROOT)/misc/pigeons/commands.txt %i"
+    } in
+  let pigeonsTests = [pigeonsCompile, pigeonsRun, pigeonsCheckSamples] in
+
+
+  api.tests []
+    (and (strStartsWith "lib/models/") (strEndsWith ".tppl"))
+    (map (lam x. (x, Succ ())) pigeonsTests);
+
+  -- NOTE(vipa, 2026-05-06): Some models have additional library files
+  -- in a `-lib` folder, do not test them as though they were models.
+  api.tests []
+    (strContains "-lib/")
+    (map (lam x. (x, Dont ())) pigeonsTests);
+
   -- NOTE(vipa, 2026-04-13): Some models have a decent likelihood of
   -- getting stuck when running with APF and very few particles, so we
   -- turn off those tests there
