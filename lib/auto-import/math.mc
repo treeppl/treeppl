@@ -9,5 +9,7 @@ let mathLog = log
 let mathSqrt = sqrt
 let mathModi = modi
 
+let mathLogGamma = logGamma
+
 let mathMini = mini
 let mathMaxi = maxi
