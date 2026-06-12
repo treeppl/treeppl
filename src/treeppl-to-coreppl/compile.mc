@@ -1093,12 +1093,12 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
   + OverloadedOpTypeCheck
   + OverloadedOpPrettyPrint
   + TransformDist + CPPLLoader + CorePPLFileTypeLoader
-  + ProjMatchToJson
+  + ProjMatchToJson + TyVarOrConToJson
   + JsonSerializationLoader
   + DPrintViaPprintLoader + MExprGeneratePprint + GeneratePprintMissingCase
   + TreePPLOperators
   + StripUtestLoader + PprintUnifyErrorNumArguments + UncurriedTypeCheck + SymUncurried + UncurriedPrettyPrint + LowerUncurryLoader
-  + UnifyUncurriedMixed
+  + UnifyUncurriedMixed + UncurriedToJson
   + MExprLowerNestedPatterns + MExprDeadcodeElimination + MExprConstantFold + MCoreCompileLang
   + PhaseStats
   + BPFCompilerPicker + APFCompilerPicker + ImportanceCompilerPicker

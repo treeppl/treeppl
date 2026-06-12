@@ -156,6 +156,15 @@ lang TyVarOrConSym = Sym + TyVarOrConAst + ConTypeAst + VarTypeAst
     end
 end
 
+lang TyVarOrConToJson = AstToJson + TyVarOrConAst
+  sem typeToJson =
+  | TyVarOrCon x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TyVarOrCon")
+    , ("ident", nameToJson x.ident)
+    , ("info", infoToJson x.info)
+    ] )
+end
+
 lang TreePPLOperators
   = OverloadedOpDesugarLoader
   + IntTypeAst + CmpIntTypeAst
