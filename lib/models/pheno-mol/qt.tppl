@@ -353,8 +353,7 @@ function getCharacterMessage(tree: QTTree, messages: Real[][]) => Matrix[Real]
 
   else
   {
-    error("Error: getCharacterMessage: unexpected tree structure");
-    return rvecCreate(1, [0.0]);
+    return error("Error: getCharacterMessage: unexpected tree structure");
   }
 }
 
