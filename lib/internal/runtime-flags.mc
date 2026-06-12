@@ -122,3 +122,20 @@ let _inferTimeMs : Bool -> OptParser Bool = lam default.
   , category = catDebug
   })
 let inferTimeMs = _inferTimeMs false
+
+let _pigeonsGlobal : Bool -> OptParser Bool = lam default.
+  optMap (xor default) (optFlag
+  { optFlagDef with long = if default then "no-pigeons-global" else "pigeons-global"
+  , description = concat (if default then "Disable" else "Enable") " using global moves when sampling at temperature 0.0"
+  , category = catRun
+  })
+let pigeonsGlobal = _pigeonsGlobal true
+
+let _pigeonsExploreSteps : Int -> OptParser Int = lam default.
+  let opt = optArg
+    { optArgDefInt with long = "pigeons-explore-steps"
+    , description = concat "The number of local MCMC steps to take before communicating with Pigeons.jl. Default: " (int2string default)
+    , category = catRun
+    } in
+  optOr opt (optPure default)
+let pigeonsExploreSteps = _pigeonsExploreSteps 1

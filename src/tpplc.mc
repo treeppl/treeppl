@@ -97,21 +97,7 @@ let _pigeons : OptParser Bool = optNoArg
   , description = "Let Pigeons.jl control inference via stdio."
   , category = catCompile
   } in
-let _pigeonsGlobalDefault : Bool = true in
-let _pigeonsGlobal : OptParser Bool = optMap (xor _pigeonsGlobalDefault) (optFlag
-  { optFlagDef with long = "pigeons-no-global"
-  , description = "Do not use global moves when sampling at temperature 0.0"
-  , category = catCompile
-  }) in
-let _pigeonsExploreStepsDefault : Int = 1 in
-let _pigeonsExploreSteps : OptParser Int =
-  let opt = optArg
-    { optArgDefInt with long = "pigeons-explore-steps"
-    , description = concat "The number of local MCMC steps to take before communicating with Pigeons.jl. Default: " (int2string _pigeonsExploreStepsDefault)
-    , category = catCompile
-    } in
-  optOr opt (optPure _pigeonsExploreStepsDefault) in
-let pigeonsOptions = optOptional (optMap3 (lam. lam pg. lam pes. (pg, pes)) _pigeons _pigeonsGlobal _pigeonsExploreSteps) in
+let pigeonsOptions = optOptional (optMap3 (lam. lam pg. lam pes. (pg, pes)) _pigeons pigeonsGlobal pigeonsExploreSteps) in
 
 let makeOptParser : Loader -> [(String, Expr)] -> (Loader, Expr) = lam loader. lam fieldParsers.
   match includeFileExn "." "stdlib::optparse-applicative.mc" loader with (optParseEnv, loader) in
