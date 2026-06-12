@@ -2,10 +2,6 @@
 // constant rate birth death (CRBD) model
 // with hard-coded delayed sampling
 
-import "treeppl::math.tppl"
-import "treeppl::distributions.tppl"
-import "treeppl::trees.tppl"
-
 // Types for this script
 type alias Tree = ClockTree
 
@@ -37,7 +33,7 @@ function numTrialsUntilMRCADetection(g: Globals, gdist: GammaDist, tRoot: Real, 
     let ret = isDetected(g, gdist, tRoot);
     if (ret.detected) {
         let ret = isDetected(g, ret.gdist, tRoot);
-        if (ret.detected) { 
+        if (ret.detected) {
             return 1;       // We are detected, terminate
         }
     }
@@ -49,12 +45,12 @@ function numTrialsUntilMRCADetection(g: Globals, gdist: GammaDist, tRoot: Real, 
 // Simulate the process from some time in the past and determine
 // whether any descendant will be detected at present (at t = 0.0)
 function isDetected(g: Globals, gdist: GammaDist, tBegin: Real) => GammaBool {
-  
+
     let ret = drawGammaExponential(gdist, 1.0 + g.epsilon);
     let gdist = ret.gdist;
     let waitingTime = ret.rv;
     let newTime = tBegin - waitingTime;
-  
+
     if (newTime < 0.0) {
         assume detected ~ Bernoulli(g.rho);
         return GammaBool {
@@ -62,7 +58,7 @@ function isDetected(g: Globals, gdist: GammaDist, tBegin: Real) => GammaBool {
             detected = detected
         };
     }
-  
+
     assume isSpeciation ~ Bernoulli(1.0 / (1.0 + g.epsilon));
 
     if (isSpeciation) {
@@ -83,7 +79,7 @@ function isDetected(g: Globals, gdist: GammaDist, tBegin: Real) => GammaBool {
 
 // Simulate hidden speciation along an observed branch
 function simHiddenSpeciation(g: Globals, gdist: GammaDist, startTime: Real, endTime: Real) => GammaDist {
-  
+
     let ret = drawGammaExponential(gdist, 1.0);
     let gdist = ret.gdist;
     let waitingTime = ret.rv;
@@ -111,7 +107,7 @@ function walk(g: Globals, gdist: GammaDist, parentAge: Real, node: Tree) => Gamm
 
     let nodeAge = node.age;
     let gdist = simHiddenSpeciation(g, gdist, parentAge, nodeAge);
-    
+
     if (node is Node) {
         let gdist = observeGammaExponential(0.0, gdist, 1.0);   // Speciation at end of branch
         resample;
@@ -167,4 +163,3 @@ model function crbd(tree: Tree, rho: Real) => Real[] {
 
     return [gdist.alpha, gdist.beta, lambda, mu, int2real(m)];
 }
-

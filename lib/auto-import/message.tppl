@@ -1,0 +1,16 @@
+import "./matrix.tppl"
+import "./sequence.tppl"
+
+type alias Message = Matrix[Real][]
+
+function messageElemMul(a : Message, b : Message) => Message {
+  return zipWith(mtxElemMul, a, b);
+}
+
+function messageElemPow(a : Message, pow : Real) => Message {
+  return sapply(a, mtxElemPow(_, pow));
+}
+
+function messageNormalize(m : Message) => Message {
+  return sapply(m, mtxNormalize);
+}

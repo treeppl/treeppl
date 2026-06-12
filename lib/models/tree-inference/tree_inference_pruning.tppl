@@ -8,7 +8,6 @@
 //   "T" for thymine - 3
 //   "-" for gaps - 4
 
-import "treeppl::math.tppl"
 
 // TYPES
 

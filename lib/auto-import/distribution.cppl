@@ -1,0 +1,1 @@
+let capLogObserve : all a. Dist a -> a -> Float = logObserve

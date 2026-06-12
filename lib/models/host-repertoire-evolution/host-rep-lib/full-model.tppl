@@ -1,5 +1,4 @@
 import "stdlib::math.mc"
-import "treeppl::math.tppl"
 import "helpers.tppl"
 import "container-types.tppl"
 /*

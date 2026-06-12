@@ -1,0 +1,48 @@
+import "./conversion.mc"
+import "./sequence.tppl"
+
+function real2string(v : Real) => String {
+  return float2string(v);
+}
+
+function sreal2string(v : Real[]) => String[] {
+  return sapply(v, float2string);
+}
+
+function int2string(v : Int) => String {
+  return const_int2string(v);
+}
+
+function sint2string(v : Int[]) => String[] {
+  return sapply(v, int2string);
+}
+
+function int2real(v : Int) => Real {
+  return Real(v);
+}
+
+function sint2real(v : Int[]) => Real[] {
+  return sapply(v, int2real);
+}
+
+function bool2real(v : Bool) => Real {
+  if (v) {
+    return 1.0;
+  }
+  return 0.0;
+}
+
+function sbool2real(v : Bool[]) => Real[] {
+  return sapply(v, bool2real);
+}
+
+function bool2string(v: Bool) => String {
+  if (v) {
+     return "true";
+  }
+  return "false";
+}
+
+function sbool2string(v : Bool[]) => String[] {
+  return sapply(v, bool2string);
+}

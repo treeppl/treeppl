@@ -1,11 +1,4 @@
--- Supporting MCore code for the TreePPL standard library (which can
--- be found in `standard.tppl`)
-
-include "common.mc"
-include "string.mc"
-include "ext/math-ext.mc"
 include "ext/mat-ext.mc"
-include "seq.mc"
 
 let _iterateni = lam bound. lam f.
   recursive let work = lam i. lam acc.
@@ -13,38 +6,6 @@ let _iterateni = lam bound. lam f.
     then work (addi i 1) (f i acc)
     else acc
   in work 0
-
-let printStd = print
-let printErr = printError
-let crash = error
-
-let seqSnoc = snoc
-let seqCons = cons
-let seqCreate = create
-let seqConcat = concat
-let seqLength = length
-let seqMap = map
-let seqMapi = mapi
-let seqZipWith = zipWith
-let seqSubsequence = subsequence
-let seqFoldl = foldl
-let seqFoldli = foldli
-let seqAny = any
-
-let mathFloor = floorfi
-let mathCeil = ceilfi
-let mathRound = roundfi
-
-let float2string = float2string
-let const_int2string = int2string
-
-let mathExp = exp
-let mathLog = log
-let mathSqrt = sqrt
-let mathModi = modi
-
-let mathMini = mini
-let mathMaxi = maxi
 
 -- NOTE(vipa, 2025-05-05): Some of the functions below use the
 -- internal mutability of matrices for their workings. This ok,

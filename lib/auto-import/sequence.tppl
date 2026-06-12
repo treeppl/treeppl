@@ -1,0 +1,88 @@
+import "stdlib::seq.mc"
+import "./sequence.mc"
+
+function cons[X](e : X, s : X[]) => X[] {
+  return seqCons(e)(s);
+}
+
+function rep[X](count : Int, elem : X) => X[] {
+  return make(count)(elem);
+}
+
+function repApply[X](count : Int, f : Function(Int) => X) => X[] {
+  return seqCreate(count)(function(idx:Int) => X { return f(idx + 1); });
+}
+
+function repDraw[X](count : Int, dist : Dist[X]) => X[] {
+  return repApply(count, function(idx:Int) => X { assume x ~ dist; return x; });
+}
+
+function concat[X](l : X[], r : X[]) => X[] {
+  return seqConcat(l)(r);
+}
+
+function paste0[X](l : X[][]) => X[] {
+  return join(l);
+}
+
+function paste[X](l : X[][], sep : X[]) => X[] {
+  return seqJoin(sep)(l);
+}
+
+function slice[X](l : X[], first : Int, last : Int) => X[] {
+  return seqSubsequence(l)(first - 1)(last - first);
+}
+
+function length[X](l : X[]) => Int {
+  return seqLength(l);
+}
+
+function sapply[A, B](s : A[], f : Function(A)=>B) => B[] {
+  return seqMap(f)(s);
+}
+
+function sapplyi[A, B](s : A[], f : Function(Int, A)=>B) => B[] {
+  return seqMapi(function(i : Int) => Function(A) => B {return function(x : A) => B {return f(i+1, x);};})(s);
+}
+
+function fold[A, B](f : Function(A, B)=>A, init : A, seq : B[]) => A {
+  return seqFoldl(function(a : A) => Function(B) => A {return function(b : B) => A {return f(a, b);};})(init)(seq);
+}
+
+function foldi[A, B](f : Function(A, Int, B)=>A, init : A, seq : B[]) => A {
+  return seqFoldli(function(a : A) => Function(Int) => Function(B) => A {return function(idx : Int) => Function(B) => A {return function(b : B) => A {return f(a, idx+1, b);};};})(init)(seq);
+}
+
+function zipWith[A, B, C](f : Function(A, B) => C, a : A[], b : B[]) => C[] {
+  return seqZipWith(function(a : A) => Function(B) => C {return function(b : B) => C {return f(a, b);};})(a)(b);
+}
+
+function seqSumReal(s : Real[]) => Real {
+  return fold(function(a : Real, b : Real) => Real {return a + b;}, 0.0, s);
+}
+
+function seqSumInt(s : Int[]) => Int {
+  return fold(function(a : Int, b : Int) => Int {return a + b;}, 0, s);
+}
+
+function seqNormalize(s : Real[]) => Real[] {
+  let sum = seqSumReal(s);
+  return sapply(s, function(x : Real) => Real {return x / sum;});
+}
+
+function any[X](f : Function(X) => Bool, l : X[]) => Bool {
+  return seqAny(f)(l);
+}
+
+function qSort[X](cmp : Function(X, X)=>Int, l : X[]) => X[] {
+  return quickSort(function(a : X) => Function(X) => Int {return function(b : X) => Int {return cmp(a, b);};})(l);
+}
+
+function whichTrue(s : Bool[]) => Int[] {
+  return foldi(function(acc : Int[], idx : Int, elem : Bool) => Int[] {
+    if elem {
+      return seqSnoc(acc)(idx);
+    }
+    return acc;
+  }, [], s);
+}

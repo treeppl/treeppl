@@ -17,7 +17,6 @@
 // combinations of the four nucleotides, but typically
 // only those given above are used.
 
-import "treeppl::math.tppl"
 
 // TYPES
 

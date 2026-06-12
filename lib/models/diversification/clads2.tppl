@@ -1,8 +1,5 @@
 // ClaDS2 model script
 
-import "treeppl::trees.tppl"
-import "treeppl::math.tppl"
-
 
 // Types
 // -----
@@ -84,7 +81,7 @@ function isDetected(g: Globals, multiplier: Real, tBegin: Real) => Bool {
     let multiplier = max(multiplier,1e-6);
 
     assume waitingTime ~ Exponential(multiplier*(g.lambda+g.mu));
-    let newTime = tBegin - waitingTime; 
+    let newTime = tBegin - waitingTime;
 
     if (newTime < 0.0) {
         assume detected ~ Bernoulli(g.rho);
@@ -125,7 +122,7 @@ function simHiddenSpeciation(g: Globals, multiplier: Real, startTime: Real, endT
         weight 2.0;
         return simHiddenSpeciation(g, multiplier, newTime, endTime);
     }
-    
+
     // Passed the end, we are done
     observe 0 ~ Poisson(multiplier*g.mu*(startTime-endTime));
     return multiplier;
@@ -134,7 +131,7 @@ function simHiddenSpeciation(g: Globals, multiplier: Real, startTime: Real, endT
 
 // Simulate process ("walk") along the observed tree
 function walk(g: Globals, multiplier: Real, parentAge: Real, node: Tree) {
-   
+
     let nodeAge = node.age;
     let multiplier = simHiddenSpeciation(g, multiplier, parentAge, nodeAge);
 
@@ -189,4 +186,3 @@ model function clads2(tree: Tree, rho: Real) => Real[] {
 
     return [lambda, mu, logAlpha, sigma, int2real(m)];
 }
-

@@ -13,7 +13,6 @@
 //   "T" for thymine 3
 //   "-" currently not handled in this model
 
-import "treeppl::math.tppl"
 
 // TYPES
 
@@ -74,19 +73,19 @@ function cluster(q: Matrix[Real], trees: SeqTree[], maxAge: Real, seqLen: Int) =
     let age = maxAge + t;
 
     // Propose ancestral state(s) from stationary distribution, to be corrected later
-    let seq = iid(categorical, CategoricalParam{probs=[0.25, 0.25, 0.25, 0.25]}, seqLen);
+    let seq = repDraw(seqLen, Categorical([0.25, 0.25, 0.25, 0.25]));
 
     // Observe the child states given the proposed state of parent node
     for i in 1 to seqLen {
         let p1 = ctmc(seq[i], q, age-leftChild.age);
         observe leftChild.seq[i] ~ Categorical(p1);
         if (leftChild is Node) {
-            logWeight -(categoricalLogScore(leftChild.seq[i], CategoricalParam{probs=[0.25, 0.25, 0.25, 0.25]}));
+            logWeight -(logPdf(leftChild.seq[i], Categorical([0.25, 0.25, 0.25, 0.25])));
         }
         let p2 = ctmc(seq[i], q, age-rightChild.age);
         observe rightChild.seq[i] ~ Categorical(p2);
         if (rightChild is Node) {
-            logWeight -(categoricalLogScore(rightChild.seq[i], CategoricalParam{probs=[0.25, 0.25, 0.25, 0.25]}));
+            logWeight -(logPdf(rightChild.seq[i], Categorical([0.25, 0.25, 0.25, 0.25])));
         }
     }
 

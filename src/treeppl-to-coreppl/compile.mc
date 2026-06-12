@@ -99,14 +99,15 @@ lang TreePPLCompile
   sem compileTpplConDecl : DeclTppl -> [Decl]
   sem compileTpplConDecl =
   | TypeDeclTppl (x & {constructor = Some c}) ->
+    let params = map (lam x. x.v) c.params in
     let f = lam constr.
       match constr with TypeCon constr in DeclConDef
       { ident = constr.name.v
       , tyIdent =
         let f = lam field. (field.name.v, compileTypeTppl field.ty) in
         let lhs = tyrecord_ (map f constr.fields) in
-        let rhs = ntycon_ c.name.v in
-        tyarrow_ lhs rhs
+        let rhs = tyapps_ (ntycon_ c.name.v) (map ntyvar_ params) in
+        foldr ntyall_ (tyarrow_ lhs rhs) params
       , info = constr.name.i
       } in
     map f c.cons
@@ -1091,7 +1092,7 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
   + MExprGenerateEq
   + OverloadedOpTypeCheck
   + OverloadedOpPrettyPrint
-  + TransformDist + CPPLLoader
+  + TransformDist + CPPLLoader + CorePPLFileTypeLoader
   + ProjMatchToJson
   + JsonSerializationLoader
   + DPrintViaPprintLoader + MExprGeneratePprint + GeneratePprintMissingCase
@@ -1129,9 +1130,14 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
     match parseTreePPLExn path content with DeclSequenceFileTppl top in
 
     -- Standard library (these should be in scope in the program)
-    match includeFileExn "." "treeppl::standard.mc" loader with (stdlibMCEnv, loader) in
-    match includeFileExn "." "treeppl::standard.tppl" loader with (stdlibTPPLEnv, loader) in
-    let fileEnv = stdlibTPPLEnv.env in
+    let autoImportDir = stdlibResolveFileOr (lam. never) "." "treeppl::auto-import" in
+    let autoImportPaths =
+      -- NOTE(vipa, 2026-05-20): Do not autoimport anything if we're
+      -- currently compiling a file in the auto-import dir
+      if strStartsWith autoImportDir path then [] else
+      let x = sysRunCommand ["find", autoImportDir, "-type", "f", "-a", "-name", "'*.tppl'"] "" "." in
+      let x = strSplit "\n" x.stdout in
+      filter (lam s. not (null s)) x in
     -- Compiler libraries (these should *not* be in scope in the program)
     match includeFileExn "." "stdlib::ext/dist-ext.mc" loader with (distEnv, loader) in
     match includeFileExn "." "stdlib::ext/math-ext.mc" loader with (mathEnv, loader) in
@@ -1142,9 +1148,9 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
     match includeFileExn "." "treeppl::internal/lib-compile.mc" loader with (compileLibEnv, loader) in
     -- Explicit imports (these should be in scope in the program)
     let import = lam acc. lam imp.
-      match includeFileExn (dirname path) imp.v acc.1 with (newEnv, loader) in
+      match includeFileExn (dirname path) imp acc.1 with (newEnv, loader) in
       (mergeSymEnv acc.0 newEnv.env, loader) in
-    match foldl import (fileEnv, loader) top.imports with (fileEnv, loader) in
+    match foldl import (_symEnvEmpty, loader) (concat autoImportPaths (map (lam x. x.v) top.imports)) with (fileEnv, loader) in
 
     let context =
       { serializeResult = _getVarExn "serializeResult" compileLibEnv
@@ -1223,6 +1229,15 @@ let compileTpplToExecutable = lam frontend. lam transformations. lam mkInference
   let log = mkPhaseLogState transformations.debugDumpPhases transformations.debugPhases transformations.invariantsToCheck in
   let loader = mkLoader symEnvDefault typcheckEnvDefault [StripUtestHook ()] in
   let loader = enableCPPLCompilation transformations loader in
+  let loader = addHook loader (CorePPLFileHook
+    { options =
+      { dpplTypeCheck = false
+      , printSamples = false
+      , printAcceptanceRate = false
+      , defaultParticles = 0
+      }
+    , method = Default {runs = int_ 0}
+    }) in
   let loader = enableEqGeneration loader in
   let loader = enableDesugar loader in
   let loader = enableJsonSerialization loader in

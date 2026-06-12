@@ -1,0 +1,10 @@
+type ClockTree =
+    | Node {left: ClockTree, right: ClockTree, age: Real}
+    | Leaf {age: Real}
+
+function countLeaves(tree: ClockTree) => Int {
+  if tree is Node {
+    return countLeaves(tree.left) + countLeaves(tree.right);
+  }
+  return 1;
+}

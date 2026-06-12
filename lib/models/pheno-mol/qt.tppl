@@ -4,7 +4,6 @@
  * Models the joint evolution of a gene and phenotype.
  */
 
-import "treeppl::math.tppl"
 
 type QTTree =
   | QTLeaf  { age: Real
