@@ -107,7 +107,7 @@ function drawGammaExponential(gdist: GammaDist, multiplier: Real) => GammaExpDra
 function negbinomialLogPMF(x: Int, r: Real, p: Real) => Real {
 
     let k = int2real(x);
-    return lnGamma(k+r-1.0) - lnGamma(r-1.0) - lnGamma(k) + k*log(1.0-p) + r*log(p);
+    return logGamma(k+r-1.0) - logGamma(r-1.0) - logGamma(k) + k*log(1.0-p) + r*log(p);
 }
 
 function negbinomialRv(r: Real, p: Real) => Int {
