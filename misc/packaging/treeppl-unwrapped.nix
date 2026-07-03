@@ -3,7 +3,7 @@
   miking-lib, miking-unwrapped, miking-dppl-lib,
 }:
 
-stdenv.mkDerivation (finalAttrs: {
+stdenv.mkDerivation (finalAttrs: rec {
   pname = "treeppl";
   version = "0.4";
 
@@ -17,6 +17,11 @@ stdenv.mkDerivation (finalAttrs: {
     ocamlPackages.ocaml
     ocamlPackages.linenoise
   ];
+
+  preBuild = ''
+    substituteInPlace src/tpplc.mc \
+      --replace-fail "~git~" "${version}"
+  '';
 
   makeFlags = [ "bin_path=$(out)/bin" "lib_path=$(out)/lib/mcore/treeppl" ];
 
