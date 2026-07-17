@@ -378,7 +378,7 @@ let isLwOptions : OptParser MkInferMethod =
   optMap2 (lam. lam x. x) (optOr method (optPure ())) res in
 
 let smcApfOptions : OptParser MkInferMethod =
-  let mk = lam particles. lam subsample. lam subsampleSize. lam resample. lam prune. lam cps. lam. lam loader.
+  let mk = lam particles. lam subsample. lam subsampleSize. lam maxPropagations. lam resample. lam prune. lam cps. lam. lam loader.
     match includeFileExn "." "treeppl::internal/runtime-flags.mc" loader with (flagEnv, loader) in
     let getOptParser : String -> Expr -> Expr = lam ident. lam default.
       app_ (nvar_ (_getVarExn ident flagEnv)) default in
@@ -386,6 +386,7 @@ let smcApfOptions : OptParser MkInferMethod =
       [ ("particles", getOptParser "_particles" (int_ particles))
       , ("subsample", getOptParser "_subsample" (bool_ subsample))
       , ("subsampleSize", getOptParser "_subsampleSize" (int_ subsampleSize))
+      , ("maxPropagations", getOptParser "_maxPropagations" (int_ maxPropagations))
       ] in
     match makeOptParser loader fields with (loader, optParser) in
     ( loader
@@ -393,6 +394,7 @@ let smcApfOptions : OptParser MkInferMethod =
         { particles = recordproj_ "particles" (nvar_ n)
         , subsample = recordproj_ "subsample" (nvar_ n)
         , subsampleSize = recordproj_ "subsampleSize" (nvar_ n)
+        , maxPropagations = recordproj_ "maxPropagations" (nvar_ n)
         , resample = resample
         , prune = prune
         , cps = cps
@@ -400,7 +402,7 @@ let smcApfOptions : OptParser MkInferMethod =
       , optParser = optParser
       }
     ) in
-  let res = optApply (optMap5 mk particles subsample subsampleSize _resample _prune) _cps in
+  let res = optApply (optApply (optMap5 mk particles subsample subsampleSize maxPropagations _resample) _prune) _cps in
   let method = optSpecificArg
     { optExactArg "smc-apf" with short = "m", long = "method"
     , description = "SMC using the alive particles filter"
