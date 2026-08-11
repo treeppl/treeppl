@@ -57,6 +57,8 @@ token {fragment = TpplLineCommentParser,}
 token {fragment = TpplMultilineCommentParser,}
 token {fragment = WhitespaceParser,}
 
+token {fragment = ErrorTokenParser,}
+
 type FileTppl
 type DeclTppl
 type TypeTppl
