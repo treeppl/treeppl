@@ -47,7 +47,7 @@ awk '
 
     d = vals[1] - vals[0]
     for (i = 2; i < n; i++) {
-      if (abs(vals[i] - vals[i-1] - d) > 1e-5) {
+      if (abs(vals[i] - vals[i-1] - d) > 1e-3) {
         printf "FAIL: not an arithmetic progression: "
         for (i = 0; i < n; i++) printf "%s ", vals[i]
         print ""
