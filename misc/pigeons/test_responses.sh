@@ -13,7 +13,10 @@ $tppl_exe "$data_file" | tee "$response_file"
 
 # Extract only numeric response values; a blank response() becomes an
 # empty line
-awk '
+#
+# NOTE: uses gawk's 3-argument match() to capture the numeric group, which
+# is not supported by other awk implementations (e.g. mawk, BSD awk).
+gawk '
   /^response\(/ {
     if ($0 == "response()") {
       print ""
@@ -23,7 +26,7 @@ awk '
     }
   }
 ' "$response_file" |
-awk '
+gawk '
   # Process blocks separated by empty lines
   NF == 0 {
     check_block()
