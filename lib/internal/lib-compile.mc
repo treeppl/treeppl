@@ -51,4 +51,4 @@ let runInference : all res. all inferOpts. RunInferenceConfig res inferOpts -> (
       repeat runOnce sweeps in
     let options = optMap5 run
       dataFile (_inferTimeMs config.inferTimeMs) (_sweeps config.sweeps) (_seed config.seed) config.inferOpts in
-    optParseWithHelp (head argv) "" options (tail argv) ()
+    optParseWithHelp (optParserHelpDef (head argv)) options (tail argv) ()

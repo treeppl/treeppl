@@ -22,6 +22,15 @@ mexpr
 
 use TreePPLThings in
 
+let _version : OptParser String = optNoArg
+  -- NOTE(vipa, 2026-08-11): The "~git~" string below will be
+  -- substituted for a proper version by the Nix derivation when
+  -- building a release.
+  { optNoArgDef "tpplc version ~git~" with long = "version"
+  , description = "Print the version number of the compiler."
+  , category = catDebug
+  } in
+
 let _cpsDefault : String = "full" in
 let _cps : OptParser String =
   let opt = optArg
@@ -590,7 +599,7 @@ let transformationOptions : OptParser TransformationOptions =
     optOr (optMap (lam str. setOfSeq cmpString (strSplit "," str)) opt) (optPure (setEmpty cmpString)) in
   optMap5 mk printModel extractSimplification staticDelay debugPhases debugDumpPhases in
 
-let options : OptParser (TpplFrontendOptions, TransformationOptions, MkInferMethod) =
+let options : OptParser (Either String (TpplFrontendOptions, TransformationOptions, MkInferMethod)) =
   let inference = foldl1 optOr
     [ isLwOptions
     , smcApfOptions
@@ -601,8 +610,25 @@ let options : OptParser (TpplFrontendOptions, TransformationOptions, MkInferMeth
     , graphMcmcOptions
     , pmcmcPimhOptions
     ] in
-  optMap3 (lam a. lam b. lam c. (a, b, c)) tpplFrontendOptions transformationOptions inference in
+  let options = optMap3 (lam a. lam b. lam c. (a, b, c))
+    tpplFrontendOptions
+    transformationOptions
+    inference in
+  let help =
+    { optParserHelpDef "tpplc" with description = "Compile a TreePPL program to a sampler using the given inference method."
+    , orderedCategories = [catMethod, catCompile, catRun, catDebug]
+    } in
+  let options = optParserWithHelp help options in
+  optOr (optMap (lam x. Left x) _version) options in
 
-match optParseWithHelp "tpplc" "" options (tail argv)
-  with (frontend, transformations, mkInferenceMethod) in
-compileTpplToExecutable frontend transformations mkInferenceMethod
+
+switch optParse options (tail argv)
+case Left err then
+  printLn err;
+  exit 1
+case Right (Left info) then
+  printLn info;
+  exit 0
+case Right (Right (frontend, transformations, mkInferenceMethod)) then
+  compileTpplToExecutable frontend transformations mkInferenceMethod
+end
