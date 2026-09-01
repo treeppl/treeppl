@@ -8,21 +8,19 @@ import "./debug.mc"
 type alias Matrix[X] = Mat[X]
 
 function mtxCreate(rows : Int, cols : Int, data : Real[]) => Matrix[Real] {
-  return matFromArrExn(rows)(cols)(extArrOfSeq(extArrKindFloat64)(data));
+  return _mtxCreate(rows)(cols)(data);
 }
 
 function mtxCreateId(sideLength : Int) => Matrix[Real] {
-  let mat = matMake(extArrKindFloat64)(sideLength)(sideLength)(0.0);
-  repeati(function(i : Int) {return matSetExn(mat)(i)(i)(1.0);})(sideLength);
-  return mat;
+  return _mtxCreateId(sideLength);
 }
 
 function rvecCreate(cols : Int, seq : Real[]) => Matrix[Real] {
-  return matFromArrExn(1)(cols)(extArrOfSeq(extArrKindFloat64)(seq));
+  return _rvecCreate(cols)(seq);
 }
 
 function cvecCreate(rows : Int, seq : Real[]) => Matrix[Real] {
-  return matFromArrExn(rows)(1)(extArrOfSeq(extArrKindFloat64)(seq));
+  return _cvecCreate(rows)(seq);
 }
 
 function dim[X](mtx : Matrix[X]) => Int[] {
