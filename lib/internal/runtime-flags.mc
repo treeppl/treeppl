@@ -68,6 +68,15 @@ let _subsampleSize : Int -> OptParser Int = lam default.
   optOr opt (optPure default)
 let subsampleSize = _subsampleSize 1
 
+let _maxPropagations: Int -> OptParser Int = lam default.
+  let opt = optArg
+    { optArgDefInt with long = "max-propagations"
+    , description = concat "The maximum number of attempts tried by smc-apf (at a given resample step) to find a non-zero weighted path for a particle. Default: " (int2string default)
+    , category = catRun
+    } in
+  optOr opt (optPure default)
+let maxPropagations = _maxPropagations 1000
+
 let _samplingPeriod : Int -> OptParser Int = lam default.
   let opt = optArg
     { optArgDefInt with long = "sampling-period"
