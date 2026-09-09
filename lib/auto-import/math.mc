@@ -1,3 +1,4 @@
+include "int.mc"
 include "ext/math-ext.mc"
 
 let mathFloor = floorfi

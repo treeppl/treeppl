@@ -47,7 +47,7 @@ include "ast-additions.mc"
 lang TreePPLCompile
   = TreePPLAst + MExprPPL + MExprFindSym + RecLetsDeclAst + Externals + MExprSym
   + FloatAst + Resample + GenerateJsonSerializers + MExprEliminateDuplicateCode
-  + MCoreLoader + JsonSerializationLoader
+  + MCoreLoader + JsonSerializationLoader + IncludeLoader
   + ProjMatchAst + TreePPLOperators
   + TyVarOrConAst
   + UncurriedAst
@@ -1100,6 +1100,8 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
   + StripUtestLoader + PprintUnifyErrorNumArguments + UncurriedTypeCheck + SymUncurried + UncurriedPrettyPrint + LowerUncurryLoader
   + UnifyUncurriedMixed + UncurriedToJson
   + MExprLowerNestedPatterns + MExprDeadcodeElimination + MExprConstantFold + MCoreCompileLang
+  + MLangTypeAlias + MLangSyn + MLangSem + TyUseSym + DeclUseSym
+  + MExprPatAnalysis + MCoreKeywordMaker
   + PhaseStats
   + BPFCompilerPicker + APFCompilerPicker + ImportanceCompilerPicker
   + NaiveMCMCCompilerPicker + TraceMCMCCompilerPicker + PIMHCompilerPicker
@@ -1116,11 +1118,7 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
     }
 
   sem _fileType = | _ ++ ".tppl" -> FTreePPL ()
-  sem _loadFile path = | (FTreePPL _, loader & Loader x) ->
-    -- NOTE(vipa, 2024-12-12): Return if we've already included this
-    -- file
-    match mapLookup path x.includedFiles with Some symEnv then (symEnv, loader) else
-    let loader = Loader {x with includedFiles = mapInsert path _symEnvEmpty x.includedFiles} in
+  sem _loadFile path = | (FTreePPL _, loader) ->
     match getHookOpt (lam x. match x with TreePPLHook x then Some x else None ()) loader with Some hook in
     -- For things referencing the entirety of the file, and no
     -- particular part of it
@@ -1145,7 +1143,7 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
     match includeFileExn "." "stdlib::json.mc" loader with (jsonEnv, loader) in
     match includeFileExn "." "stdlib::basic-types.mc" loader with (optionEnv, loader) in
     match includeFileExn "." "stdlib::common.mc" loader with (commonEnv, loader) in
-    match includeFileExn "." "treeppl::internal/lib-compile.mc" loader with (compileLibEnv, loader) in
+    match includeFileExn "." "treeppl::internal/lib-compile.cppl" loader with (compileLibEnv, loader) in
     -- Explicit imports (these should be in scope in the program)
     let import = lam acc. lam imp.
       match includeFileExn (dirname path) imp acc.1 with (newEnv, loader) in
@@ -1170,14 +1168,14 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
     -- before *all* constructors, which lets constructors refer to
     -- other types in mutually recursive ways.
     let work = lam f. lam acc. lam decl.
-      foldl (lam acc. _addDeclWithEnvExn acc.0 acc.1) acc (f decl) in
+      foldl (lam acc. _addDeclExn acc.0 acc.1) acc (f decl) in
     match foldl (work compileTpplTypeDecl) (fileEnv, loader) top.decls with (fileEnv, loader) in
     match foldl (work compileTpplConDecl) (fileEnv, loader) top.decls with (fileEnv, loader) in
 
     -- 2. Functions. These are inserted into a single recursive let,
     -- which enables mutual recursion.
     let functions = DeclRecLets {bindings = joinMap (compileTpplFunction context) top.decls, info = fileInfo} in
-    match _addDeclWithEnvExn fileEnv loader functions with (fileEnv, loader) in
+    match _addDeclExn fileEnv loader functions with (fileEnv, loader) in
 
     -- 3. Model invocations.
     let work = lam loader. lam decl.
@@ -1189,12 +1187,11 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
           , tyBody = tyunknown_
           , info = infoTm invocation
           } in
-        (_addDeclWithEnvExn fileEnv loader decl).1
+        (_addDeclExn fileEnv loader decl).1
       else loader in
     let loader = foldl work loader top.decls in
 
-    match loader with Loader x in
-    (mapFindExn path x.includedFiles, loader)
+    loader
 
   sem registerMatrixFunctions : Loader -> Loader
   sem registerMatrixFunctions = | loader ->
@@ -1227,7 +1224,7 @@ end
 let compileTpplToExecutable = lam frontend. lam transformations. lam mkInferenceMethod.
   use TreePPLThings in
   let log = mkPhaseLogState transformations.debugDumpPhases transformations.debugPhases transformations.invariantsToCheck in
-  let loader = mkLoader symEnvDefault typcheckEnvDefault [StripUtestHook ()] in
+  let loader = mkLoader typcheckEnvDefault [StripUtestHook ()] in
   let loader = enableCPPLCompilation transformations loader in
   let loader = addHook loader (CorePPLFileHook
     { options =

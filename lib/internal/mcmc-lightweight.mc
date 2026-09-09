@@ -1,3 +1,7 @@
+include "bool.mc"
+include "seq.mc"
+include "basic-types.mc"
+include "string.mc"
 include "common.mc"
 include "json.mc"
 include "ext/file-ext.mc"

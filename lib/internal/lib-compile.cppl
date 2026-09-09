@@ -1,6 +1,10 @@
 -- NOTE(2023-08-11,dlunde): This CorePPL library file contains functions
 -- referred to by the TreePPL compiler.
 
+include "basic-types.mc"
+include "common.mc"
+include "map.mc"
+include "string.mc"
 include "json.mc"
 include "optparse-applicative.mc"
 include "ext/dist-ext.mc"
