@@ -1143,7 +1143,7 @@ lang TreePPLThings = TreePPLAst + TreePPLCompile
     match includeFileExn "." "stdlib::json.mc" loader with (jsonEnv, loader) in
     match includeFileExn "." "stdlib::basic-types.mc" loader with (optionEnv, loader) in
     match includeFileExn "." "stdlib::common.mc" loader with (commonEnv, loader) in
-    match includeFileExn "." "treeppl::internal/lib-compile.cppl" loader with (compileLibEnv, loader) in
+    match includeFileExn "." "treeppl::internal/lib-compile.dppl" loader with (compileLibEnv, loader) in
     -- Explicit imports (these should be in scope in the program)
     let import = lam acc. lam imp.
       match includeFileExn (dirname path) imp acc.1 with (newEnv, loader) in
