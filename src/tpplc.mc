@@ -101,6 +101,20 @@ let _debugAlignment : OptParser (Option String) = optOptional (optArg
   , category = catDebug
   }) in
 
+let _debugIdealized : OptParser (Option String) = optOptional (optArg
+  { optArgDefString with long = "debug-idealized"
+  , description = "Output a pretty-printed version of the graph-generating code after the first translation step to the given file."
+  , arg = "FILE"
+  , category = catDebug
+  }) in
+
+let _debugGraphJson : OptParser (Option String) = optOptional (optArg
+  { optArgDefString with long = "debug-graph-json"
+  , description = "Do not run inference, instead produce a json representation of the first graph produced to the given file."
+  , arg = "FILE"
+  , category = catDebug
+  }) in
+
 let _pigeons : OptParser Bool = optNoArg
   { optNoArgDef true with long = "pigeons"
   , description = "Let Pigeons.jl control inference via stdio."
@@ -483,7 +497,7 @@ let pmcmcPimhOptions : OptParser MkInferMethod =
   optMap2 (lam. lam x. x) method res in
 
 let graphMcmcOptions : OptParser MkInferMethod =
-  let mk = lam iterations. lam globalProb. lam. lam loader.
+  let mk = lam iterations. lam globalProb. lam debugIdealized. lam debugGraphJson. lam. lam loader.
     match includeFileExn "." "treeppl::internal/runtime-flags.mc" loader with (flagEnv, loader) in
     match includeFileExn "." "coreppl::coreppl-to-mexpr/pval-graph/config.mc" loader with (pvalConfigEnv, loader) in
     let getOptParser : String -> Expr -> Expr = lam ident. lam default.
@@ -500,11 +514,13 @@ let graphMcmcOptions : OptParser MkInferMethod =
             [ ("globalProb", recordproj_ "globalProb" (nvar_ n))
             , ("iterations", recordproj_ "iterations" (nvar_ n))
             ])
+        , debugIdealized = optionGetOr "" debugIdealized
+        , debugOutput = optionGetOr "" debugGraphJson
         }
       , optParser = optParser
       }
     ) in
-  let res = optMap2 mk iterations mcmcLightweightGlobalProb in
+  let res = optMap4 mk iterations mcmcLightweightGlobalProb _debugIdealized _debugGraphJson in
   let method = optSpecificArg
     { optExactArg "mcmc-graph" with short = "m", long = "method"
     , description = "MCMC using the experimental graph representation"
