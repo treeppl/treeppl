@@ -74,6 +74,10 @@ function any[X](f : Function(X) => Bool, l : X[]) => Bool {
   return seqAny(f)(l);
 }
 
+function all[X](f : Function(X) => Bool, l : X[]) => Bool {
+  return seqAll(f)(l);
+}
+
 function qSort[X](cmp : Function(X, X)=>Int, l : X[]) => X[] {
   return quickSort(function(a : X) => Function(X) => Int {return function(b : X) => Int {return cmp(a, b);};})(l);
 }
