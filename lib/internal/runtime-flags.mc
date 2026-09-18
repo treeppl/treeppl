@@ -1,3 +1,7 @@
+include "option.mc"
+include "basic-types.mc"
+include "string.mc"
+include "bool.mc"
 include "optparse-applicative.mc"
 
 
