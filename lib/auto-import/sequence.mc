@@ -1,3 +1,5 @@
+include "bool.mc"
+include "common.mc"
 include "seq.mc"
 
 let seqSnoc = snoc

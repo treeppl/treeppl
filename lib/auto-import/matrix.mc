@@ -1,3 +1,5 @@
+include "ext/math-ext.mc"
+include "ext/arr-ext.mc"
 include "ext/mat-ext.mc"
 
 let _iterateni : all a. Int -> (Int -> a -> a) -> a -> a = lam bound. lam f.

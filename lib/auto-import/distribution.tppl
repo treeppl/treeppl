@@ -1,4 +1,4 @@
-import "./distribution.cppl"
+import "./distribution.dppl"
 import "./math.tppl"
 import "./conversion.tppl"
 
