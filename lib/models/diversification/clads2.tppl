@@ -73,7 +73,7 @@ function isDetected(g: Globals, multiplier: Real, tBegin: Real) => Bool {
     }
     */
 
-    assume deltaLogRate ~ Gaussian(g.logAlpha, g.sigma);
+    assume deltaLogRate ~ Normal(g.logAlpha, g.sigma);
     let multiplier = multiplier * exp(deltaLogRate);
     if (multiplier > 1e4) {
       return true;
@@ -101,7 +101,7 @@ function isDetected(g: Globals, multiplier: Real, tBegin: Real) => Bool {
 // Simulate hidden speciation along an observed branch
 function simHiddenSpeciation(g: Globals, multiplier: Real, startTime: Real, endTime: Real) => Real {
 
-    assume deltaLogRate ~ Gaussian(g.logAlpha, g.sigma);
+    assume deltaLogRate ~ Normal(g.logAlpha, g.sigma);
     let multiplier = multiplier * exp(deltaLogRate);
     if (multiplier > 1e4) {
       weight 0.0;
@@ -161,7 +161,7 @@ model function clads2(tree: Tree, rho: Real) => Real[] {
     let mu = epsilon*lambda;
     assume sigma ~ Gamma(1.0, 1.0)                  drift Gamma(sigma/1.1, 1.1*sigma);
     let sigma = sqrt(0.2 / sigma);
-    assume logAlpha ~ Gaussian(0.0, sigma)          drift Uniform(logAlpha-0.05,logAlpha+0.05);
+    assume logAlpha ~ Normal(0.0, sigma)          drift Uniform(logAlpha-0.05,logAlpha+0.05);
 
     let g = Globals {
         lambda      = lambda,

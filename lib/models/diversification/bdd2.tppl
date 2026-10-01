@@ -49,7 +49,7 @@ function predictUndetectedProb(g: Globals, multiplier: Real, time: Real) => Real
 // Brownian motion on the log scale
 function shiftDivRates(g: Globals, timeSegment: Real) => Real {
 
-    assume deltaLogRate ~ Gaussian(g.logAlpha, g.sigma);
+    assume deltaLogRate ~ Normal(g.logAlpha, g.sigma);
     return exp(deltaLogRate*timeSegment);
 }
 
@@ -232,7 +232,7 @@ model function bdd2(tree: Tree, rho: Real, numIntervals: Int) => Real[] {
     let mu = epsilon*lambda;
     assume sigma_x ~ Gamma(1.0, 1.0)                drift Gamma(sigma_x/1.1,sigma_x*1.1);               // Multiplier probably more efficient, tuning param 1.1
     let sigma = sqrt(0.2*meanLambdaPrior/sigma_x);
-    assume logAlpha ~ Gaussian(0.0, sigma)          drift Uniform(logAlpha-0.05,logAlpha+0.05);         // Sliding window, tuning param width=0.1
+    assume logAlpha ~ Normal(0.0, sigma)          drift Uniform(logAlpha-0.05,logAlpha+0.05);         // Sliding window, tuning param width=0.1
 
     // Package global model variables in one object
     let g = Globals {

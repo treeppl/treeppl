@@ -135,7 +135,7 @@ function isDetected(g: Globals, d: Dists, multiplier: Real, tBegin: Real) => Dis
     let b = bddCase(tBegin, waitingTime, g.deltaT);
 
     // Let the diversification rates shift
-    let ret2 = drawNormalInverseGammaGaussian(d.nigdist);
+    let ret2 = drawNormalInverseGammaNormal(d.nigdist);
     let multiplier = exp(ret2.rv*b.timeSegment)*multiplier;
 
     // Update distributions
@@ -202,7 +202,7 @@ function simHiddenSpeciation(g: Globals, d: Dists, multiplier: Real, tBegin:Real
     let gdist = observeGammaPoisson(0, ret1.gdist, multiplier*g.epsilon*b.timeSegment);
 
     // Let the diversification rates shift
-    let ret2 = drawNormalInverseGammaGaussian(d.nigdist);
+    let ret2 = drawNormalInverseGammaNormal(d.nigdist);
     let multiplier = exp(ret2.rv*b.timeSegment)*multiplier;
 
     // Update distributions

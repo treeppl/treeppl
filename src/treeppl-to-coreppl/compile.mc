@@ -634,9 +634,9 @@ lang TreePPLCompile
       info = d.info
     }
 
-  | GaussianExprTppl d ->
+  | NormalExprTppl d ->
     TmDist {
-      dist = DGaussian {
+      dist = DNormal {
         mu = compileExprTppl context d.mean,
         sigma = compileExprTppl context d.dev
       },
