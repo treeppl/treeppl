@@ -13,9 +13,21 @@
 
   outputs = { self, nixpkgs, flake-utils, relocatable, miking, miking-dppl }:
     let
+      # Workaround: clang 21 crashes in instcombine on `complex32_modf`
+      # (owl_ndarray_maths_stub.c). Hypothesis: it is the llvm.modf intrinsic;
+      # stop clang from forming it.
+      owlClangWorkaround = final: prev: {
+        ocamlPackages = prev.ocamlPackages.overrideScope (ofinal: oprev: {
+          owl = oprev.owl.overrideAttrs (old: {
+            preBuild = (old.preBuild or "") + ''
+              export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE -fno-builtin-modf -fno-builtin-modff"
+            '';
+          });
+        });
+      };
       mkPkg = system:
         let
-          pkgs = nixpkgs.legacyPackages.${system}.pkgs;
+          pkgs = import nixpkgs { inherit system; overlays = [ owlClangWorkaround ]; };
           mpkgs = miking.packages.${system};
           mdpkgs = miking-dppl.packages.${system};
           treeppl-unwrapped = pkgs.callPackage ./treeppl-unwrapped.nix {
