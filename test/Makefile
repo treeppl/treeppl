@@ -8,7 +8,7 @@ TPPLC ?= tpplc
 test: $(TESTS)
 
 $(TESTS):
-	uv run --project . scripts/run_test.py models/$@ --compiler-path $(TPPLC)
+	uv run --locked --project . scripts/run_test.py models/$@ --compiler-path $(TPPLC)
 
 clean:
 	rm -rf $(addprefix models/,$(addsuffix /build,$(TESTS)))
