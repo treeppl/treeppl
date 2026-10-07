@@ -1,8 +1,8 @@
-// A beta-binomial model -- a simple continuous parameter model
+// A beta-Bernoulli model -- a simple continuous parameter model
 // with known analytical reference distribution.
 
 
-model function betaBinom() => Real {
+model function betaBernoulli() => Real {
   assume p ~ Beta(1., 1.);
   let data = [true, false, true];
   for d in data {

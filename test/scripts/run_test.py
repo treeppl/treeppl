@@ -1,14 +1,13 @@
-import importlib.util
+import argparse
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
-import argparse
-import shutil
+from typing import NamedTuple
 
 import yaml
 
-import common
 import checks
 
 SHARED_CONFIG = {
@@ -17,22 +16,34 @@ SHARED_CONFIG = {
         "mcmc-naive": "--iterations",
         "mcmc-trace": "--iterations",
         "mcmc-graph": "--iterations",
+        "pmcmc-pimh": "--iterations",
         "is": "--particles",
         "smc-bpf": "--particles",
         "smc-apf": "--particles",
     }
 }
 
+# Check function and distance name, keyed on the `discrete` config entry
+CHECKS = {
+    True: (checks.check_discrete_analytical, "TV"),
+    False: (checks.check_continuous_analytical, "KS"),
+}
+
+
+class ReplicateResult(NamedTuple):
+    seed: int
+    passed: bool
+    distance: float
+    details: str
+
 
 def load_config(model_dir: Path) -> dict:
     """Shared config with the model's config.yaml layered on top."""
     with open(model_dir / "config.yaml") as f:
-        config = yaml.safe_load(f) or {}
-    config |= SHARED_CONFIG
-    return config
+        return SHARED_CONFIG | (yaml.safe_load(f) or {})
 
 
-def compile_variant(model_dir: Path, bin: Path, variant: dict, config: dict) -> None:
+def compile_variant(bin: Path, model_dir: Path, variant: dict, config: dict) -> None:
     bin.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         [
@@ -47,24 +58,20 @@ def compile_variant(model_dir: Path, bin: Path, variant: dict, config: dict) -> 
         check=True,
         cwd=bin.parent,
         capture_output=True,
+        text=True,
     )
 
 
 def run_inference(
-    model_dir: Path,
-    bin: Path,
-    method_name: str,
-    sample_size: int,
-    seed: int,
-    config: dict,
+    bin: Path, model_dir: Path, variant: dict, seed: int, config: dict
 ) -> dict:
     """Run the compiled model and return its parsed JSON output."""
     result = subprocess.run(
         [
             str(bin),
             str(model_dir / "data.json"),
-            config["sample-size-flag"][method_name],
-            str(sample_size),
+            config["sample-size-flag"][variant["method"]],
+            str(variant["sample-size"]),
             "--seed",
             str(seed),
         ],
@@ -75,59 +82,46 @@ def run_inference(
     return json.loads(result.stdout.splitlines()[-1])
 
 
-CHECKS = {
-    # discrete
-    True: (checks.check_discrete_analytical, "TV"),
-    False: (checks.check_continuous_analytical, "KS"),
-}
-
-
-def run_variant(model_dir: Path, name: str, variant: dict, config: dict):
-    # Compile the model
-    bin = model_dir / "build" / name / "out"
-    compile_variant(model_dir, bin, variant, config)
-    seed = variant["seed"]
-
-    threshold = variant["threshold"]
-    check, metric = CHECKS[config["discrete"]]
-
-    instances = [
-        run_variant_instance(model_dir, bin, s, threshold, check, variant, config)
-        for s in range(seed, seed + variant["replicates"])
-    ]
-    npassed = sum(passed for passed, _, _, _ in instances)
-    max_dist = max(distance for _, _, distance, _ in instances)
-    all_passed = npassed == len(instances)
-    status = "PASS" if all_passed else "FAIL"
-    print(
-        f"{status} ({npassed}/{len(instances)}) {model_dir.name}/{name}: max {metric} = {max_dist:.4f} (threshold {threshold})"
-    )
-    if not all_passed:
-        for passed, details, distance, seed in instances:
-            if not passed:
-                print(
-                    f"{status} {model_dir.name}/{name} seed {seed}: {metric} = {distance:.4f} (threshold {threshold})"
-                )
-                print(details)
-    return all_passed
-
-
-def run_variant_instance(
-    model_dir: Path,
-    bin: Path,
-    seed: int,
-    threshold: float,
-    check,
-    variant: dict,
-    config: dict,
-) -> bool:
-    output = run_inference(
-        model_dir, bin, variant["method"], variant["sample-size"], seed, config
-    )
+def run_replicate(
+    bin: Path, model_dir: Path, variant: dict, seed: int, config: dict
+) -> ReplicateResult:
+    check, _ = CHECKS[config["discrete"]]
+    output = run_inference(bin, model_dir, variant, seed, config)
     distance, details = check(model_dir, output)
-    passed = distance < threshold
+    return ReplicateResult(seed, distance < variant["threshold"], distance, details)
 
-    return (passed, details, distance, seed)
+
+def run_variant(model_dir: Path, name: str, variant: dict, config: dict) -> bool:
+    test_name = f"{model_dir.name}/{name}"
+    bin = model_dir / "build" / name / "out"
+    seeds = range(variant["seed"], variant["seed"] + variant["replicates"])
+    try:
+        compile_variant(bin, model_dir, variant, config)
+        results = [
+            run_replicate(bin, model_dir, variant, seed, config) for seed in seeds
+        ]
+    except subprocess.CalledProcessError as e:
+        print(f"FAIL {test_name}: command exited with status {e.returncode}")
+        print(f"  command: {' '.join(e.cmd)}")
+        print(e.stderr)
+        return False
+
+    _, metric = CHECKS[config["discrete"]]
+    threshold = variant["threshold"]
+    npassed = sum(r.passed for r in results)
+    all_passed = npassed == len(results)
+    max_distance = max(r.distance for r in results)
+    print(
+        f"{'PASS' if all_passed else 'FAIL'} ({npassed}/{len(results)}) {test_name}: "
+        f"max {metric} = {max_distance:.4f} (threshold {threshold})"
+    )
+    for r in results:
+        if not r.passed:
+            print(
+                f"FAIL {test_name} seed {r.seed}: {metric} = {r.distance:.4f} (threshold {threshold})"
+            )
+            print(r.details)
+    return all_passed
 
 
 def main() -> None:
@@ -139,15 +133,13 @@ def main() -> None:
     compiler = shutil.which(args.compiler_path)
     if compiler is None:
         sys.exit(f"Compiler not found: {args.compiler_path}")
-    compiler = Path(compiler).resolve()
     config = load_config(model_dir)
-    config["tpplc"] = compiler
+    config["tpplc"] = Path(compiler).absolute()
 
-    results = []
-    for name, variant in config["inference"].items():
-        replicates = variant.get("replicates", 4)
-        status = run_variant(model_dir, name, variant, config)
-        results.append(status)
+    results = [
+        run_variant(model_dir, name, variant, config)
+        for name, variant in config["inference"].items()
+    ]
     sys.exit(0 if all(results) else 1)
 
 

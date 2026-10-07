@@ -15,14 +15,12 @@ inference:
     replicates: 4
   mcmc-graph:
     method: mcmc-graph
-    additional-flags: ""
     sample-size: 100000
     threshold: 0.01
     seed: 1
     replicates: 4
   is:
     method: is
-    additional-flags: ""
     sample-size: 1000000
     threshold: 0.01
     seed: 1

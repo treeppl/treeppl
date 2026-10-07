@@ -1,5 +1,11 @@
+import json
+from pathlib import Path
+
 import scipy
 import numpy as np
+
+# A probability mass function, mapping each state to its probability
+PMF = dict[int, float]
 
 
 def normalized_weights(weights: list[float]) -> np.ndarray:
@@ -8,30 +14,24 @@ def normalized_weights(weights: list[float]) -> np.ndarray:
     return np.exp(log_w - scipy.special.logsumexp(log_w))
 
 
-def empirical_pmf(samples: list, weights: list[float]) -> dict:
+def empirical_pmf(samples: list[int], weights: list[float]) -> PMF:
     """Weighted empirical PMF of `samples`, given log-weights `weights`."""
-    probs = [p.item() for p in normalized_weights(weights)]
-
+    pmf: PMF = {}
     # Merge weights of identical sample values
-    pmf: dict = {}
-    for s, p in zip(samples, probs):
-        pmf[s] = pmf.get(s, 0.0) + p
-    return {"states": list(pmf.keys()), "probs": list(pmf.values())}
+    for s, p in zip(samples, normalized_weights(weights)):
+        pmf[s] = pmf.get(s, 0.0) + p.item()
+    return pmf
 
 
-def long_to_short_pmf(long_pmf):
-    return {s: p for s, p in zip(long_pmf["states"], long_pmf["probs"])}
+def load_pmf(path: Path) -> PMF:
+    """Load a PMF stored as JSON with paired `states` and `probs` lists."""
+    with open(path) as f:
+        data = json.load(f)
+    return dict(zip(data["states"], data["probs"]))
 
 
-def tv_distance_discrete(pmf1: dict, pmf2: dict) -> float:
-    pmf1 = long_to_short_pmf(pmf1)
-    pmf2 = long_to_short_pmf(pmf2)
-    tv = 0.0
-    for k in pmf1.keys() | pmf2.keys():
-        d1 = pmf1.get(k, 0.0)
-        d2 = pmf2.get(k, 0.0)
-        tv += abs(d1 - d2)
-    return tv / 2
+def tv_distance_discrete(pmf1: PMF, pmf2: PMF) -> float:
+    return sum(abs(pmf1.get(k, 0.0) - pmf2.get(k, 0.0)) for k in pmf1.keys() | pmf2.keys()) / 2
 
 
 def ks_distance_continuous(samples: list[float], weights: list[float], cdf) -> float:

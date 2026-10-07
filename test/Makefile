@@ -1,4 +1,4 @@
-TESTS=impossible-redraws beta-binom skewed-geometric
+TESTS=impossible-redraws beta-bernoulli skewed-geometric
 
 # Compiler to test, override with e.g. `make TPPLC=../build/tpplc`
 TPPLC ?= tpplc

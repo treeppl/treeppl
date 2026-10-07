@@ -2,8 +2,7 @@ discrete: true
 inference:
   is:
     method: is
-    additional-flags: ""
-    sample-size: 10000
+    sample-size: 100000
     threshold: 0.01
     seed: 1
     replicates: 4

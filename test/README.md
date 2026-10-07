@@ -4,10 +4,11 @@ This subdirectory contains TreePPL inference tests for ensuring that our inferen
 ## Running tests
 The testing framework is written in Python and uses the [`uv` package manager](https://docs.astral.sh/uv/) for Python code execution.
 Please follow the installation instructions on the [`uv` website](https://docs.astral.sh/uv/).
-The tests also require the TreePPL compiler `tpplc` to be on your `PATH`.
 
 To run all tests, simply run `make` in this subdirectory, or `make test` in the main TreePPL Makefile.
-To run a single test, run `make <test name>`, e.g. `make beta-binom`.
+Running `make` in this subdirectory tests the `tpplc` on your `PATH`; to test another compiler, pass its path, e.g. `make TPPLC=../build/tpplc`.
+Running `make test` in the main Makefile builds the compiler and tests `build/tpplc`.
+To run a single test, run `make <test name>`, e.g. `make beta-bernoulli`.
 
 ## Testing approach
 The tests compute a distance between a reference distribution and the empirical distribution based on the output from a TreePPL sampler.

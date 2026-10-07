@@ -1,12 +1,10 @@
-import common
-import json
-import importlib
+import importlib.util
 from pathlib import Path
 
+import common
 
-def check_continuous_analytical(
-    model_dir: Path, output: dict
-) -> tuple[str, float, str]:
+
+def check_continuous_analytical(model_dir: Path, output: dict) -> tuple[float, str]:
     spec = importlib.util.spec_from_file_location(
         "analytical_cdf", model_dir / "analytical_cdf.py"
     )
@@ -18,13 +16,9 @@ def check_continuous_analytical(
     return ks, ""
 
 
-def check_discrete_analytical(model_dir: Path, output: dict) -> tuple[str, float, str]:
+def check_discrete_analytical(model_dir: Path, output: dict) -> tuple[float, str]:
     empirical = common.empirical_pmf(output["samples"], output["weights"])
-    with open(model_dir / "analytical_pmf.json") as f:
-        reference = json.load(f)
+    reference = common.load_pmf(model_dir / "analytical_pmf.json")
     tv = common.tv_distance_discrete(empirical, reference)
-    details = (
-        f"  empirical: {common.long_to_short_pmf(empirical)}\n"
-        f"  reference: {common.long_to_short_pmf(reference)}"
-    )
+    details = f"  empirical: {empirical}\n  reference: {reference}"
     return tv, details
