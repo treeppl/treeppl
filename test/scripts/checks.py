@@ -28,11 +28,3 @@ def check_discrete_analytical(model_dir: Path, output: dict) -> tuple[str, float
         f"  reference: {common.long_to_short_pmf(reference)}"
     )
     return tv, details
-
-
-def check_discrete_sampled(model_dir: Path, output: dict) -> tuple[str, float, str]:
-    pass
-
-
-def check_continuous_sampled(model_dir: Path, output: dict) -> tuple[str, float, str]:
-    pass

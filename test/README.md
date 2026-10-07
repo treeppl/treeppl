@@ -62,9 +62,3 @@ It should contain the top-level keys:
   - **discrete**, `analytical_pmf.json`: Supply a JSON file `analytical_pmf.json` with a dictionary containing two entries: `states` and `probs`, where `states` holds a list of integers and `probs` the corresponding probabilities. We expect both lists to be ordered in the same way. States not listed are assumed to have probability zero.
   - **continuous**, `analytical_cdf.py`: Supply a Python script `analytical_cdf.py` with a single function `def analytical_cdf(x: np.ndarray) -> np.ndarray` that outputs the CDF evaluated at each state in `x`. The function must be vectorized, e.g. by using `scipy.stats`.
 
-  References based on samples rather than analytical expressions are not yet supported.
-
-### Shared configuration
-The file `test/config.yaml` holds settings shared by all tests.
-In particular, `sample-size-flag` maps each `tpplc` method to the runtime flag that sets the sample size (`--iterations` or `--particles`).
-If a test uses a method that is not listed there, add it.
