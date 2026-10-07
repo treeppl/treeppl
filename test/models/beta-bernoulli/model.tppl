@@ -1,0 +1,12 @@
+// A beta-Bernoulli model -- a simple continuous parameter model
+// with known analytical reference distribution.
+
+
+model function betaBernoulli() => Real {
+  assume p ~ Beta(1., 1.);
+  let data = [true, false, true];
+  for d in data {
+    observe d ~ Bernoulli(p);
+  }
+  return p;
+}

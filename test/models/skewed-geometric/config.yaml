@@ -1,0 +1,15 @@
+discrete: true
+inference:
+  is:
+    method: is
+    sample-size: 100000
+    threshold: 0.01
+    seed: 1
+    replicates: 4
+  mcmc-align-kernel:
+    method: mcmc
+    additional-flags: "--align --kernel"
+    sample-size: 1000000
+    threshold: 0.01
+    seed: 1
+    replicates: 4

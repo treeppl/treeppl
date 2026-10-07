@@ -45,8 +45,9 @@ misc/test: misc/test-spec.mc
 	mi compile $< --output $@
 
 .PHONY: test
-test: misc/test
+test: build/${tppl_name} misc/test
 	+misc/test
+	$(MAKE) -C test/ TPPLC=$(current_dir)build/${tppl_name}
 
 clean:
 	rm -f src/treeppl-ast.mc
