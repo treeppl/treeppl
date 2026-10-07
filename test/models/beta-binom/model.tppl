@@ -1,0 +1,10 @@
+// Regression test for https://github.com/miking-lang/miking-dppl/issues/249
+
+model function betaBinom() => Real {
+  assume p ~ Beta(1., 1.);
+  let data = [true, false, true];
+  for d in data {
+    observe d ~ Bernoulli(p);
+  }
+  return p;
+}

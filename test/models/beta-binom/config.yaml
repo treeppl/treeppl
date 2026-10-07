@@ -1,0 +1,28 @@
+discrete: false
+inference:
+  mcmc:
+    method: mcmc
+    sample-size: 100000
+    threshold: 0.01
+    seed: 1
+    replicates: 4
+  mcmc-aligned-cps:
+    method: mcmc
+    additional-flags: "--align --cps full"
+    sample-size: 100000
+    threshold: 0.01
+    seed: 1
+    replicates: 4
+  mcmc-graph:
+    method: mcmc-graph
+    sample-size: 100000
+    threshold: 0.01
+    seed: 1
+    replicates: 4
+  is:
+    method: is
+    additional-flags: ""
+    sample-size: 1000000
+    threshold: 0.01
+    seed: 1
+    replicates: 4

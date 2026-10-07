@@ -1,0 +1,16 @@
+model function wgeom() => Int {
+  let q = 3. / 4.;
+  let p = 1. / 2.;
+  assume flip ~ Bernoulli(q) drift Bernoulli(p);
+  return manyCoins(p, q, flip);
+}
+
+function manyCoins(p : Real, q : Real, flip : Bool) => Int {
+  if flip {
+    weight p / q;
+    assume flip ~ Bernoulli(q) drift Bernoulli(p);
+    return 1 + manyCoins(p, q, flip);
+  } else {
+    return 1;
+  }
+}
