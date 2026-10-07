@@ -1,3 +1,10 @@
+// A reweighted geometric distribution written recursively:
+// We generate recursively a sample from Geom(q), and accumulate
+// likelihood ratio weights such that the normalized sample
+// is from Geom(p)
+//
+// This tests whether inference works for recursive models
+
 model function wgeom() => Int {
   let q = 3. / 4.;
   let p = 1. / 2.;

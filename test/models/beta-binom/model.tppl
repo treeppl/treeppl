@@ -1,4 +1,6 @@
-// Regression test for https://github.com/miking-lang/miking-dppl/issues/249
+// A beta-binomial model -- a simple continuous parameter model
+// with known analytical reference distribution.
+
 
 model function betaBinom() => Real {
   assume p ~ Beta(1., 1.);
