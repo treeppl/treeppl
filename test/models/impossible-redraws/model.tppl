@@ -1,0 +1,16 @@
+// Regression test for https://github.com/miking-lang/miking-dppl/issues/249
+
+model function mwe() => Int {
+  assume a ~ Bernoulli(0.5);
+  let bProb = getProb(a);
+  assume b ~ Bernoulli(bProb);
+  return bool2int(a) + 2 * bool2int(b);
+}
+
+function getProb(a : Bool) => Real {
+  if a {
+    return 0.5;
+  } else {
+    return 1.0;
+  }
+}
