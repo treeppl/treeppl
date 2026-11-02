@@ -36,6 +36,17 @@ function sbool2real(v : Bool[]) => Real[] {
   return sapply(v, bool2real);
 }
 
+function bool2int(v : Bool) => Int {
+  if (v) {
+    return 1;
+  }
+  return 0;
+}
+
+function sbool2int(v : Bool[]) => Int[] {
+  return sapply(v, bool2int);
+}
+
 function bool2string(v: Bool) => String {
   if (v) {
      return "true";

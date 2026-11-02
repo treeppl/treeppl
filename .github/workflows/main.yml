@@ -31,6 +31,12 @@ jobs:
           path: 'miking-dppl'
           # Clones the Miking DPPL repository's develop branch into 'miking-dppl' directory
 
+      - name: Setup uv for inference testing
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 #  v10.1.0
+        with:
+          version: "0.12.3"
+          enable-cache: true
+
       - name: Setup OCaml and OPAM for Miking
         uses: ocaml/setup-ocaml@v3
         with:
@@ -82,6 +88,6 @@ jobs:
       - name: Run TreePPL tests
         run: |
           cd treeppl
-          make test
+          make -j$(nproc) test
 
   # Assuming similar setup is needed for macOS, replicate the steps with necessary adjustments for macOS environment
