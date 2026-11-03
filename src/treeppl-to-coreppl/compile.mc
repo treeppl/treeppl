@@ -22,6 +22,8 @@ include "mexpr/generate-utest.mc"
 include "mexpr/uncurried.mc"
 include "ocaml/mcore.mc"
 include "ocaml/compile.mc"
+include "ocaml/external-includes.mc"
+include "mi-stats::stats.ext-ocaml.mc"
 
 include "sys.mc"
 
@@ -1262,7 +1264,9 @@ let compileTpplToExecutable = lam frontend. lam transformations. lam mkInference
     sysChmodWriteAccessFile frontend.output;
     res.cleanup ();
     frontend.output in
-  let hooks = mkEmptyHooks ocamlCompile in
+  let hooks =
+    { mkEmptyHooks ocamlCompile with
+      externalImpls = mapUnion globalExternalImplsMap miStatsExtMap } in
   let ast = deadcodeElimination ast in
   endPhaseStatsExpr log "deadcode-elimination" ast;
   let ast = lowerAll ast in
