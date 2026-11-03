@@ -1,4 +1,4 @@
-# Miking/Miking-Dppl/TreePPL
+# TreePPL (and meaningful change from dependencies)
 
 ## [Unreleased]
 
