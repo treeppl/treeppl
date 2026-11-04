@@ -4,5 +4,8 @@ out.mc
 tool
 build/
 
+#Auto generate
+misc/other-repositories/
+
 .envrc
 result
