@@ -47,7 +47,7 @@ function tree2string(tree: QTTree) => String {
 
 function gammaZeroMix(rho: Bool, a: Real, b: Real) => Real {
   if (rho) {
-    assume x ~ Gamma(a, b);
+    assume x ~ Gamma(a, 1.0/b);
     return x;
   }
   return 0.0;
@@ -120,9 +120,9 @@ model function qtbirds( tree: QTTree
   // printLn(real2string(nuShape));
   // printLn(real2string(nuScale));
 
-  assume lam ~ Gamma(lamShape, lamScale);
-  assume mu ~ Gamma(muShape, muScale);
-  assume nu ~ Gamma(nuShape, nuScale); // comment this ...
+  assume lam ~ Gamma(lamShape, 1.0/lamScale);
+  assume mu ~ Gamma(muShape, 1.0/muScale);
+  assume nu ~ Gamma(nuShape, 1.0/nuScale); // comment this ...
   let p = 0.0;                         // and this and ...
 
   // and uncomment the following lines, if you want nu to be a mix between

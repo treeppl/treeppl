@@ -142,9 +142,9 @@ model function distributions() => TestDistributions {
   let logScoreE = logPdf(1.0, myExpoP);
 
   // Gamma
-  assume aG ~ Gamma(2.0, 3.0);
+  assume aG ~ Gamma(2.0, 1.0/3.0);
 
-  let myGammaP = Gamma(2.0, 3.0);
+  let myGammaP = Gamma(2.0, 1.0/3.0);
   let someG = repDraw(10, myGammaP);
   let scoreG = pdf(1.5, myGammaP);
   let logScoreG = logPdf(1.5, myGammaP);

@@ -60,7 +60,7 @@ model function crbd(tree: Tree, rho: Real) => Real[] {
     let expectedTotalLeaves = numLeaves / rho;
     let meanLambdaPrior = 2.0 * log(expectedTotalLeaves) / tree.age;
 
-    assume lambda ~ Gamma(1.0, meanLambdaPrior);
+    assume lambda ~ Gamma(1.0, 1.0/meanLambdaPrior);
     assume epsilon ~ Uniform(0.0,1.0);
     let mu = epsilon*lambda;
 

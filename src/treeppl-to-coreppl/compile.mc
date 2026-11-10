@@ -630,7 +630,7 @@ lang TreePPLCompile
     TmDist {
       dist = DGamma {
         k = compileExprTppl context d.shape,
-        theta = compileExprTppl context d.scale
+        rate = compileExprTppl context d.rate
       },
       ty = tyunknown_,
       info = d.info

@@ -112,8 +112,8 @@ function negbinomialLogPMF(x: Int, r: Real, p: Real) => Real {
 
 function negbinomialRv(r: Real, p: Real) => Int {
 
-    let theta = (1.0-p)/p;
-    assume lambda ~ Gamma(r, theta);
+    let rate = p/(1.0-p);
+    assume lambda ~ Gamma(r, rate);
     assume x ~ Poisson(lambda);
 
     return x;
@@ -149,7 +149,7 @@ function drawNormalInverseGammaNormal(nig: NormalInverseGammaDist) => NormalInve
     let k = 2.0*nig.alpha;
     let v = 2.0*nig.beta*(1.0 + (1.0/nig.lambda));
     assume u1 ~ Normal(0.0, sqrt(v/k));
-    assume u2 ~ Gamma(k/2.0,2.0);   // Chi-square is the same as this Gamma distribution, also works for noninteger k
+    assume u2 ~ Gamma(k/2.0,0.5);   // Chi-square is the same as this Gamma distribution, also works for noninteger k
 
     let value = nig.mu0 + u1/sqrt(u2/k);
     let z = value - nig.mu0;
