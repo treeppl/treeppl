@@ -209,7 +209,7 @@ precedence {
 
 -- Built-in distro keywords
 prod Bernoulli: ExprTppl = "Bernoulli" "(" prob:ExprTppl ")"
-prod Beta: ExprTppl = "Beta" "(" a:ExprTppl "," b:ExprTppl ")"
+prod Beta: ExprTppl = "Beta" "(" alpha:ExprTppl "," beta:ExprTppl ")"
 prod Binomial: ExprTppl = "Binomial" "(" n:ExprTppl "," prob:ExprTppl ")"
 prod Categorical: ExprTppl = "Categorical" "(" probs:ExprTppl ")"
 prod Chi2: ExprTppl = "Chi2" "(" df:ExprTppl ")"

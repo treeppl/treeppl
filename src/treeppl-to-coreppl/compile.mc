@@ -564,8 +564,8 @@ lang TreePPLCompile
   | BetaExprTppl d ->
     TmDist {
       dist = DBeta {
-        a = compileExprTppl context d.a,
-        b = compileExprTppl context d.b
+        alpha = compileExprTppl context d.alpha,
+        beta = compileExprTppl context d.beta
       },
       ty = tyunknown_,
       info = d.info
