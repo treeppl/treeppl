@@ -158,7 +158,7 @@ function drawNormalInverseGammaNormal(nig: NormalInverseGammaDist) => NormalInve
 //    (mathematically identical, is it less numerically stable or slower?)
 //    let k = 2.0*nig.alpha;
 //    assume u1 ~ Normal(0,1);
-//    assume u2 ~ Chi2(round(k));
+//    assume u2 ~ ChiSquare(int2real(round(k)));
 //    let value = nig.mu0 + u1*sqrt(k/u2)*sqrt(nig.beta*(1.0+1.0/nig.lambda)/nig.alpha));
 
     let nig = NormalInverseGammaDist {

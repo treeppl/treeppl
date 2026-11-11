@@ -590,10 +590,10 @@ lang TreePPLCompile
       info = d.info
   }
 
-  | Chi2ExprTppl d ->
+  | ChiSquareExprTppl d ->
     TmDist {
-      dist = DChi2 {
-        df = compileExprTppl context d.df
+      dist = DChiSquare {
+        nu = compileExprTppl context d.nu
       },
       ty = tyunknown_,
       info = d.info

@@ -24,10 +24,10 @@ type TestDistributions = TestDistributions {
   scoreCategorical: Real,
   logScoreCategorical: Real,
 
-  aChi2: Real,
-  someChi2: Real[],
-  scoreChi2: Real,
-  logScoreChi2: Real,
+  aChiSquare: Real,
+  someChiSquare: Real[],
+  scoreChiSquare: Real,
+  logScoreChiSquare: Real,
 
   aDirichlet: Real[],
   someDirichlet: Real[][],
@@ -116,13 +116,13 @@ model function distributions() => TestDistributions {
   let scoreCat = pdf(1, myCatP);
   let logScoreCat = logPdf(1, myCatP);
 
-  // Chi2
-  assume aChi2 ~ Chi2(2);
+  // ChiSquare
+  assume aChiSquare ~ ChiSquare(2.0);
 
-  let myChi2P = Chi2(2);
-  let someChi2 = repDraw(10, myChi2P);
-  let scoreChi2 = pdf(1.0, myChi2P);
-  let logScoreChi2 = logPdf(1.0, myChi2P);
+  let myChiSquareP = ChiSquare(2.0);
+  let someChiSquare = repDraw(10, myChiSquareP);
+  let scoreChiSquare = pdf(1.0, myChiSquareP);
+  let logScoreChiSquare = logPdf(1.0, myChiSquareP);
 
    // Dirichlet
   let dirAlphas = [2.0, 3.0, 5.0];
@@ -227,10 +227,10 @@ model function distributions() => TestDistributions {
     scoreCategorical = scoreCat,
     logScoreCategorical = logScoreCat,
 
-    aChi2 = aChi2,
-    someChi2 = someChi2,
-    scoreChi2 = scoreChi2,
-    logScoreChi2 = logScoreChi2,
+    aChiSquare = aChiSquare,
+    someChiSquare = someChiSquare,
+    scoreChiSquare = scoreChiSquare,
+    logScoreChiSquare = logScoreChiSquare,
 
     aDirichlet = aDir,
     someDirichlet = someDir,
