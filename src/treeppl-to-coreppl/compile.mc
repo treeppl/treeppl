@@ -575,7 +575,7 @@ lang TreePPLCompile
     TmDist {
       dist = DBinomial {
         n = compileExprTppl context d.n,
-        p = compileExprTppl context d.prob
+        theta = compileExprTppl context d.prob
       },
       ty = tyunknown_,
       info = d.info
