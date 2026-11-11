@@ -221,7 +221,7 @@ prod Normal: ExprTppl = "Normal" "(" mean:ExprTppl "," dev:ExprTppl ")"
 prod Geometric: ExprTppl = "Geometric" "("prob:ExprTppl ")"
 prod Multinomial: ExprTppl = "Multinomial" "(" n:ExprTppl "," probs:ExprTppl ")"
 prod Poisson: ExprTppl = "Poisson" "(" lambda:ExprTppl ")"
-prod Uniform: ExprTppl = "Uniform" "(" a:ExprTppl "," b:ExprTppl ")"
+prod Uniform: ExprTppl = "Uniform" "(" alpha:ExprTppl "," beta:ExprTppl ")"
 prod DiscreteRange: ExprTppl = "DiscreteRange" "(" lower:ExprTppl "," upper:ExprTppl ")"
 prod Reciprocal: ExprTppl = "Reciprocal" "(" a:ExprTppl "," b:ExprTppl ")"
 
