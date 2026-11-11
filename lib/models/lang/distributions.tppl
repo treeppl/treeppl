@@ -69,10 +69,10 @@ type TestDistributions = TestDistributions {
   scoreUniform: Real,
   logScoreUniform: Real,
 
-  aUniformDiscrete: Int,
-  someUniformDiscrete: Int[],
-  scoreUniformDiscrete: Real,
-  logScoreUniformDiscrete: Real,
+  aDiscreteRange: Int,
+  someDiscreteRange: Int[],
+  scoreDiscreteRange: Real,
+  logScoreDiscreteRange: Real,
 
   aReciprocal: Real,
   someReciprocal: Real[],
@@ -190,10 +190,10 @@ model function distributions() => TestDistributions {
   let scoreU = pdf(-5., myUniP);
   let logScoreU = logPdf(-5., myUniP);
 
-  // UniformDiscrete
-  assume aUDis ~ UniformDiscrete(0, 2);
+  // DiscreteRange
+  assume aUDis ~ DiscreteRange(0, 2);
 
-  let myUniDisP = UniformDiscrete(0, 2);
+  let myUniDisP = DiscreteRange(0, 2);
   let someUDis = repDraw(10, myUniDisP);
   let scoreUDis = pdf(1, myUniDisP);
   let logScoreUDis = logPdf(1, myUniDisP);
@@ -272,10 +272,10 @@ model function distributions() => TestDistributions {
     scoreUniform = scoreU,
     logScoreUniform = logScoreU,
 
-    aUniformDiscrete = aUDis,
-    someUniformDiscrete = someUDis,
-    scoreUniformDiscrete = scoreUDis,
-    logScoreUniformDiscrete = logScoreUDis,
+    aDiscreteRange = aUDis,
+    someDiscreteRange = someUDis,
+    scoreDiscreteRange = scoreUDis,
+    logScoreDiscreteRange = logScoreUDis,
 
     aReciprocal = aR,
     someReciprocal = someR,

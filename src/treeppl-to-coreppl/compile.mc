@@ -684,11 +684,11 @@ lang TreePPLCompile
       info = d.info
   }
 
-  | UniformDiscreteExprTppl d ->
+  | DiscreteRangeExprTppl d ->
     TmDist {
-      dist = DUniformDiscrete {
-        a = compileExprTppl context d.a,
-        b = compileExprTppl context d.b
+      dist = DDiscreteRange {
+        lower = compileExprTppl context d.lower,
+        upper = compileExprTppl context d.upper
       },
       ty = tyunknown_,
       info = d.info
