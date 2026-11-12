@@ -48,7 +48,7 @@ let earlyStop = _earlyStop true
 
 let _maxInitReSamp : Int -> OptParser Int = lam default.
   let opt = optArg
-    { optArgDefInt with long = "mcmc-max-init-rs"
+    { optArgDefInt with long = "max-init-rs"
     , description = concat "The maximum number of iterations for the rejection sampling to find a first sample with positive probability for the MCMC chain. Returns an error if the limit is reached. Default: " (int2string default)
     , category = catRun
     } in
