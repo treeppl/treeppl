@@ -53,7 +53,7 @@ let _maxInitReSamp : Int -> OptParser Int = lam default.
     , category = catRun
     } in
   optOr opt (optPure default)
-let maxInitReSamp = _maxInitReSamp 1000
+let maxInitReSamp = _maxInitReSamp 1500
 
 let _resampleFrac : Float -> OptParser Float = lam default.
   let opt = optArg
