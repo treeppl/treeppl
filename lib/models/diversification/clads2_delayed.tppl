@@ -56,7 +56,7 @@ function numTrialsUntilMRCADetection(g: Globals, d: Dists, tRoot: Real, mMax: In
 // Forward simulation determining whether a tree survives and is detected (sampled)
 function isDetected(g: Globals, d: Dists, multiplier: Real, tBegin: Real) => DistsBool {
 
-    let ret1 = drawNormalInverseGammaGaussian(d.nigdist);
+    let ret1 = drawNormalInverseGammaNormal(d.nigdist);
     let multiplier = exp(ret1.rv) * multiplier;
     if (multiplier > 1e4) {
         return DistsBool { d=Dists{nigdist=ret1.nigdist, gdist=d.gdist}, detected=true };
@@ -99,7 +99,7 @@ function isDetected(g: Globals, d: Dists, multiplier: Real, tBegin: Real) => Dis
 // Simulate hidden speciation along an observed branch
 function simHiddenSpeciation(g: Globals, d: Dists, multiplier: Real, startTime: Real, endTime: Real) => Params {
 
-    let ret1 = drawNormalInverseGammaGaussian(d.nigdist);
+    let ret1 = drawNormalInverseGammaNormal(d.nigdist);
     let multiplier = exp(ret1.rv) * multiplier;
     if (multiplier > 1e4) {
         weight 0.0;
