@@ -141,7 +141,7 @@ let mcmcLightweightOptions : OptParser MkInferMethod =
     lam pigeonsInfo.
     lam debugIterations. lam samplingPeriod. lam incrementalPrinting. lam iterations. lam globalProb : Float.
     lam driftKernel. lam driftScale. lam cps.
-    lam align. lam debugAlignment. lam resampleBehaviorFlag.
+    lam align. lam debugAlignment. lam resampleBehaviorFlag. lam maxInitReSamp.
     lam outputType. lam loader.
 
     match includeFileExn "." "stdlib::json.mc" loader with (jsonEnv, loader) in
@@ -303,6 +303,7 @@ let mcmcLightweightOptions : OptParser MkInferMethod =
       , temperature = mkTemp n
       , resampleBehavior = mkResampleBehavior n
       , debug = mkDebug n
+      , maxInitReSamp = int_ maxInitReSamp
       , driftKernel = driftKernel
       , driftScale = driftScale
       , cps = cps
@@ -311,11 +312,11 @@ let mcmcLightweightOptions : OptParser MkInferMethod =
       } in
     match makeOptParser loader (mapBindings fields) with (loader, optParser) in
     (loader, {mkMethod = mkMethod, optParser = optParser}) in
-  let res = optApply2
+  let res = optApply3
     (optApply5
       (optMap5 mk pigeonsOptions debugIterations samplingPeriod incrementalPrinting iterations)
       mcmcLightweightGlobalProb _driftKernel _driftScale _cps _align)
-    _debugAlignment resampleBehavior in
+    _debugAlignment resampleBehavior maxInitReSamp in
   let method = optSpecificArg
     { optExactArg "mcmc" with short = "m", long = "method"
     , description = "MCMC using the lightweight approach"
@@ -324,7 +325,7 @@ let mcmcLightweightOptions : OptParser MkInferMethod =
   optMap2 (lam. lam x. x) method res in
 
 let mcmcNaiveOptions : OptParser MkInferMethod =
-  let mk = lam iterations. lam. lam loader.
+  let mk = lam iterations. lam maxInitReSamp. lam. lam loader.
     match includeFileExn "." "treeppl::internal/runtime-flags.mc" loader with (flagEnv, loader) in
     let getOptParser : String -> Expr -> Expr = lam ident. lam default.
       app_ (nvar_ (_getVarExn ident flagEnv)) default in
@@ -335,11 +336,12 @@ let mcmcNaiveOptions : OptParser MkInferMethod =
     ( loader
     , { mkMethod = lam n. NaiveMCMC
         { iterations = recordproj_ "iterations" (nvar_ n)
+        , maxInitReSamp = int_ maxInitReSamp
         }
       , optParser = optParser
       }
     ) in
-  let res = optMap mk iterations in
+  let res = optMap2 mk iterations maxInitReSamp in
   let method = optSpecificArg
     { optExactArg "mcmc-naive" with short = "m", long = "method"
     , description = "MCMC exploring completely independent runs of the program (mainly for experiments)"
@@ -348,7 +350,7 @@ let mcmcNaiveOptions : OptParser MkInferMethod =
   optMap2 (lam. lam x. x) method res in
 
 let mcmcTraceOptions : OptParser MkInferMethod =
-  let mk = lam iterations. lam. lam loader.
+  let mk = lam iterations. lam maxInitReSamp. lam. lam loader.
     match includeFileExn "." "treeppl::internal/runtime-flags.mc" loader with (flagEnv, loader) in
     let getOptParser : String -> Expr -> Expr = lam ident. lam default.
       app_ (nvar_ (_getVarExn ident flagEnv)) default in
@@ -357,13 +359,14 @@ let mcmcTraceOptions : OptParser MkInferMethod =
       ] in
     match makeOptParser loader fields with (loader, optParser) in
     ( loader
-    , { mkMethod = lam n. NaiveMCMC
+    , { mkMethod = lam n. TraceMCMC
         { iterations = recordproj_ "iterations" (nvar_ n)
+        , maxInitReSamp = int_ maxInitReSamp
         }
       , optParser = optParser
       }
     ) in
-  let res = optMap mk iterations in
+  let res = optMap2 mk iterations maxInitReSamp in
   let method = optSpecificArg
     { optExactArg "mcmc-trace" with short = "m", long = "method"
     , description = "MCMC running complete programs with stored traces, changing one assume at a time (mainly for experiments)"
@@ -497,7 +500,7 @@ let pmcmcPimhOptions : OptParser MkInferMethod =
   optMap2 (lam. lam x. x) method res in
 
 let graphMcmcOptions : OptParser MkInferMethod =
-  let mk = lam iterations. lam globalProb. lam debugIdealized. lam debugGraphJson. lam. lam loader.
+  let mk = lam iterations. lam globalProb. lam maxInitReSamp. lam debugIdealized. lam debugGraphJson. lam. lam loader.
     match includeFileExn "." "treeppl::internal/runtime-flags.mc" loader with (flagEnv, loader) in
     match includeFileExn "." "coreppl::coreppl-to-mexpr/pval-graph/config.mc" loader with (pvalConfigEnv, loader) in
     let getOptParser : String -> Expr -> Expr = lam ident. lam default.
@@ -505,6 +508,7 @@ let graphMcmcOptions : OptParser MkInferMethod =
     let fields =
       [ ("iterations", getOptParser "_iterations" (int_ iterations))
       , ("globalProb", getOptParser "_mcmcLightweightGlobalProb" (float_ globalProb))
+      , ("maxInitReSamp", getOptParser "_maxInitReSamp" (int_ maxInitReSamp))
       ] in
     match makeOptParser loader fields with (loader, optParser) in
     ( loader
@@ -513,6 +517,7 @@ let graphMcmcOptions : OptParser MkInferMethod =
           (autoty_record_
             [ ("globalProb", recordproj_ "globalProb" (nvar_ n))
             , ("iterations", recordproj_ "iterations" (nvar_ n))
+            , ("maxInitReSamp", recordproj_ "maxInitReSamp" (nvar_ n))
             ])
         , debugIdealized = optionGetOr "" debugIdealized
         , debugOutput = optionGetOr "" debugGraphJson
@@ -520,7 +525,7 @@ let graphMcmcOptions : OptParser MkInferMethod =
       , optParser = optParser
       }
     ) in
-  let res = optMap4 mk iterations mcmcLightweightGlobalProb _debugIdealized _debugGraphJson in
+  let res = optMap5 mk iterations mcmcLightweightGlobalProb maxInitReSamp _debugIdealized _debugGraphJson in
   let method = optSpecificArg
     { optExactArg "mcmc-graph" with short = "m", long = "method"
     , description = "MCMC using the experimental graph representation"
