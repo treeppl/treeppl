@@ -23,14 +23,14 @@ model function poly(data: Real[][]) => Int {
 
     // Sample the coefficients from n + 1 (we need one coeff for const poly)
     let coeffs = repApply(n + 1, function(i : Int) => Real {
-        assume g ~ Gaussian(0.0, 1.0);
+        assume g ~ Normal(0.0, 1.0);
         return g;
     });
 
     // likelihood
     sapply(data, function(datum: Real[]) {
         let predictedY = polynomialFunction(coeffs, datum[1]);
-        observe datum[2] ~ Gaussian(predictedY, sigma);
+        observe datum[2] ~ Normal(predictedY, sigma);
     });
 
     return n;

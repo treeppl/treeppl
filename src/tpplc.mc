@@ -261,7 +261,7 @@ let mcmcLightweightOptions : OptParser MkInferMethod =
                 ])
               (utuple_
                 [ create_ (var_ "length") (ulam_ "" true_)
-                , assume_ (uniformDiscrete_ (int_ 0) (subi_ (var_ "length") (int_ 1)))
+                , assume_ (discreteRange_ (int_ 0) (subi_ (var_ "length") (int_ 1)))
                 ])
             ]))
         )
