@@ -53,7 +53,7 @@ type NormalInverseGammaDist = NormalInverseGammaDist {
     beta   : Real
 }
 
-type NormalInverseGammaGaussianDraw = NormalInverseGammaGaussianDraw {
+type NormalInverseGammaNormalDraw = NormalInverseGammaNormalDraw {
     nigdist : NormalInverseGammaDist,
     rv      : Real
 }
@@ -144,11 +144,11 @@ function drawGammaPoisson(gdist: GammaDist, multiplier: Real) => GammaPoissonDra
     };
 }
 
-function drawNormalInverseGammaGaussian(nig: NormalInverseGammaDist) => NormalInverseGammaGaussianDraw {
+function drawNormalInverseGammaNormal(nig: NormalInverseGammaDist) => NormalInverseGammaNormalDraw {
 
     let k = 2.0*nig.alpha;
     let v = 2.0*nig.beta*(1.0 + (1.0/nig.lambda));
-    assume u1 ~ Gaussian(0.0, sqrt(v/k));
+    assume u1 ~ Normal(0.0, sqrt(v/k));
     assume u2 ~ Gamma(k/2.0,2.0);   // Chi-square is the same as this Gamma distribution, also works for noninteger k
 
     let value = nig.mu0 + u1/sqrt(u2/k);
@@ -157,7 +157,7 @@ function drawNormalInverseGammaGaussian(nig: NormalInverseGammaDist) => NormalIn
 //    Alternative derivation, from Student t to the distribution we want
 //    (mathematically identical, is it less numerically stable or slower?)
 //    let k = 2.0*nig.alpha;
-//    assume u1 ~ Gaussian(0,1);
+//    assume u1 ~ Normal(0,1);
 //    assume u2 ~ Chi2(round(k));
 //    let value = nig.mu0 + u1*sqrt(k/u2)*sqrt(nig.beta*(1.0+1.0/nig.lambda)/nig.alpha));
 
@@ -168,5 +168,5 @@ function drawNormalInverseGammaGaussian(nig: NormalInverseGammaDist) => NormalIn
         lambda = 1.0 + nig.lambda
     };
 
-    return NormalInverseGammaGaussianDraw{ rv=value, nigdist=nig };
+    return NormalInverseGammaNormalDraw{ rv=value, nigdist=nig };
 }

@@ -44,10 +44,10 @@ type TestDistributions = TestDistributions {
   scoreGamma: Real,
   logScoreGamma: Real,
 
-  aGaussian: Real,
-  someGaussian: Real[],
-  scoreGaussian: Real,
-  logScoreGaussian: Real,
+  aNormal: Real,
+  someNormal: Real[],
+  scoreNormal: Real,
+  logScoreNormal: Real,
 
   aGeometric: Int,
   someGeometric: Int[],
@@ -149,10 +149,10 @@ model function distributions() => TestDistributions {
   let scoreG = pdf(1.5, myGammaP);
   let logScoreG = logPdf(1.5, myGammaP);
 
-  // Gaussian
-  assume aG ~ Gaussian(0.0, 1.0);
+  // Normal
+  assume aG ~ Normal(0.0, 1.0);
 
-  let myGaussP = Gaussian(0.0, 1.0);
+  let myGaussP = Normal(0.0, 1.0);
   let someG = repDraw(10, myGaussP);
   let scoreG = pdf(-1.5, myGaussP);
   let logScoreG = logPdf(-1.5, myGaussP);
@@ -247,10 +247,10 @@ model function distributions() => TestDistributions {
     scoreGamma = scoreG,
     logScoreGamma = logScoreG,
 
-    aGaussian = aG,
-    someGaussian = someG,
-    scoreGaussian = scoreG,
-    logScoreGaussian = logScoreG,
+    aNormal = aG,
+    someNormal = someG,
+    scoreNormal = scoreG,
+    logScoreNormal = logScoreG,
 
     aGeometric = aGeo,
     someGeometric = someGeo,
