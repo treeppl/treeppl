@@ -1,0 +1,27 @@
+import "../../container-types.tppl"
+
+import "sample.tppl"
+import "log-pdf.tppl"
+import "../forward-sim/log-pdf.tppl"
+
+function ctmcForwardSimTruncated(
+  startState: Int,
+  finalState: Int,
+  startAge: Real,
+  finalAge: Real,
+  host: Int,
+  nodeLabel: Int,
+  embeddedQMatrix: EmbeddedMarkovChainMatrix,
+  matExpCache: Matrix[Real] // Not used here
+) => BridgeWithDensity {
+  let bridge = forwardSimBridgeSample(startState, finalState, startAge, finalAge, host, nodeLabel, embeddedQMatrix);
+  let logPdf = ctmcForwardLogPdf(
+    startState,
+    finalState,
+    startAge,
+    finalAge,
+    bridge,
+    embeddedQMatrix
+  );
+  return BridgeWithDensity { bridge = bridge, logPdf = logPdf };
+}

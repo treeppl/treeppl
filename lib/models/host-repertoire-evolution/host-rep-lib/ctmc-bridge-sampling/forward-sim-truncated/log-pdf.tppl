@@ -1,0 +1,6 @@
+import "../../container-types.tppl"
+
+// Log density of Exponential(rate) truncated to [0, upper], at t.
+function logPdfTruncExp(t: Real, rate: Real, upper: Real) => Real {
+  return log(rate) - rate * t - log(1.0 - exp(-rate * upper));
+}

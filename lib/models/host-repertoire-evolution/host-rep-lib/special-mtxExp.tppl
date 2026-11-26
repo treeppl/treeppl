@@ -1,0 +1,61 @@
+import "container-types.tppl"
+
+// Somewhat hacky implementation of exmp1(x) = exp(x) - 1 via truncated tailor series
+// but at least more accurate than the plain exp(x) - 1 for small values
+function expm1(x: Real) => Real {
+  if x < 1e-5 && x > -1e-5 {
+    return x * (1.0 + (x / 2.0) * (1.0 + (x / 3.0) * (1.0 + x / 4.0)));
+  } else {
+    return exp(x) - 1.0;
+  }
+}
+
+// Closed-form exp(Qt) for the indepedence model
+function independenceMtxExp(t: Real, params: GlobalParams) => Matrix[Real] {
+  return specialMtxExp(
+    params.lambda[1],
+    params.lambda[2],
+    params.lambda[3],
+    params.lambda[4],
+    params.mu,
+    t
+  );
+}
+
+function specialMtxExp(
+  lambda01: Real,
+  lambda10: Real,
+  lambda12: Real,
+  lambda21: Real,
+  mu: Real,
+  t: Real
+) => Matrix[Real] {
+  let mut = mu * t;
+  // The following (opaque) lines solves the characteristic polynomial for the eigenvalues
+  // of the unscaled rate matrix. Note that 0.0 is always an eigenvalue; xi_1 and xi_2 are 
+  // the remaining ones
+  let s = lambda01 + lambda10 + lambda12 + lambda21;
+  let p = lambda01 * lambda12 + lambda01 * lambda21 + lambda10 * lambda21;
+  let discriminant = s * s - 4.0 * p;
+  let sdisc = sqrt(discriminant);
+  let xi_1 = (-s + sdisc) / 2.0;
+  let xi_2 = (-s - sdisc) / 2.0;
+
+  // The matrix exponential is formed by summing over an identity matrix and
+  // two "basis" matrices corresponding to an outer product of left and
+  // right eigenvectors
+  let basis = function(xi_k: Real, xi_l: Real) => Matrix[Real] {
+    let num = 1.0 / (xi_k * (xi_k - xi_l));
+    return mtxSclrMul(num, mtxCreate(3, 3, [
+          -lambda01 * (xi_k + lambda12 + lambda21),      lambda01 * (xi_k + lambda21),          lambda01 * lambda12,
+           lambda10 * (xi_k + lambda21),          lambda01 * lambda21 - p - xi_k * (lambda10 + lambda12), lambda12 * (xi_k + lambda01),
+           lambda10 * lambda21,                   lambda21 * (xi_k + lambda01),          -lambda21 * (xi_k + lambda01 + lambda10)
+    ]));
+  };
+  // Compute the final expression; I + B_1 (exp(mu * t * xi_1) - 1) + B_2 (exp(mu * t * xi_2) - 1)
+  let identity = mtxCreateId(3);
+  let phi_1 = mtxSclrMul(expm1(mut * xi_1), basis(xi_1, xi_2));
+  let phi_2 = mtxSclrMul(expm1(mut * xi_2), basis(xi_2, xi_1));
+  return mtxAdd(mtxAdd(identity, phi_1), phi_2);
+}
+

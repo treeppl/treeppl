@@ -1,11 +1,35 @@
 import "container-types.tppl"
-import "lib.tppl"
 
-function rateMatrixToEmbeddedMarkovChain(
-  qMatrix: Matrix[Real]
-) => EmbeddedMarkovChainMatrix {
-  // Construct a sequence representations of the qMatrix which we can later
-  // use for sampling from the embedded Markov Chain
+function normalizeHostMetric(hostMetric: Real[][]) => Real[][] {
+  // Divide the metric by the mean distance
+  let summedPairWiseDists = seqSumReal(paste0(hostMetric));
+  let n = length(hostMetric);
+  let meanDist = summedPairWiseDists / Real(n * (n - 1));
+  return sapply(hostMetric,
+    function(s : Real[]) => Real[] {
+      return sapply(s, function(e: Real) => Real {
+        return e / meanDist;
+      });
+    }
+  );
+}
+
+function rateMatrixFromParams(params: GlobalParams) => Matrix[Real] {
+  let lambda01 = params.lambda[1];
+  let lambda10 = params.lambda[2];
+  let lambda12 = params.lambda[3];
+  let lambda21 = params.lambda[4];
+  let rate1    = lambda10 + lambda12;
+  let r = mtxCreate(3, 3,
+    [-lambda01, lambda01,       0.0,
+      lambda10,   -rate1,  lambda12,
+           0.0, lambda21, -lambda21]
+  );
+  return mtxSclrMul(params.mu, r);
+}
+
+function embeddedMarkovChainFromParams(params: GlobalParams) => EmbeddedMarkovChainMatrix {
+  let qMatrix = rateMatrixFromParams(params);
   let q1 = -mtxGet(1, 1, qMatrix);
   let q2 = -mtxGet(2, 2, qMatrix);
   let q3 = -mtxGet(3, 3, qMatrix);
@@ -16,15 +40,28 @@ function rateMatrixToEmbeddedMarkovChain(
       [mtxGet(2, 1, qMatrix) / q2, 0.0, mtxGet(2, 3, qMatrix) / q2],
       [0.0, 1.0, 0.0]
     ],
-    mat = qMatrix
+    qMatrix = qMatrix,
+    params = params
   };
 }
 
-function is2(x: Int) => Bool {
-  return x == 2;
+// NOTE(ErikDanielsson, 22-01-2026): Constructs a matrix from a nested list.
+// Does not verify non-jaggedness and requires the outer list to be nonempty
+function nestSeqToMtx(ns : Real[][]) => Matrix[Real] {
+  let n = length(ns); 
+  let m = length(ns[1]);
+  return mtxCreate(n, m, paste0(ns));
 }
 
+function is2(x: Int) => Bool { return x == 2; }
+
 function compAge(left: Event, right: Event) => Int {
+  if (right.eventTime != right.eventTime) {
+    return -1;
+  }
+  if (left.eventTime != left.eventTime) {
+    return 1;
+  }
   if (right.eventTime >= left.eventTime) {
     return 1;
   } else {
@@ -32,49 +69,16 @@ function compAge(left: Event, right: Event) => Int {
   }
 }
 
-function ones(nOnes: Int) => Real[] {
-  if nOnes > 0 {
-    return cons(
-      1., ones(nOnes - 1)
-    );
-  } else {
-    return [];
-  }
+function isValidRep(r: Int[]) => Bool {
+  return any(function(x: Int) => Bool { return x == 2; }, r);
 }
 
-function n2s(repertoire: Int[]) => Int {
-  return fold(function (acc: Int, h: Int) => Int {
-      if h == 2 { return acc + 1; } else { return acc; }
-    }, 0, repertoire);
-}
-
-function updateRepertoire(currRep: Int[], event: Event, nhosts: Int) => Int[] {
-  let hostIndex = event.host;
-  return paste0(
-    [
-      slice(currRep, 1, hostIndex),
-      [event.toState],
-      slice(currRep, hostIndex + 1, nhosts + 1)
-    ]
-  );
-}
-
-function sampleNextEvent(
-  currState: Int,
-  embeddedQMatrix: EmbeddedMarkovChainMatrix
-) => Int {
-  // If currState \in \{0, 2 \} then the transition is deterministic
-  // Categorical distribution seems to sometimes fail when sampling 
-  // from a trivial probability vector
-  if currState == 0 {
-    return 1;
-  } else {
-    if currState == 2 {
-      return 1;
-    } else {
-      let param = embeddedQMatrix.transitionProbs[currState + 1];
-      assume nextState ~ Categorical(param);
-      return nextState;
+// The rows of a 3x3 matrix.
+function kernelRows(kernel: Matrix[Real]) => Real[][] {
+  return sapply(
+    1 to 3,
+    function(i : Int) => Real[] {
+      return sapply(1 to 3, function(j : Int) => Real { return mtxGet(i, j, kernel); });
     }
-  }
+  );
 }

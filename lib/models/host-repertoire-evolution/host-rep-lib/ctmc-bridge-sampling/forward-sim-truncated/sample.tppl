@@ -1,0 +1,90 @@
+import "../../container-types.tppl"
+
+/* 
+ * Alternative formulation of a forward simulation of a CTMC on a fixed interval
+ *
+ * In the standard implementation we have an extra assume corresponding to the
+ * overshooting time. This assume is (correctly) included when we reweight the
+ * trace after a change to a global parameter, as it is an extra variable that is
+ * marginalized out. 
+ *
+ * This implementation avoid the extra assume by first drawing whether there is
+ * a next event and then drawing the event time from the conditional
+ * distribution (a truncated exponential distribution). This should for most
+ * datasets increase acceptance rates.
+ */
+
+type ForwardSimResult = ForwardSimResult { events : Event[], success : Bool }
+
+// An event time drawn from Exponential(rate) truncated to [0, upper].
+function sampleTruncExp(rate: Real, upper: Real) => Real {
+  assume t ~ TruncatedExponential(rate, upper);
+  return t;
+}
+
+function forwardSimBridgeSample(
+  startState: Int,
+  finalState: Int,
+  startAge: Real,
+  finalAge: Real,
+  host: Int,
+  nodeLabel: Int,
+  embeddedQMatrix: EmbeddedMarkovChainMatrix
+) => Event[] {
+  let rate = embeddedQMatrix.totalRates[startState + 1];
+  let remaining = startAge - finalAge;
+  assume hasEvent ~ Bernoulli(1.0 - exp(-rate * remaining));
+  let result = firstSegment(
+    hasEvent, startState, finalState, startAge, finalAge, host, nodeLabel, embeddedQMatrix
+  );
+  weight bool2real(result.success);
+  resample;
+  return result.events;
+}
+
+function firstSegment(
+  hasEvent: Bool,
+  startState: Int,
+  finalState: Int,
+  startAge: Real,
+  finalAge: Real,
+  host: Int,
+  nodeLabel: Int,
+  embeddedQMatrix: EmbeddedMarkovChainMatrix
+) => ForwardSimResult {
+  if hasEvent {
+    let rate = embeddedQMatrix.totalRates[startState + 1];
+    let t = sampleTruncExp(rate, startAge - finalAge);
+    return sampleEventRec(
+      startState, finalState, startAge - t, finalAge, host, nodeLabel, embeddedQMatrix
+    );
+  } else {
+    return ForwardSimResult { events = [], success = (startState == finalState) };
+  }
+}
+
+function sampleEventRec(
+  currentState: Int,
+  finalState: Int,
+  eventAge: Real,
+  finalAge: Real,
+  host: Int,
+  nodeLabel: Int,
+  embeddedQMatrix: EmbeddedMarkovChainMatrix
+) => ForwardSimResult {
+  let param = embeddedQMatrix.transitionProbs[currentState + 1];
+  assume nextState ~ Categorical(param);
+  let event = Event { eventTime = eventAge, fromState = currentState, toState = nextState, host = host };
+  let rate = embeddedQMatrix.totalRates[nextState + 1];
+  let remaining = eventAge - finalAge;
+  assume hasEvent ~ Bernoulli(1.0 - exp(-rate * remaining));
+  if hasEvent {
+    let t = sampleTruncExp(rate, remaining);
+    let rest = sampleEventRec(
+      nextState, finalState, eventAge - t, finalAge, host, nodeLabel, embeddedQMatrix
+    );
+    return ForwardSimResult { events = cons(event, rest.events), success = rest.success };
+  } else {
+    return ForwardSimResult { events = [event], success = (nextState == finalState) };
+  }
+}
