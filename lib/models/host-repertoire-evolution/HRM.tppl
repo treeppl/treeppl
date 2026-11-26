@@ -1,0 +1,203 @@
+import "host-rep-lib/container-types.tppl"
+import "host-rep-lib/helpers.tppl"
+import "host-rep-lib/belief-propagation.tppl"
+import "host-rep-lib/dist-helpers.tppl"
+import "host-rep-lib/full-model.tppl"
+import "host-rep-lib/branch-sampling.tppl"
+import "host-rep-lib/ctmc-bridge-sampling/forward-sim-truncated/interface.tppl"
+
+model function hostRepertoireModel(
+  symbiontTree: TreeLabeled,
+  interactions: Int[][],
+  hostDistances: Real[][]
+) => ReturnType {
+
+  let nHosts = length(hostDistances);
+
+  assume lambda ~ Dirichlet([1., 1., 1., 1.]);
+  assume mu ~ Exponential(10.);
+  assume beta ~ Exponential(1.);
+
+  let globalParams = GlobalParams { mu = mu, beta = beta, lambda = lambda };
+
+  // Construct an object containing the rate matrix in a suitable format for sampling
+  // from the embedded Markov chain
+  let embeddedQMatrix = embeddedMarkovChainFromParams(globalParams);
+  let modelParams = ModelParams {
+    beta = beta,
+    hostMetric = nestSeqToMtx(normalizeHostMetric(hostDistances)),
+    embeddedQMatrix = embeddedQMatrix
+  };
+
+  let postorderTree = postorderTraverse(symbiontTree, globalParams, interactions, nHosts);
+
+  // Sample the root. We assume in both the independence and full model
+  // that we have a flat prior on the root
+  let rootPrior = mtxCreate(nHosts, 3, rep(3 * nHosts, 1.));
+  let rootSamplingProb = mtxElemMul(postorderTree.outMsg, rootPrior);
+  let rootRep = suggestNodeRep(rootSamplingProb, nHosts, postorderTree.label);
+  
+  validityWeight(postorderTree.label, isValidRep(rootRep));
+  resample;
+
+  // Calculate the samplingDensity and modelDensity
+  let rootLogSamplingDensity = getRepertoireSamplingDensity(rootRep, rootSamplingProb);
+  let rootLogModelDensity = -log((3.^(Real(nHosts))) - (2.^Real(nHosts)));
+
+  // This is an aligned point so we can weight by the importance ratio
+  ratioWeight(postorderTree.label, rootLogModelDensity - rootLogSamplingDensity);
+
+  // Compute messages to pass to pass to the children of the root
+  let newMsg = observationMessage(rootRep);
+  let leftMsg = mtxMul(newMsg, postorderTree.leftKernel);
+  let rightMsg = mtxMul(newMsg, postorderTree.rightKernel);
+
+  let rootAge = postorderTree.age;
+  let leftReps = sampleTreeHistory(
+    postorderTree.left, nHosts, leftMsg, rootRep, rootAge, postorderTree.label, modelParams,
+    postorderTree.leftKernel
+  );
+
+  let rightReps = sampleTreeHistory(
+    postorderTree.right, nHosts, rightMsg, rootRep, rootAge, postorderTree.label, modelParams,
+    postorderTree.rightKernel
+  );
+
+  let rootNode = NodeRepertoire {
+    label = postorderTree.label, parent = -1, age = postorderTree.age, repertoire = rootRep,
+    branchKernel = []
+  };
+  return ReturnType {
+    mu = mu,
+    beta = beta,
+    lambda = lambda,
+    nodeHistories = cons(rootNode, concat(leftReps, rightReps))
+  };
+}
+
+function suggestNodeRep(
+  msg: Matrix[Real], nHosts: Int, nodeLabel: Int
+) => Int[] {
+  return sapply(
+    1 to nHosts,
+    function(h : Int) => Int {
+      return sampleNodeRepHost(msg, nodeLabel, h);
+    }
+  );
+}
+
+// The assume for one (node, host) cell of a node repertoire. The guard on
+// nodeLabel/host keeps both variables referenced next to the assume in the
+// pval-graph dump (an unused one is optimized away), and its error message is
+// the marker rewrite_stores_common.py uses to find this site and attach
+// (hrmStoreNodeRep nodeLabel host) as the assume's store function.
+function sampleNodeRepHost(msg: Matrix[Real], nodeLabel: Int, host: Int) => Int {
+  if nodeLabel < 0 || host < 1 {
+    error("hrmNodeRepSite: invalid node repertoire site");
+  }
+  let param = hostMsgToProb(msg, host);
+  assume x ~ Categorical(param);
+  return x;
+}
+
+
+// The model's weights, each with the label of the node it belongs to:
+// validityWeight is the hard constraint that a sampled repertoire is valid,
+// ratioWeight an importance ratio (the root's, or that of a node's incident
+// branch). As in sampleNodeRepHost, the guard keeps nodeLabel referenced in
+// the pval-graph dump, where rewrite_stores_common.py reads it off the
+// function's parameter to give the weight its store.
+function validityWeight(nodeLabel: Int, valid: Bool) {
+  if nodeLabel < 0 {
+    error("hrmWeightSite: invalid node label");
+  }
+  weight bool2real(valid);
+}
+
+function ratioWeight(nodeLabel: Int, logRatio: Real) {
+  if nodeLabel < 0 {
+    error("hrmWeightSite: invalid node label");
+  }
+  logWeight logRatio;
+}
+
+function sampleTreeHistory(
+  tree: MsgTree,
+  nHosts: Int,
+  preorderMsg: Matrix[Real],
+  parentRep: Int[],
+  parentAge: Real,
+  parentLabel: Int,
+  modelParams: ModelParams,
+  branchKernel: Matrix[Real]
+) => NodeRepertoire[] {
+  if tree is MsgLeaf {
+    // We are at a leaf, so we don't need to sample the interactions
+    let rep = tree.interactions;
+    // Sample the incident branch
+    let branchSample = sampleBranch(
+      parentRep,
+      rep,
+      parentAge,
+      tree.age,
+      nHosts,
+      tree.label,
+      modelParams,
+      branchKernel,
+      ctmcForwardSimTruncated
+    );
+
+    // Weight the program by the importance ratio
+    ratioWeight(tree.label, branchSample.logModelDensity - branchSample.logSamplingDensity);
+
+    return [NodeRepertoire {
+      label = tree.label, parent = parentLabel, age = tree.age, repertoire = rep,
+      branchKernel = kernelRows(branchKernel)
+    }];
+  } else {
+    let samplingProb = mtxElemMul(tree.outMsg, preorderMsg);
+    let rep = suggestNodeRep(samplingProb, nHosts, tree.label);
+    // Verify that the sampled repertoire is valid
+    validityWeight(tree.label, isValidRep(rep));
+    resample;
+    let nodeLogSamplingDensity = getRepertoireSamplingDensity(rep, samplingProb);
+
+    // Sample the incident branch
+    let branchSample = sampleBranch(
+      parentRep,
+      rep,
+      parentAge,
+      tree.age,
+      nHosts,
+      tree.label,
+      modelParams,
+      branchKernel,
+      ctmcForwardSimTruncated
+    );
+
+    // Weight the program by the importance ratio
+    ratioWeight(
+      tree.label,
+      branchSample.logModelDensity - branchSample.logSamplingDensity - nodeLogSamplingDensity
+    );
+
+    // Since we sampled a repertoire at the node we should propagate this information to the child nodes
+    let newMsg = observationMessage(rep);
+    let leftMsg = mtxMul(newMsg, tree.leftKernel);
+    let rightMsg = mtxMul(newMsg, tree.rightKernel);
+
+    // Sample the two subtrees
+    let leftReps = sampleTreeHistory(
+      tree.left, nHosts, leftMsg, rep, tree.age, tree.label, modelParams, tree.leftKernel
+    );
+    let rightReps = sampleTreeHistory(
+      tree.right, nHosts, rightMsg, rep, tree.age, tree.label, modelParams, tree.rightKernel
+    );
+
+    let node = NodeRepertoire {
+      label = tree.label, parent = parentLabel, age = tree.age, repertoire = rep,
+      branchKernel = kernelRows(branchKernel)
+    };
+    return cons(node, concat(leftReps, rightReps));
+  }
+}

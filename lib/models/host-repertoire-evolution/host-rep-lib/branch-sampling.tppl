@@ -1,0 +1,83 @@
+import "container-types.tppl"
+import "full-model.tppl"
+import "helpers.tppl"
+
+function sampleBranch(
+  startRep: Int[],
+  finalRep: Int[],
+  startAge: Real,
+  finalAge: Real,
+  nHosts: Int,
+  nodeLabel: Int,
+  modelParams: ModelParams,
+  branchKernel: Matrix[Real],
+  hostSampleAndLogPdf: Function(Int, Int, Real, Real, Int, Int, EmbeddedMarkovChainMatrix, Matrix[Real]) => BridgeWithDensity
+) => WeightedBranchSample {
+  // Sample the events per host
+  let unorderedBranch = sampleUnorderedBranch(
+    startRep,
+    finalRep,
+    startAge,
+    finalAge,
+    nHosts,
+    nodeLabel,
+    modelParams.embeddedQMatrix,
+    branchKernel,
+    hostSampleAndLogPdf
+  );
+
+  // Form the joint event sequence
+  let allHostEvents = paste0(unorderedBranch.bridges);
+  let orderedEvents = qSort(compAge, allHostEvents);
+  let nEvents = length(orderedEvents);
+  let logSamplingDensity = unorderedBranch.cumLogPdf;
+
+  // Calculate the likelihood of the path under the full model
+  let logModelDensity = fullModelWeight(
+    1, startRep, finalRep, startAge, finalAge, orderedEvents, nEvents, nHosts, modelParams
+  );
+  return WeightedBranchSample {
+    history = orderedEvents,
+    logSamplingDensity = logSamplingDensity,
+    logModelDensity = logModelDensity
+  };
+}
+
+// Sample each coordinate independently from the independence model
+
+type UnorderedBranch = UnorderedBranch { bridges : Event[][], cumLogPdf : Real }
+
+function sampleUnorderedBranch(
+  startRep: Int[],
+  finalRep: Int[],
+  startAge: Real,
+  finalAge: Real,
+  nHosts: Int,
+  nodeLabel: Int,
+  embeddedQMatrix: EmbeddedMarkovChainMatrix,
+  branchKernel : Matrix[Real],
+  sampleLogPdfHost: Function(Int, Int, Real, Real, Int, Int, EmbeddedMarkovChainMatrix, Matrix[Real]) => BridgeWithDensity
+) => UnorderedBranch {
+  // Note that startAge > finalAge since the tree is moving forwards in time
+  return fold(
+    function(acc : UnorderedBranch, hostIndex : Int) => UnorderedBranch {
+      let bridgeLogPdf = sampleLogPdfHost(
+        startRep[hostIndex],
+        finalRep[hostIndex],
+        startAge,
+        finalAge,
+        hostIndex,
+        nodeLabel,
+        embeddedQMatrix,
+        branchKernel
+      );
+      return UnorderedBranch {
+        bridges = cons(bridgeLogPdf.bridge, acc.bridges),
+        cumLogPdf = acc.cumLogPdf + bridgeLogPdf.logPdf
+      };
+    },
+    UnorderedBranch { bridges = [], cumLogPdf = 0.0 },
+    1 to nHosts
+  );
+}
+
